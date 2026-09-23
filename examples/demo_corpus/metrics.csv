@@ -1,0 +1,4 @@
+metric,value,unit
+required_coverage,100,percent
+ranking_filters_context,0,boolean
+checkpoint_resume,1,boolean

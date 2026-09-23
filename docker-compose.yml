@@ -1,0 +1,13 @@
+services:
+  contextmesh:
+    build: .
+    ports:
+      - "8765:8765"
+    environment:
+      CONTEXTMESH_DATA_DIR: /data
+    volumes:
+      - contextmesh-data:/data
+    restart: unless-stopped
+
+volumes:
+  contextmesh-data:

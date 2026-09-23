@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ContextMesh — API & Deployment</title>
+<style>
+:root{--bg:#090b0e;--panel:#11151a;--line:#242a31;--text:#f5f7fa;--muted:#84909d;--accent:#a9ed45}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(900px 500px at 50% -10%,rgba(169,237,69,.07),transparent 65%),var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:38px 24px 80px}.top{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:45px}.brand{font-weight:800}.nav a{color:#aeb7c2;text-decoration:none;margin-left:18px;font-size:13px}.nav a:hover{color:white}
+.ey{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#68737f}.hero h1{font-size:48px;line-height:1.02;letter-spacing:-.05em;margin:9px 0 16px}.hero p{max-width:760px;color:var(--muted);line-height:1.65}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:34px}.card{border:1px solid var(--line);border-radius:16px;padding:22px;background:linear-gradient(180deg,#11151a,#0d1115)}.card h2{font-size:17px;margin:0 0 12px}.card p,.card li{color:#8d98a5;font-size:13px;line-height:1.6}
+pre{background:#080a0d;border:1px solid var(--line);border-radius:12px;padding:16px;overflow:auto;color:#d5dce4;font-size:12px;line-height:1.55}.pill{display:inline-flex;border:1px solid #35442b;color:var(--accent);padding:5px 8px;border-radius:99px;font-size:10px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}.hero h1{font-size:36px}.top{align-items:flex-start;flex-direction:column}.nav a{margin:0 16px 0 0}}
+</style></head><body><div class="wrap">
+<div class="top"><div class="brand">ContextMesh <span class="pill">v0.10 frontend</span></div><div class="nav"><a href="./">Workspace</a><a href="./admin.html">Admin</a><a href="./api.html">API</a></div></div>
+<section class="hero"><div class="ey">Deployment contract</div><h1>One external submit.<br>Full-corpus execution inside.</h1><p>This public deployment is the static product surface. It runs in demo mode today. Point the frontend at a real ContextMesh FastAPI deployment to activate ingest jobs, SSE progress, provider routing, full-coverage evaluation and LMCache telemetry.</p></section>
+<div class="grid">
+<div class="card"><h2>Evaluation API</h2><pre>POST /api/evaluation-jobs
+
+{
+  "corpus_id": "corp_xxx",
+  "question": "...",
+  "answer": "...",
+  "route_id": "local-qwen"
+}</pre><p>The server reads every required ContextBlock, checkpointing progress and refusing a final score until ingest, semantic and execution coverage gates pass.</p></div>
+<div class="card"><h2>Provider routes</h2><pre>OpenAI
+Anthropic
+Gemini
+Qwen / DashScope
+vLLM
+SGLang
+Generic OpenAI-compatible</pre><p>Provider adapters own modality payloads and context limits. Corpus storage remains provider-neutral; KV cache is a model-specific acceleration artifact.</p></div>
+<div class="card"><h2>Large-file path</h2><pre>Browser
+  → resumable upload
+  → S3 / MinIO
+  → ingest worker
+  → ContextBlock catalog
+  → full-coverage reader</pre><p>The repository build currently includes the local-store reference path. Production should swap the object-store and durable queue adapters without changing ContextBlock or evaluator semantics.</p></div>
+<div class="card"><h2>Run locally</h2><pre>python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+contextmesh serve --host 0.0.0.0 --port 8765</pre><p>Workspace: <code>/</code><br>Admin: <code>/admin</code><br>OpenAPI: <code>/docs</code></p></div>
+</div></div></body></html>

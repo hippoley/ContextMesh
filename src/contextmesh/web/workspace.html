@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ContextMesh — Workspace</title>
+  <link rel="stylesheet" href="/static/contextmesh.css"/>
+</head>
+<body data-page="workspace" class="cm-v10">
+  <div class="os-shell">
+    <aside class="os-sidebar">
+      <a class="brand" href="/"><span class="brand-mark">CM</span><span><strong>ContextMesh</strong><small>full-coverage context runtime</small></span></a>
+      <div class="sidebar-section-label">Workspace</div>
+      <nav class="nav-stack">
+        <a class="nav-item active" href="/"><span>◫</span> Context Workspace</a>
+        <a class="nav-item" href="/admin"><span>⌁</span> Control Plane</a>
+        <a class="nav-item" href="/docs"><span>↗</span> API</a>
+      </nav>
+      <div class="sidebar-contract">
+        <span class="contract-dot"></span>
+        <div><strong>Coverage contract</strong><small>Ranking changes order, never eligibility.</small></div>
+      </div>
+      <div class="runtime-badge compact"><div class="pulse-dot"></div><span id="healthText">Checking runtime…</span></div>
+    </aside>
+
+    <main class="os-main">
+      <header class="os-topbar">
+        <div>
+          <p class="eyebrow">Context operating surface · v0.10</p>
+          <h1>Inspect the whole corpus without pretending it fits in one prompt.</h1>
+          <p class="subhead">Read everything. Score once. Upload heterogeneous assets, inspect the addressable context graph, then run a full-coverage evaluation over question + corpus + candidate answer.</p>
+        </div>
+        <div class="topbar-actions"><span class="status ok">runtime online</span><a class="btn secondary" href="/admin">Open admin</a></div>
+      </header>
+
+      <section class="workspace-ribbon">
+        <div class="ribbon-step active"><b>1</b><span>Ingest</span></div>
+        <div class="ribbon-line"></div>
+        <div class="ribbon-step active"><b>2</b><span>Inspect</span></div>
+        <div class="ribbon-line"></div>
+        <div class="ribbon-step active"><b>3</b><span>Evaluate</span></div>
+        <div class="ribbon-line"></div>
+        <div class="ribbon-step"><b>4</b><span>Calibrate</span></div>
+      </section>
+
+      <section class="context-studio">
+        <aside class="studio-pane corpus-pane">
+          <div class="pane-head"><div><p class="eyebrow">Corpus</p><h2>Sources</h2></div><button id="refreshCorpora" class="icon-btn" title="Refresh">↻</button></div>
+
+          <label id="dropzone" class="dropzone compact-drop">
+            <input id="fileInput" type="file" multiple />
+            <span class="drop-icon">＋</span>
+            <strong>Drop files or folders</strong>
+            <span>PDF · PPTX · XLSX · DOCX · image · audio · video · text</span>
+          </label>
+          <div id="fileList" class="file-list empty">No files selected</div>
+          <button id="uploadBtn" class="btn primary full" disabled>Queue ingest</button>
+
+          <div id="ingestProgress" class="mini-progress hidden">
+            <div class="coverage-row"><span id="ingestStatus">queued</span><strong id="ingestPct">0%</strong></div>
+            <div class="progress"><i id="ingestBar" style="width:0%"></i></div>
+            <small id="ingestDetail">0/0 files</small>
+          </div>
+
+          <div class="sidebar-divider"></div>
+          <label class="field-label">Active corpus</label>
+          <select id="corpusSelect" class="select"><option value="">Choose a corpus…</option></select>
+          <div id="corpusStats" class="mini-metrics">
+            <div><span>Assets</span><strong>—</strong></div><div><span>Blocks</span><strong>—</strong></div><div><span>Semantic</span><strong>—</strong></div><div><span>Unresolved</span><strong>—</strong></div>
+          </div>
+          <div class="coverage-stack">
+            <div class="coverage-card slim"><div class="coverage-row"><span>Ingest</span><strong id="ingestCoverageValue">—</strong></div><div class="progress"><i id="ingestCoverageBar" style="width:0%"></i></div></div>
+            <div class="coverage-card slim"><div class="coverage-row"><span>Semantic</span><strong id="semanticCoverageValue">—</strong></div><div class="progress"><i id="semanticCoverageBar" style="width:0%"></i></div></div>
+          </div>
+          <p id="corpusCoverageNote" class="pane-note">Final score unlocks only when ingest, semantic, and execution coverage are complete.</p>
+        </aside>
+
+        <section class="studio-pane explorer-pane">
+          <div class="pane-head"><div><p class="eyebrow">Address space</p><h2>Context Explorer</h2></div><span id="explorerCount" class="chip">0 blocks</span></div>
+          <div id="structureRail" class="structure-rail"><div class="empty-state">Choose a corpus to inspect pages, slides, sheets, timeline segments and text sections.</div></div>
+          <div class="explorer-toolbar">
+            <input id="contextSearch" placeholder="Search exact phrases, IDs, entities…" />
+            <button id="contextSearchBtn" class="btn secondary">Search</button>
+            <button id="contextBrowseBtn" class="btn secondary">Browse</button>
+          </div>
+          <div class="explorer-grid">
+            <div id="blockList" class="block-list"><div class="empty-state">No corpus selected.</div></div>
+            <div id="blockDetail" class="block-detail"><div class="empty-state">Select a block to inspect source provenance and raw content.</div></div>
+          </div>
+        </section>
+
+        <aside class="studio-pane eval-pane">
+          <div class="pane-head"><div><p class="eyebrow">Evaluation inspector</p><h2>Run full coverage</h2></div><span class="chip">one submit</span></div>
+          <label class="field-label">Question</label>
+          <textarea id="questionInput" rows="5" placeholder="What should be verified across the entire corpus?"></textarea>
+          <label class="field-label top-space">Candidate answer</label>
+          <textarea id="answerInput" rows="6" placeholder="Paste the AI answer to evaluate."></textarea>
+
+          <div class="route-stack">
+            <label><span>Model route</span><select id="routeSelect" class="select"><option value="">Demo judge (offline)</option></select></label>
+            <div class="two-col"><label><span>Workers</span><input id="workerCount" type="number" value="4" min="1" max="64"/></label><label><span>Reduce fan-in</span><input id="reductionBatch" type="number" value="32" min="2" max="512"/></label></div>
+          </div>
+          <div id="routePreflight" class="preflight-card"><div class="coverage-row"><span>Route preflight</span><strong id="routePreflightStatus">Choose corpus + route</strong></div><small id="routePreflightDetail">Capabilities and context budget are checked before model spend.</small></div>
+          <div class="context-contract"><strong>Overflow policy</strong><span>exhaustive map → bounded reduce → source rehydration</span></div>
+          <div class="button-row"><button id="cancelEvalBtn" class="btn secondary hidden">Cancel</button><button id="evaluateBtn" class="btn primary grow">Submit full-coverage job</button></div>
+
+          <section id="resultSection" class="live-eval hidden">
+            <div class="live-head"><span id="resultStatus" class="status pending">queued</span><strong id="scoreValue">—</strong></div>
+            <p id="rationaleText">The final score is locked until full corpus coverage completes.</p>
+            <div class="mini-metrics four"><div><span>Coverage</span><strong id="coverageValue">0%</strong></div><div><span>Visited</span><strong id="visitedValue">0/0</strong></div><div><span>Evidence</span><strong id="evidenceValue">0</strong></div><div><span>Tokens</span><strong id="jobTokenValue">0</strong></div></div>
+            <div class="coverage-card slim"><div class="coverage-row"><span>Execution</span><strong id="coveragePercent">0%</strong></div><div class="progress"><i id="coverageBar" style="width:0%"></i></div><small id="jobLiveDetail">Waiting for worker events.</small></div>
+            <div class="evidence-title"><span>Evidence ledger</span><span id="evidenceCount" class="chip">0</span></div>
+            <div id="evidenceList" class="evidence-list compact"><div class="empty-state">Relevant evidence remains linked to raw blocks.</div></div>
+          </section>
+        </aside>
+      </section>
+
+      <section class="calibration-strip">
+        <div><p class="eyebrow">Release gate</p><h2>Score-preservation calibration</h2><p>For corpora that fit a direct request, compare direct full-context scoring against the progressive runtime before changing chunking, prompts, reducers or models.</p></div>
+        <button id="benchmarkBtn" class="btn secondary">Compare direct vs progressive</button>
+        <div id="benchmarkResult" class="benchmark-result empty-state">No benchmark run yet.</div>
+      </section>
+    </main>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script src="/static/contextmesh.js"></script>
+</body>
+</html>
