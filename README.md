@@ -12,6 +12,28 @@ question + uploaded corpus + candidate answer -> score
 
 A top-k RAG pipeline can omit the one low-ranked page, slide, sheet, table, transcript segment, or exception that changes the score. ContextMesh instead turns the uploaded material into an addressable external context space and enforces 100% coverage before a final score is valid.
 
+### Reality first
+
+The project now keeps a public **Reality Lab** of current-main reproductions instead of asking users to trust the architecture:
+
+- **Cognee 1.6.0** — the decisive source ranked 17 in two controlled CHUNKS probes; visible top-5 recalled 0/2 while full-coverage execution preserved both.
+- **RAGFlow current main** — a tenant 32K context override resolved as the 128K provider catalog value on one composite-reference path; the saved candidate patch makes the same regression pass.
+- **Dify current main** — an 11,343-byte instruction source was selected/read, but ordinary shell rendering hid its decisive middle span behind an 8 KiB head/tail budget.
+
+These are specific mechanism tests, not global product rankings.
+
+- [Reality Lab static surface](site/reality.html)
+- [Evidence lifecycle contract](docs/EVIDENCE_LIFECYCLE.md)
+- [External demand radar](docs/reality/EXTERNAL_DEMAND_RADAR.md)
+
+The resulting diagnostic model follows evidence through:
+
+```text
+ingested -> stored -> retrieved -> eligible -> rendered -> model-visible -> judged
+```
+
+A source can therefore fail as a retrieval miss, an eligibility cutoff, or a transport/model-visibility loss without those states being collapsed into one “context missing” label.
+
 
 
 ## v0.15 — Reality Probe
@@ -53,7 +75,13 @@ Saved results:
 - [Cognee 1.6.0 reality result](docs/reality/Cognee-1.6.0-2026-09-24.md)
 - [Rank-depth: rank 17 vs eligibility](docs/reality/Cognee-1.6.0-rank-depth-2026-09-24.md)
 
-See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits.
+The same Reality Probe now also records byte-range visibility and a source-level evidence lifecycle trace, so “selected” is no longer treated as equivalent to “semantically visible.”
+
+Additional current-main evidence:
+- [Dify #42889 — selected source, hidden middle span](docs/reality/Dify-42889-2026-09-24.md)
+- [RAGFlow #20140 — validated 32K vs 128K context-resolution delta](benchmarks/results/ragflow-20140-2026-09-24.json)
+
+See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits, and [docs/EVIDENCE_LIFECYCLE.md](docs/EVIDENCE_LIFECYCLE.md) for the generalized stage model.
 
 ## v0.14 — resumable multipart uploads
 
