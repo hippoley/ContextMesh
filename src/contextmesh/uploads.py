@@ -282,11 +282,17 @@ class S3MultipartAdapter:
     ):
         try:
             import boto3
+            from botocore.config import Config
         except ImportError as exc:
             raise RuntimeError("S3 multipart requires the optional s3 dependency") from exc
         self.bucket = bucket
         self.prefix = prefix.strip("/")
-        self.client = boto3.client("s3", endpoint_url=endpoint_url or None, region_name=region_name or None)
+        self.client = boto3.client(
+            "s3",
+            endpoint_url=endpoint_url or None,
+            region_name=region_name or None,
+            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+        )
 
     @classmethod
     def from_env(cls) -> "S3MultipartAdapter":
