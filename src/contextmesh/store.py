@@ -7,6 +7,7 @@ import threading
 import uuid
 from pathlib import Path
 
+from .catalog import SQLiteContextCatalog
 from .models import ContextBlock, CorpusManifest, EvaluationCheckpoint, IngestJob, IngestStatus, ModelRoute
 
 
@@ -22,6 +23,7 @@ class FileContextStore:
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "_control").mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self.catalog = SQLiteContextCatalog(self.root / "_catalog.sqlite3")
 
 
     @staticmethod
@@ -38,9 +40,19 @@ class FileContextStore:
         return p
 
     def put_block(self, block: ContextBlock) -> None:
-        d = self._corpus_dir(block.corpus_id) / "blocks"
-        d.mkdir(parents=True, exist_ok=True)
-        self._atomic_write(d / f"{block.id}.json", block.model_dump_json(indent=2))
+        self.put_blocks([block])
+
+    def put_blocks(self, blocks: list[ContextBlock]) -> None:
+        if not blocks:
+            return
+        by_corpus: dict[str, list[ContextBlock]] = {}
+        for block in blocks:
+            d = self._corpus_dir(block.corpus_id) / "blocks"
+            d.mkdir(parents=True, exist_ok=True)
+            self._atomic_write(d / f"{block.id}.json", block.model_dump_json(indent=2))
+            by_corpus.setdefault(block.corpus_id, []).append(block)
+        for items in by_corpus.values():
+            self.catalog.upsert_many(items)
 
     def get_block(self, corpus_id: str, block_id: str) -> ContextBlock:
         p = self._corpus_dir(corpus_id, create=False) / "blocks" / f"{block_id}.json"
@@ -72,7 +84,36 @@ class FileContextStore:
         if not p.exists():
             return False
         shutil.rmtree(p)
+        self.catalog.delete_corpus(corpus_id)
         return True
+
+    def ensure_catalog(self, corpus_id: str) -> dict:
+        """Backfill the SQLite catalog for corpora created by older ContextMesh versions."""
+        manifest = self.get_manifest(corpus_id)
+        expected_ids = list(dict.fromkeys([*manifest.structural_block_ids, *manifest.block_ids]))
+        indexed_before = self.catalog.count(corpus_id)
+        if indexed_before < len(expected_ids):
+            for block_id in expected_ids:
+                try:
+                    self.catalog.upsert(self.get_block(corpus_id, block_id))
+                except FileNotFoundError:
+                    continue
+        stats = self.catalog.stats(corpus_id)
+        stats["manifest_blocks"] = manifest.total_blocks
+        stats["manifest_required_blocks"] = manifest.required_blocks
+        stats["addressable_manifest_blocks"] = len(expected_ids)
+        stats["ready"] = (
+            stats["indexed_blocks"] >= len(expected_ids)
+            and stats["processable_blocks"] >= manifest.required_blocks
+        )
+        return stats
+
+    def search_blocks(self, corpus_id: str, query: str, *, limit: int = 100) -> list[str]:
+        self.ensure_catalog(corpus_id)
+        return self.catalog.search(corpus_id, query, limit=limit, processable_only=True)
+
+    def catalog_stats(self, corpus_id: str) -> dict:
+        return self.ensure_catalog(corpus_id)
 
     def put_checkpoint(self, checkpoint: EvaluationCheckpoint) -> None:
         d = self._corpus_dir(checkpoint.corpus_id) / "jobs"

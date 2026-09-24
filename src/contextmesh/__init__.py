@@ -1,4 +1,4 @@
-from .models import BlockKind, ContextBlock, CorpusManifest, EvaluationResult, Modality
+from .models import BlockKind, ContextBlock, CorpusManifest, EvaluationResult, EvidenceAtom, EvidenceKind, Modality
 from .reader import CorpusReader
 from .runtime import CoverageController, ProgressiveEvaluator
 from .benchmark import ScorePreservationBenchmark, ScorePreservationResult
@@ -9,6 +9,8 @@ __all__ = [
     "ContextBlock",
     "CorpusManifest",
     "EvaluationResult",
+    "EvidenceKind",
+    "EvidenceAtom",
     "CorpusReader",
     "CoverageController",
     "ProgressiveEvaluator",
@@ -16,4 +18,4 @@ __all__ = [
     "ScorePreservationResult",
 ]
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"

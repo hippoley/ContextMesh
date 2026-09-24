@@ -1,6 +1,6 @@
 # ContextMesh
 
-> v0.10: Provider-aware Full-Coverage Context Studio for heterogeneous corpora larger than model context windows.
+> v0.11: Full-Coverage Context Runtime with typed evidence preservation and a scalable SQLite/FTS context catalog.
 
 **Full-coverage external context runtime for evaluating AI answers against corpora larger than a model context window.**
 
@@ -11,6 +11,35 @@ question + uploaded corpus + candidate answer -> score
 ```
 
 A top-k RAG pipeline can omit the one low-ranked page, slide, sheet, table, transcript segment, or exception that changes the score. ContextMesh instead turns the uploaded material into an addressable external context space and enforces 100% coverage before a final score is valid.
+
+
+## v0.11: typed evidence + scalable catalog
+
+ContextMesh now separates the **raw evidence ledger**, **typed evidence state**, and **model-facing reduced state**. Relevant blocks produce source-linked atoms for claims, numbers, dates, exceptions, contradictions and requirements. The final judge receives this typed channel alongside hierarchical reductions, so critical values and exception clauses do not have to survive only as free-form summaries.
+
+The portable filesystem store also gains a SQLite catalog with FTS5 acceleration:
+
+```text
+raw block JSON = source of truth
+SQLite/FTS   = navigation + scheduling index
+manifest     = coverage eligibility
+```
+
+Search can rank millions of addressable blocks without scanning every JSON file for each query, but it still **cannot remove any required block from execution**. Existing corpora are lazily backfilled into the catalog.
+
+```text
+GET /api/corpora/{corpus_id}/catalog
+```
+
+returns index backend, indexed block/asset counts, modalities and readiness.
+
+Reproducible catalog benchmark:
+
+```bash
+PYTHONPATH=src python examples/catalog_benchmark.py --blocks 100000
+```
+
+See [`docs/V011_VALIDATION.md`](docs/V011_VALIDATION.md) for measured smoke results and limits.
 
 ## v0.9 large-job reliability
 
@@ -136,12 +165,12 @@ Rich media/documents:
 
 ```bash
 pip install -e '.[dev,docling]'
-```
 
 Lightweight PDF/PPTX/XLSX fallbacks only:
 
 ```bash
 pip install -e '.[dev,rich]'
+```
 ```
 
 ## Run the web product

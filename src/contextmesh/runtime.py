@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
+from .evidence import evidence_kind_counts, extract_evidence_atoms
 from .models import EvaluationCheckpoint, EvaluationResult, EvaluationState, Evidence, ReductionNode
 from .reader import CorpusReader
 from .store import FileContextStore
@@ -307,7 +308,7 @@ class ProgressiveEvaluator:
             state.working_notes.append(outcome.note)
         if outcome.relevant:
             block = reader.read(outcome.block_id)
-            state.evidence.append(Evidence(block_id=block.id, note=outcome.note or "", source=block.source, modality=block.modality))
+            state.evidence.append(Evidence(block_id=block.id, note=outcome.note or "", source=block.source, modality=block.modality, atoms=extract_evidence_atoms(block, outcome.note or "")))
 
     def _result(self, corpus_id: str, job_id: str, state: EvaluationState, coverage: CoverageController, *, score, rationale) -> EvaluationResult:
         expected = coverage.expected
@@ -332,6 +333,8 @@ class ProgressiveEvaluator:
             ingest_coverage=manifest.ingest_coverage,
             semantic_coverage=manifest.semantic_coverage,
             ingest_ready=manifest.coverage_ready,
+            evidence_atoms=sum(len(item.atoms) for item in state.evidence),
+            evidence_kind_counts=evidence_kind_counts(state.evidence),
         )
 
     def preflight(self, corpus_id: str) -> dict:

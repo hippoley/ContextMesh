@@ -154,13 +154,24 @@ class CorpusReader:
         return out
 
     def lexical_order(self, query: str) -> list[str]:
-        """Cheap navigation heuristic. It changes order only, never coverage."""
-        terms = {t.lower().strip(".,?!:;()[]{}") for t in query.split() if len(t) > 2}
-        scored: list[tuple[int, int, str]] = []
-        for pos, block_id in enumerate(self.required_ids):
-            block = self.read(block_id)
-            text = block.text.lower()
-            score = sum(text.count(t) for t in terms if t)
-            scored.append((-score, pos, block_id))
-        scored.sort()
-        return [block_id for _, _, block_id in scored]
+        """Indexed navigation/scheduling order. Coverage eligibility is unchanged."""
+        required = list(self.required_ids)
+        required_set = set(required)
+        try:
+            ranked = self.store.search_blocks(self.corpus_id, query, limit=min(max(len(required), 100), 5000))
+            ordered = [block_id for block_id in ranked if block_id in required_set]
+            seen = set(ordered)
+            # FTS never filters coverage. Every required block is appended exactly once.
+            ordered.extend(block_id for block_id in required if block_id not in seen)
+            return ordered
+        except Exception:
+            # Portable fallback for damaged/unsupported indexes.
+            terms = {t.lower().strip(".,?!:;()[]{}") for t in query.split() if len(t) > 2}
+            scored: list[tuple[int, int, str]] = []
+            for pos, block_id in enumerate(required):
+                block = self.read(block_id)
+                text = block.text.lower()
+                score = sum(text.count(t) for t in terms if t)
+                scored.append((-score, pos, block_id))
+            scored.sort()
+            return [block_id for _, _, block_id in scored]

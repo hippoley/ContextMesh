@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .evidence import render_typed_evidence
 from .models import ContextBlock, EvaluationState, Modality, UsageMetrics
 
 
@@ -363,11 +364,15 @@ class OpenAICompatibleJudge:
         if limit and sum(len(x) + 1 for x in notes) > limit:
             notes = [self.reduce_notes(state.question, state.answer, notes, 99)]
         joined = "\n".join(notes)
+        typed_budget = max(4_000, min(32_000, (limit // 3) if limit else 32_000))
+        typed = render_typed_evidence(state.evidence, max_chars=typed_budget)
         prompt = (
             "Produce strict JSON {score:number,rationale:string}. Score the candidate answer against the question using the "
             "complete, hierarchically reduced inspection state below. Full corpus coverage has already been enforced by the runtime. "
-            "The reduction process preserved source block identifiers so the raw evidence remains auditable.\n\n"
+            "Typed evidence is a source-linked preservation channel for numbers, dates, exceptions, contradictions and requirements; "
+            "treat it as authoritative evidence metadata, not as a replacement for the reduced inspection state.\n\n"
             f"QUESTION:\n{state.question}\n\nANSWER:\n{state.answer}\n\nREDUCED INSPECTION STATE:\n{joined}"
+            f"\n\nTYPED EVIDENCE STATE:\n{typed or '(none)'}"
         )
         raw = self._chat([{"role": "user", "content": prompt}])
         obj = _parse_json_object(raw)

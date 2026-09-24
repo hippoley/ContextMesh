@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.11.0
+
+- Added a portable SQLite Context Catalog with FTS5 acceleration and automatic backfill for older corpora.
+- Explorer/search now uses indexed ranking for navigation and scheduling while preserving the full manifest coverage set.
+- Added `/api/corpora/{corpus_id}/catalog` with index backend, indexed block/asset counts, modality counts and readiness.
+- Added typed evidence atoms for claims, numbers, dates, exceptions, contradictions and requirements, each linked to the raw source block.
+- Final model judging now receives a bounded typed-evidence preservation channel in addition to hierarchical reduced notes.
+- Evaluation/job APIs expose evidence-atom totals and per-kind counts.
+- Workspace adds catalog health plus a Typed Evidence Inspector; Admin surfaces indexed-block scale.
+- Added v0.11 regression tests covering catalog ranking without coverage filtering, typed evidence preservation and API exposure.
+
 ## v0.10.0 — Provider adapters and Context Studio
 
 - Reworked Workspace into a three-pane Context Studio: Corpus / Context Explorer / Evaluation Inspector.

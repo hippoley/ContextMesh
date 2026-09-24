@@ -15,6 +15,7 @@ from pydantic import BaseModel
 
 from .benchmark import ScorePreservationBenchmark
 from .events import EventBus
+from .evidence import evidence_kind_counts
 from .explorer import build_explorer_groups
 from .ingest import ingest_paths
 from .judges import HeuristicJudge, OpenAICompatibleJudge
@@ -38,7 +39,7 @@ async def _lifespan(_app: FastAPI):
     STORE.reconcile_interrupted_jobs()
     yield
 
-app = FastAPI(title="ContextMesh", version="0.10.0", lifespan=_lifespan)
+app = FastAPI(title="ContextMesh", version="0.11.0", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT)), name="static")
 
 
@@ -85,7 +86,7 @@ def admin_page():
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "0.10.0"}
+    return {"ok": True, "version": "0.11.0"}
 
 
 @app.get("/api/events")
@@ -316,6 +317,14 @@ def corpus_audit(corpus_id: str):
 @app.get("/api/corpora")
 def list_corpora():
     return {"corpora": STORE.list_manifests()}
+
+
+@app.get("/api/corpora/{corpus_id}/catalog")
+def corpus_catalog(corpus_id: str):
+    try:
+        return {"corpus_id": corpus_id, **STORE.catalog_stats(corpus_id)}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="corpus not found") from e
 
 
 @app.delete("/api/corpora/{corpus_id}")
@@ -581,7 +590,11 @@ def search_blocks(corpus_id: str, q: str = Query(..., min_length=1), limit: int 
     try:
         reader = CorpusReader(STORE, corpus_id)
         ids = reader.lexical_order(q)[:limit]
-        return {"corpus_id": corpus_id, "query": q, "blocks": [reader.read(x) for x in ids]}
+        return {
+            "corpus_id": corpus_id, "query": q, "blocks": [reader.read(x) for x in ids],
+            "catalog": STORE.catalog_stats(corpus_id),
+            "ranking_policy": "scheduling/navigation only; never coverage eligibility",
+        }
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus not found") from e
 
@@ -605,6 +618,8 @@ def job_detail(corpus_id: str, job_id: str):
             "missing": [x for x in cp.ordered_block_ids if x in expected and x not in cp.state.visited][:200],
             "failures": failures,
             "evidence": cp.state.evidence,
+            "evidence_atoms": sum(len(item.atoms) for item in cp.state.evidence),
+            "evidence_kind_counts": evidence_kind_counts(cp.state.evidence),
             "reduction_nodes": cp.state.reduction_nodes,
             "question": cp.state.question,
             "answer": cp.state.answer,
@@ -693,7 +708,7 @@ def admin_overview():
 
     telemetry = collect_runtime_telemetry()
     runtime = {
-        "version": "0.8.0",
+        "version": "0.11.0",
         "store": str(STORE.root),
         "default judge": "heuristic / model route / OpenAI-compatible",
         "Docling": "available" if importlib.util.find_spec("docling") else "optional, not installed",
@@ -718,6 +733,7 @@ def admin_overview():
             "coverage_ready_corpora": sum(1 for x in corpora if x.coverage_ready),
             "semantic_incomplete_corpora": sum(1 for x in corpora if not x.coverage_ready),
             "unresolved_units": sum(x.unresolved_units for x in corpora),
+            "indexed_blocks": sum(STORE.catalog_stats(x.corpus_id).get("indexed_blocks", 0) for x in corpora),
         },
         "corpora": corpora,
         "ingest_jobs": ingest_jobs,

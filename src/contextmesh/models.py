@@ -99,11 +99,34 @@ class CorpusManifest(BaseModel):
         return self.required_block_ids or self.block_ids
 
 
+class EvidenceKind(str, Enum):
+    CLAIM = "claim"
+    NUMBER = "number"
+    DATE = "date"
+    EXCEPTION = "exception"
+    CONTRADICTION = "contradiction"
+    REQUIREMENT = "requirement"
+    ENTITY = "entity"
+    OTHER = "other"
+
+
+class EvidenceAtom(BaseModel):
+    kind: EvidenceKind = EvidenceKind.CLAIM
+    text: str
+    normalized_value: str | None = None
+    unit: str | None = None
+    date: str | None = None
+    polarity: str = "affirm"
+    confidence: float = 1.0
+    tags: list[str] = Field(default_factory=list)
+
+
 class Evidence(BaseModel):
     block_id: str
     note: str
     source: SourceRef
     modality: Modality | None = None
+    atoms: list[EvidenceAtom] = Field(default_factory=list)
 
 
 class ReductionNode(BaseModel):
@@ -171,6 +194,8 @@ class EvaluationResult(BaseModel):
     ingest_coverage: float = 1.0
     semantic_coverage: float = 1.0
     ingest_ready: bool = True
+    evidence_atoms: int = 0
+    evidence_kind_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class IngestStatus(str, Enum):

@@ -15,7 +15,7 @@
 @media(max-width:1360px){.context-studio{grid-template-columns:235px minmax(430px,1fr) 300px}.os-main{padding:28px 26px 56px}.control-split{grid-template-columns:360px minmax(0,1fr)}}
 @media(max-width:1120px){.os-shell{grid-template-columns:1fr}.os-sidebar{position:relative;height:auto;display:grid;grid-template-columns:auto 1fr auto;align-items:center;border-right:0;border-bottom:1px solid var(--line)}.os-sidebar .nav-stack{display:flex;margin:0 18px}.sidebar-section-label,.sidebar-contract,.runtime-badge.compact{display:none}.context-studio{grid-template-columns:1fr}.studio-pane+.studio-pane{border-left:0;border-top:1px solid var(--line)}.calibration-strip{grid-template-columns:1fr}.control-split,.ops-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.os-main{padding:20px 12px 44px}.os-sidebar{grid-template-columns:1fr}.os-sidebar .nav-stack{margin:14px 0 0}.os-topbar{display:block}.os-topbar h1{font-size:29px}.topbar-actions{margin-top:14px}.workspace-ribbon{overflow:auto}.context-studio{border-radius:12px}.mini-metrics.four{grid-template-columns:1fr 1fr}.provider-form-grid{grid-template-columns:1fr}.provider-form-grid .span-2{grid-column:auto}.explorer-pane .explorer-grid{grid-template-columns:1fr}.calibration-strip{padding:14px}}
-</style>
+.atom-summary{display:flex;gap:5px;flex-wrap:wrap;margin:7px 0 8px}.atom-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid #2a3139;border-radius:999px;padding:4px 7px;font-size:8px;color:#8f99a6;background:#0a0e12}.atom-chip b{font-weight:800;color:#cdd4dc}.evidence-atoms{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.evidence-atom{border-left:2px solid #3a424c;padding:4px 6px;background:#0b0f13;border-radius:4px;font-size:8px;line-height:1.4;color:#929ca9}.evidence-atom strong{color:#d6dce4;font-size:7px;text-transform:uppercase;letter-spacing:.08em;margin-right:5px}</style>
 </head>
 <body data-page="workspace" class="cm-v10">
   <div class="os-shell">
@@ -37,7 +37,7 @@
     <main class="os-main">
       <header class="os-topbar">
         <div>
-          <p class="eyebrow">Context operating surface · v0.10</p>
+          <p class="eyebrow">Context operating surface · v0.11</p>
           <h1>Inspect the whole corpus without pretending it fits in one prompt.</h1>
           <p class="subhead">Read everything. Score once. Upload heterogeneous assets, inspect the addressable context graph, then run a full-coverage evaluation over question + corpus + candidate answer.</p>
         </div>
@@ -78,6 +78,7 @@
           <select id="corpusSelect" class="select"><option value="">Choose a corpus…</option></select>
           <div id="corpusStats" class="mini-metrics">
             <div><span>Assets</span><strong>—</strong></div><div><span>Blocks</span><strong>—</strong></div><div><span>Semantic</span><strong>—</strong></div><div><span>Unresolved</span><strong>—</strong></div>
+            <div><span>Catalog</span><strong>sqlite-fts5</strong></div><div><span>Indexed</span><strong id="demoIndexed">—</strong></div>
           </div>
           <div class="coverage-stack">
             <div class="coverage-card slim"><div class="coverage-row"><span>Ingest</span><strong id="ingestCoverageValue">—</strong></div><div class="progress"><i id="ingestCoverageBar" style="width:0%"></i></div></div>
@@ -120,7 +121,8 @@
             <p id="rationaleText">The final score is locked until full corpus coverage completes.</p>
             <div class="mini-metrics four"><div><span>Coverage</span><strong id="coverageValue">0%</strong></div><div><span>Visited</span><strong id="visitedValue">0/0</strong></div><div><span>Evidence</span><strong id="evidenceValue">0</strong></div><div><span>Tokens</span><strong id="jobTokenValue">0</strong></div></div>
             <div class="coverage-card slim"><div class="coverage-row"><span>Execution</span><strong id="coveragePercent">0%</strong></div><div class="progress"><i id="coverageBar" style="width:0%"></i></div><small id="jobLiveDetail">Waiting for worker events.</small></div>
-            <div class="evidence-title"><span>Evidence ledger</span><span id="evidenceCount" class="chip">0</span></div>
+            <div class="evidence-title"><span>Typed evidence inspector</span><span id="evidenceCount" class="chip">0</span></div>
+            <div id="evidenceTypeSummary" class="atom-summary"><span class="atom-chip">waiting for evidence</span></div>
             <div id="evidenceList" class="evidence-list compact"><div class="empty-state">Relevant evidence remains linked to raw blocks.</div></div>
           </section>
         </aside>
@@ -183,7 +185,7 @@
     }
     stat.textContent='complete';
     $('#corpusSelect').innerHTML='<option value="demo-corpus">demo-corpus · uploaded now</option>';
-    const stats=$('#corpusStats')?.querySelectorAll('strong'); if(stats){stats[0].textContent=state.files.length;stats[1].textContent=state.blocks.length;stats[2].textContent='100%';stats[3].textContent='0';}
+    const stats=$('#corpusStats')?.querySelectorAll('strong'); if(stats){stats[0].textContent=state.files.length;stats[1].textContent=state.blocks.length;stats[2].textContent='100%';stats[3].textContent='0';if(stats[4])stats[4].textContent='sqlite-fts5';if(stats[5])stats[5].textContent=state.blocks.length;} if($('#demoIndexed'))$('#demoIndexed').textContent=state.blocks.length;
     for (const id of ['ingestCoverageBar','semanticCoverageBar']) { const el=$('#'+id); if(el) el.style.width='100%';}
     $('#ingestCoverageValue').textContent='100%'; $('#semanticCoverageValue').textContent='100%';
     renderBlocks();
@@ -219,9 +221,9 @@
       bar.style.width=p+'%'; cp.textContent=p+'%'; cv.textContent=p+'%'; vv.textContent=`${i+1}/${state.blocks.length}`;
       if ((b.text||'').length>20) {
         evidence++;
-        if(evidence<=12) evl.insertAdjacentHTML('beforeend',`<div class="evidence-item"><div class="evidence-meta"><span>${esc(b.file)}</span><span>${esc(b.id)}</span></div><p>Demo evidence capsule preserved from this required block.</p></div>`);
+        if(evidence<=12) evl.insertAdjacentHTML('beforeend',`<div class="evidence-item"><div class="evidence-meta"><span>${esc(b.file)}</span><span>${esc(b.id)}</span></div><p>Demo evidence capsule preserved from this required block.</p><div class="evidence-atoms"><div class="evidence-atom"><strong>claim</strong>source-linked claim preserved</div><div class="evidence-atom"><strong>number</strong>critical numeric values remain typed when present</div></div></div>`);
       }
-      ev.textContent=evidence; $('#evidenceCount').textContent=evidence;
+      ev.textContent=evidence; $('#evidenceCount').textContent=evidence+' blocks'; if($('#evidenceTypeSummary'))$('#evidenceTypeSummary').innerHTML='<span class="atom-chip"><b>claim</b>'+evidence+'</span><span class="atom-chip"><b>number/date</b>typed</span>';
       $('#jobLiveDetail').textContent=`Reading required block ${i+1} of ${state.blocks.length}. Ranking changes order, not eligibility.`;
     }
     $('#resultStatus').textContent='complete'; $('#resultStatus').className='status ok';

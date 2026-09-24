@@ -80,7 +80,7 @@ def _put_sibling_chain(store: FileContextStore, blocks: list[ContextBlock]) -> N
     for i, block in enumerate(blocks):
         block.prev_id = blocks[i - 1].id if i > 0 else None
         block.next_id = blocks[i + 1].id if i + 1 < len(blocks) else None
-        store.put_block(block)
+    store.put_blocks(blocks)
 
 
 def _native_text_blocks(
@@ -526,8 +526,7 @@ def ingest_paths(
 
             root.children_ids = list(dict.fromkeys([*root.children_ids, *(b.id for b in leafs)]))
             _put_sibling_chain(store, leafs)
-            for node in structural:
-                store.put_block(node)
+            store.put_blocks(structural)
             store.put_block(root)
 
             required_ids.extend(b.id for b in processable_leafs)
