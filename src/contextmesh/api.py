@@ -139,7 +139,7 @@ def admin_page():
 def health():
     return {
         "ok": True,
-        "version": "0.14.0",
+        "version": "0.15.0",
         "queue": QUEUE.stats(),
         "workers": len(QUEUE.workers()),
         "upload_backend": os.getenv("CONTEXTMESH_UPLOAD_BACKEND", "local"),
