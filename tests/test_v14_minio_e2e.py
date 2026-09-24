@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
-from urllib.request import Request, urlopen
-
+import httpx
 import pytest
 
 from contextmesh.uploads import S3MultipartAdapter
@@ -14,10 +13,14 @@ pytestmark = pytest.mark.skipif(
 
 
 def _put(url: str, payload: bytes) -> str:
-    req = Request(url, data=payload, method="PUT")
-    with urlopen(req, timeout=30) as response:
-        assert 200 <= response.status < 300
-        return response.headers["ETag"]
+    response = httpx.put(
+        url,
+        content=payload,
+        headers={"Content-Type": "application/octet-stream", "Content-Length": str(len(payload))},
+        timeout=30.0,
+    )
+    assert response.is_success, response.text
+    return response.headers["ETag"]
 
 
 def test_real_minio_multipart_resume_complete_and_materialize(tmp_path: Path):
