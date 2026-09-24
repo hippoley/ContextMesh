@@ -14,6 +14,7 @@ from .reader import CorpusReader
 from .reality_probe import (
     CogneeChunksBackend,
     ContextMeshFullCoverageBackend,
+    HeadTailByteBudgetBackend,
     LexicalTopKBackend,
     LiveProbeVerdictJudge,
     issue_derived_scenarios,
@@ -99,7 +100,7 @@ def main() -> None:
     worker.add_argument("--worker-id")
 
     rp = sub.add_parser("reality-probe", help="compare retrieval eligibility against full-coverage execution")
-    rp.add_argument("--backend", action="append", choices=["lexical", "contextmesh", "cognee"], default=[])
+    rp.add_argument("--backend", action="append", choices=["lexical", "head-tail", "contextmesh", "cognee"], default=[])
     rp.add_argument("--top-k", type=int, default=5)
     rp.add_argument("--crowding", type=int, default=24)
     rp.add_argument("--scenario", action="append", default=[], help="run only named scenario(s)")
@@ -132,6 +133,8 @@ def main() -> None:
         backends = []
         if "lexical" in requested:
             backends.append(LexicalTopKBackend(args.top_k))
+        if "head-tail" in requested:
+            backends.append(HeadTailByteBudgetBackend())
         if "contextmesh" in requested:
             backends.append(ContextMeshFullCoverageBackend(workers=args.workers))
         if "cognee" in requested:
