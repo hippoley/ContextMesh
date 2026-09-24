@@ -1,0 +1,57 @@
+{
+  "kind": "contextmesh-reality-probe-result",
+  "date": "2026-09-24",
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/35947688454",
+  "contextmesh_version": "0.15.0",
+  "cognee_version": "1.6.0",
+  "python_version": "3.12.14",
+  "configuration": {
+    "cognee_search_type": "CHUNKS",
+    "cognee_extractor": "gliner",
+    "embedding_mode": "cognee local default / fastembed",
+    "top_k": 5,
+    "crowding": 16,
+    "live_llm_verdict": false
+  },
+  "scenarios": [
+    {
+      "id": "rare-exception",
+      "expected_evidence_verdict": "contradicts",
+      "contextmesh": {
+        "coverage": 1.0,
+        "decisive_recall": 1.0,
+        "evidence_available_verdict": "contradicts",
+        "evidence_verdict_correct": true
+      },
+      "cognee_chunks": {
+        "coverage": 0.2941176471,
+        "decisive_recall": 0.0,
+        "evidence_available_verdict": "unsupported",
+        "evidence_verdict_correct": false
+      }
+    },
+    {
+      "id": "near-duplicate-crowding",
+      "expected_evidence_verdict": "contradicts",
+      "contextmesh": {
+        "coverage": 1.0,
+        "decisive_recall": 1.0,
+        "evidence_available_verdict": "contradicts",
+        "evidence_verdict_correct": true
+      },
+      "cognee_chunks": {
+        "coverage": 0.2941176471,
+        "decisive_recall": 0.0,
+        "evidence_available_verdict": "unsupported",
+        "evidence_verdict_correct": false
+      }
+    }
+  ],
+  "interpretation_limits": [
+    "Synthetic mechanism probes, not a representative benchmark of all Cognee workloads.",
+    "Cognee CHUNKS only; Graph Completion, Hybrid, MMR and other retrieval modes were not compared.",
+    "No live LLM verdict was run. evidence_available_verdict is computed from benchmark ground-truth stances.",
+    "A retrieval miss does not by itself prove a downstream model would answer incorrectly.",
+    "Source markers are embedded in each short probe document to map returned Cognee chunks back to source IDs."
+  ]
+}
