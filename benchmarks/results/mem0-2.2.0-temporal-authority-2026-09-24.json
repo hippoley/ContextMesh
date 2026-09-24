@@ -1,0 +1,63 @@
+{
+  "kind": "external-memory-authority-reality-result",
+  "date": "2026-09-24",
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/35969812150",
+  "upstream": "mem0ai/mem0",
+  "upstream_commit": "47a69e1e72dc562b6fdd49a9ef892229afc7508a",
+  "mem0_version": "2.2.0",
+  "configuration": {
+    "storage": "local-qdrant",
+    "embedder": "fastembed/BAAI-bge-small-en-v1.5",
+    "llm_called": false,
+    "infer": false,
+    "top_k": 10,
+    "threshold": 0.0,
+    "rerank": false
+  },
+  "facts": [
+    {
+      "text": "The production database port is 5432.",
+      "status": "active",
+      "verified": true,
+      "event_time": "2026-09-01T09:00:00Z",
+      "source_kind": "signed_configuration"
+    },
+    {
+      "text": "The production database port is 6543.",
+      "status": "contested",
+      "verified": false,
+      "event_time": "2026-09-23T18:00:00Z",
+      "source_kind": "transient_runtime_observation"
+    }
+  ],
+  "default_search": [
+    {
+      "memory": "The production database port is 5432.",
+      "score": 0.42526265342075237,
+      "status": "active",
+      "verified": true
+    },
+    {
+      "memory": "The production database port is 6543.",
+      "score": 0.41803890061391746,
+      "status": "contested",
+      "verified": false
+    }
+  ],
+  "active_filter_search": [
+    {
+      "memory": "The production database port is 5432.",
+      "score": 0.42526265342075237,
+      "status": "active"
+    }
+  ],
+  "observation": "Default semantic search exposed both conflicting memories with close similarity scores. Explicit lifecycle metadata filtering excluded the contested transient memory.",
+  "interpretation": "Current Mem0 OSS preserves both conflicting memories, which is good for auditability. Semantic similarity alone does not express temporal/verification authority; the caller must encode lifecycle policy in retrieval filters or another verification layer.",
+  "limits": [
+    "This uses infer=False to isolate memory storage and retrieval from LLM extraction.",
+    "Only one controlled conflict pair was executed live.",
+    "This does not claim Mem0 should automatically choose the verified fact; explicit filters are a supported mechanism.",
+    "No reranker was used.",
+    "The experiment validates an authority-policy boundary, not a global Mem0 quality ranking."
+  ]
+}
