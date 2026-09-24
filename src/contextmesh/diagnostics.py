@@ -13,6 +13,7 @@ class EvidenceStage(str, Enum):
     ELIGIBLE = "eligible"
     RENDERED = "rendered"
     MODEL_VISIBLE = "model-visible"
+    AUTHORITY = "authority"
     JUDGED = "judged"
 
 
@@ -31,6 +32,7 @@ class EvidenceFailureClass(str, Enum):
     RETRIEVAL_MISS = "retrieval-miss"
     ELIGIBILITY_LOSS = "eligibility-loss"
     TRANSPORT_VISIBILITY_LOSS = "transport-visibility-loss"
+    AUTHORITY_UNRESOLVED = "authority-unresolved"
     JUDGE_FAILURE = "judge-failure"
     UNKNOWN = "unknown"
 
@@ -97,6 +99,7 @@ def classify_evidence_failure(
     eligible: bool,
     rendered: bool,
     semantic_visible: bool,
+    authority_resolved: bool = True,
 ) -> EvidenceFailureClass:
     if not ingested or not stored:
         return EvidenceFailureClass.INGEST_LOSS
@@ -106,6 +109,8 @@ def classify_evidence_failure(
         return EvidenceFailureClass.ELIGIBILITY_LOSS
     if not rendered or not semantic_visible:
         return EvidenceFailureClass.TRANSPORT_VISIBILITY_LOSS
+    if not authority_resolved:
+        return EvidenceFailureClass.AUTHORITY_UNRESOLVED
     return EvidenceFailureClass.NONE
 
 
@@ -236,4 +241,71 @@ def build_probe_lifecycle(
         decisive=decisive,
         stages=stages,
         failure_class=failure_class,
+    )
+
+
+
+def build_authority_lifecycle(
+    *,
+    source_id: str,
+    status: str,
+    verified: bool,
+    selected_as_authority: bool,
+    reason: str,
+    decisive: bool = True,
+) -> EvidenceLifecycleTrace:
+    """Build a compact lifecycle trace for a memory/fact authority decision.
+
+    This starts after storage/retrieval: the fact exists and is available, but
+    the policy still needs to decide whether it is authoritative now.
+    """
+    normalized = (status or "").strip().lower()
+    closed = normalized in {"superseded", "refuted", "expired"}
+    contested = normalized in {"contested", "review"}
+
+    if selected_as_authority:
+        authority_disp = EvidenceDisposition.PRESENT
+        failure = EvidenceFailureClass.NONE
+    elif closed:
+        authority_disp = EvidenceDisposition.EXCLUDED
+        failure = EvidenceFailureClass.NONE
+    elif contested or not verified:
+        authority_disp = EvidenceDisposition.UNKNOWN
+        failure = EvidenceFailureClass.AUTHORITY_UNRESOLVED
+    else:
+        authority_disp = EvidenceDisposition.EXCLUDED
+        failure = EvidenceFailureClass.NONE
+
+    stages = [
+        EvidenceStageRecord(
+            stage=EvidenceStage.INGESTED,
+            disposition=EvidenceDisposition.PRESENT,
+            reason="fact entered the memory/evidence history",
+        ),
+        EvidenceStageRecord(
+            stage=EvidenceStage.STORED,
+            disposition=EvidenceDisposition.PRESENT,
+            reason="fact remains preserved and auditable",
+        ),
+        EvidenceStageRecord(
+            stage=EvidenceStage.RETRIEVED,
+            disposition=EvidenceDisposition.PRESENT,
+            reason="fact is available to the authority policy",
+        ),
+        EvidenceStageRecord(
+            stage=EvidenceStage.AUTHORITY,
+            disposition=authority_disp,
+            reason=reason,
+            metadata={
+                "status": normalized or status,
+                "verified": verified,
+                "selected_as_authority": selected_as_authority,
+            },
+        ),
+    ]
+    return EvidenceLifecycleTrace(
+        source_id=source_id,
+        decisive=decisive,
+        stages=stages,
+        failure_class=failure,
     )
