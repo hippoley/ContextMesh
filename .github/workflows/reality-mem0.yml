@@ -119,7 +119,7 @@ jobs:
           )
           active_only = memory.search(
               "What is the production database port?",
-              filters={"AND": [{"user_id": user_id}, {"status": "active"}]},
+              filters={"user_id": user_id, "status": "active"},
               top_k=10,
               threshold=0.0,
               rerank=False,
