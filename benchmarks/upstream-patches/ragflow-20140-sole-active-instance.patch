@@ -1,0 +1,47 @@
+diff --git a/internal/dao/model_context.go b/internal/dao/model_context.go
+index 9eb6c7d..0000000 100644
+--- a/internal/dao/model_context.go
++++ b/internal/dao/model_context.go
+@@ -104,6 +104,12 @@ func lookupTenantModel(ctx context.Context, db *gorm.DB, tenantID, modelRef, pur
+ 			return nil
+ 		}
+ 		instance, err := NewTenantModelInstanceDAO().GetByProviderIDAndInstanceName(ctx, db, provider.ID, instanceName)
++		if (err != nil || instance == nil) && instanceName == "default" {
++			instance = soleActiveTenantModelInstance(ctx, db, provider.ID)
++			if instance != nil {
++				err = nil
++			}
++		}
+ 		if err != nil || instance == nil || instance.Status != "active" {
+ 			return nil
+ 		}
+@@ -128,6 +134,25 @@ func lookupTenantModel(ctx context.Context, db *gorm.DB, tenantID, modelRef, pur
+ 	return obj
+ }
+ 
++// soleActiveTenantModelInstance returns the provider's only active instance.
++// Two-part composite references ("model@provider") use "default" as a
++// shorthand instance name. When a tenant configured a single active instance
++// under another name, resolve it the same way the agent credential path does
++// instead of silently falling through to the provider catalog.
++func soleActiveTenantModelInstance(ctx context.Context, db *gorm.DB, providerID string) *entity.TenantModelInstance {
++	instances, err := NewTenantModelInstanceDAO().GetAllInstancesByProviderID(ctx, db, providerID)
++	if err != nil {
++		return nil
++	}
++	var active *entity.TenantModelInstance
++	for _, instance := range instances {
++		if instance == nil || instance.Status != "active" {
++			continue
++		}
++		if active != nil {
++			return nil
++		}
++		active = instance
++	}
++	return active
++}
++
+ // modelExtraMaxTokens returns the per-model "max_tokens" override from the
+ // tenant_model.extra JSON, or 0 when absent/invalid/non-positive. Mirrors
+ // Python's model_extra.get("max_tokens") — the custom context-window length a
