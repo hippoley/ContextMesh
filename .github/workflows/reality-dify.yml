@@ -1,0 +1,110 @@
+name: Reality Probe - Dify
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reality-dify.yml'
+      - 'src/contextmesh/reality_probe.py'
+
+permissions:
+  contents: read
+
+jobs:
+  skill-middle-span:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout current Dify main
+        uses: actions/checkout@v7
+        with:
+          repository: langgenius/dify
+          ref: main
+          path: dify
+
+      - name: Reproduce current-main model-visible middle truncation
+        run: |
+          python - <<'PY'
+          import ast
+          import importlib.util
+          from pathlib import Path
+
+          root = Path("dify")
+          layer_path = root / "dify-agent/src/dify_agent/layers/shell/layer.py"
+          output_path = root / "dify-agent/src/dify_agent/layers/shell/output_text.py"
+
+          tree = ast.parse(layer_path.read_text(encoding="utf-8"))
+          values = {}
+          for node in tree.body:
+              if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                  name = node.targets[0].id
+                  if name in {"_SHELL_OUTPUT_PROMPT_EDGE_BYTES", "_SHELLCTL_OUTPUT_LIMIT_BYTES"}:
+                      values[name] = ast.literal_eval(node.value)
+
+          edge = values["_SHELL_OUTPUT_PROMPT_EDGE_BYTES"]
+          limit = values["_SHELLCTL_OUTPUT_LIMIT_BYTES"]
+          assert edge == 4096, values
+          assert limit == 8192, values
+
+          spec = importlib.util.spec_from_file_location("dify_output_text", output_path)
+          mod = importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(mod)
+
+          marker = (
+              "CRITICAL_IMPORT_GUARD: Before importing any record, cross-check source totals "
+              "against the signed reconciliation report. If reconciliation does not match, abort the import."
+          )
+          source = (
+              "# Import Skill\n"
+              + ("General setup guidance and field mapping notes. " * 115)
+              + "\n"
+              + marker
+              + "\n"
+              + ("General completion guidance and reporting notes. " * 115)
+          )
+          assert marker in source
+          assert len(source.encode("utf-8")) > limit
+
+          head = mod.utf8_prefix(source, edge)
+          tail = mod.utf8_suffix(source, edge)
+          visible = mod.normalized_output_text(
+              head,
+              tail=tail,
+              output_path=".dify_conf/skills/example/SKILL.md",
+              max_output_size_bytes=limit,
+              truncated_in_middle=True,
+          )
+
+          assert marker not in visible, "upstream behavior changed: decisive middle span is now visible"
+          assert "truncated in middle" in visible
+          print(f"dify_main_edge_bytes={edge}")
+          print(f"dify_main_model_visible_limit={limit}")
+          print(f"source_bytes={len(source.encode('utf-8'))}")
+          print(f"visible_bytes={len(visible.encode('utf-8'))}")
+          print("decisive_middle_marker_visible=false")
+          print("Confirmed: current Dify main can select/read the source while hiding the decisive middle span from model-visible shell output.")
+          PY
+
+      - name: Confirm current eager-pull path has a larger complete-output budget
+        run: |
+          python - <<'PY'
+          import ast
+          from pathlib import Path
+
+          layer = Path("dify/dify-agent/src/dify_agent/layers/shell/layer.py").read_text(encoding="utf-8")
+          config = Path("dify/dify-agent/src/dify_agent/layers/config/layer.py").read_text(encoding="utf-8")
+
+          tree = ast.parse(layer)
+          max_bytes = None
+          for node in tree.body:
+              if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                  if node.targets[0].id == "_REMOTE_COMPLETE_OUTPUT_MAX_BYTES":
+                      max_bytes = ast.literal_eval(node.value)
+
+          assert max_bytes == 1024 * 1024
+          assert "self.deps.shell.run_remote_script(" in config
+          assert "skill_md" in config
+          print(f"eager_pull_complete_output_max_bytes={max_bytes}")
+          print("Confirmed: model-visible completeness is access-path dependent on current main.")
+          PY
