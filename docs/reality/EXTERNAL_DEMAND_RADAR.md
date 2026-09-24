@@ -147,7 +147,13 @@ The unresolved problem is not merely CRUD. It is epistemic:
 - invalidation and eviction are different operations;
 - retrieval gating decides which historical facts remain authoritative.
 
-**Intervention shape:** first build a temporal-conflict replay corpus. Only comment after we can show measured failure/success rates for policies such as last-write-wins, recency+NLI, soft supersession, and verifier-assisted resolution.
+**Reality contact now implemented:** ContextMesh includes a deterministic temporal-conflict replay covering transient newer facts, expired overrides, verified preference changes, and refuted latest writes. It compares recency-only authority with an explicit verified/supersession-aware reference policy.
+
+Run: `contextmesh memory-replay --format markdown`.
+
+See [MEM0_TEMPORAL_MEMORY_REPLAY.md](MEM0_TEMPORAL_MEMORY_REPLAY.md).
+
+**Intervention shape:** wait for CI-backed replay results, then contribute the measured policy failure rather than another architecture opinion. A live Mem0 integration should be the next gate before making any claim about Mem0 itself.
 
 ### Haystack #11867 — retrieval diagnostics should preserve the loss stage
 
