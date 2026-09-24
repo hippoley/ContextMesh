@@ -40,20 +40,29 @@ QUEUE = SQLiteJobQueue(DATA_ROOT / "jobs.sqlite3")
 _WORKER_STOP = threading.Event()
 _WORKER_THREAD: threading.Thread | None = None
 
+def _embedded_worker_enabled() -> bool:
+    return os.getenv("CONTEXTMESH_EMBEDDED_WORKER", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+def _ensure_embedded_worker() -> None:
+    global _WORKER_THREAD
+    if not _embedded_worker_enabled():
+        return
+    if _WORKER_THREAD and _WORKER_THREAD.is_alive():
+        return
+    _WORKER_STOP.clear()
+    _WORKER_THREAD = threading.Thread(
+        target=run_worker_loop,
+        kwargs={"stop_event": _WORKER_STOP, "poll_seconds": 0.05},
+        daemon=True,
+        name="contextmesh-embedded-worker",
+    )
+    _WORKER_THREAD.start()
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
-    global _WORKER_THREAD
     STORE.reconcile_interrupted_jobs()
     QUEUE.recover_expired()
-    if os.getenv("CONTEXTMESH_EMBEDDED_WORKER", "1").strip().lower() not in {"0", "false", "no", "off"}:
-        _WORKER_STOP.clear()
-        _WORKER_THREAD = threading.Thread(
-            target=run_worker_loop,
-            kwargs={"stop_event": _WORKER_STOP, "poll_seconds": 0.2},
-            daemon=True,
-            name="contextmesh-embedded-worker",
-        )
-        _WORKER_THREAD.start()
+    _ensure_embedded_worker()
     try:
         yield
     finally:
@@ -273,6 +282,7 @@ async def create_ingest_job(files: list[UploadFile] = File(...)):
         max_attempts=2,
     )
     EVENTS.publish("queue", {"queue_id": queued.id, "job_id": job_id, "corpus_id": corpus_id, "kind": "ingest", "status": "queued"})
+    _ensure_embedded_worker()
     return job.model_copy(update={"message": f"Queued as {queued.id}"})
 
 
@@ -309,6 +319,7 @@ def retry_ingest_job(job_id: str):
         {"job_id": job.job_id, "corpus_id": job.corpus_id, "paths": [str(p) for p in paths]},
         max_attempts=2,
     )
+    _ensure_embedded_worker()
     return {"accepted": True, "job_id": job.job_id, "corpus_id": job.corpus_id, "queue_id": queued.id}
 
 
@@ -488,6 +499,7 @@ def create_evaluation_job(req: EvaluateRequest):
         max_attempts=1,
     )
     EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": req.corpus_id, "queue_id": queued.id, "status": "queued", "coverage": 0.0})
+    _ensure_embedded_worker()
     return {"accepted": True, "job_id": job_id, "queue_id": queued.id, "corpus_id": req.corpus_id, "events": "/api/events"}
 
 
@@ -533,6 +545,7 @@ def resume_evaluation_job(corpus_id: str, job_id: str, route_id: str | None = No
         max_attempts=1,
     )
     EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": corpus_id, "queue_id": queued.id, "status": "queued"})
+    _ensure_embedded_worker()
     return {"accepted": True, "job_id": job_id, "queue_id": queued.id, "corpus_id": corpus_id, "status": "queued"}
 
 
