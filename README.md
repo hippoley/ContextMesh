@@ -19,20 +19,21 @@ The project now keeps a public **Reality Lab** of current-main reproductions ins
 - **Cognee 1.6.0** — the decisive source ranked 17 in two controlled CHUNKS probes; visible top-5 recalled 0/2 while full-coverage execution preserved both.
 - **RAGFlow current main** — a tenant 32K context override resolved as the 128K provider catalog value on one composite-reference path; the saved candidate patch makes the same regression pass.
 - **Dify current main** — an 11,343-byte instruction source was selected/read, but ordinary shell rendering hid its decisive middle span behind an 8 KiB head/tail budget.
+- **Mem0 2.2.0** — default semantic search preserved both a verified active fact and a newer contested transient fact with close scores (0.4253 vs 0.4180); explicit lifecycle filtering was required to make authority policy visible.
 
 These are specific mechanism tests, not global product rankings.
 
 - [Reality Lab static surface](site/reality.html)
-- [Evidence lifecycle contract](docs/EVIDENCE_LIFECYCLE.md)
+- [Evidence lifecycle contract](docs/reality/EVIDENCE_LIFECYCLE.md)
 - [External demand radar](docs/reality/EXTERNAL_DEMAND_RADAR.md)
 
 The resulting diagnostic model follows evidence through:
 
 ```text
-ingested -> stored -> retrieved -> eligible -> rendered -> model-visible -> judged
+ingested -> stored -> retrieved -> eligible -> rendered -> model-visible -> authority -> judged
 ```
 
-A source can therefore fail as a retrieval miss, an eligibility cutoff, or a transport/model-visibility loss without those states being collapsed into one “context missing” label.
+A source can therefore fail as a retrieval miss, an eligibility cutoff, a transport/model-visibility loss, or an unresolved authority conflict without those states being collapsed into one “context missing” label.
 
 
 
@@ -80,8 +81,9 @@ The same Reality Probe now also records byte-range visibility and a source-level
 Additional current-main evidence:
 - [Dify #42889 — selected source, hidden middle span](docs/reality/Dify-42889-2026-09-24.md)
 - [RAGFlow #20140 — validated 32K vs 128K context-resolution delta](benchmarks/results/ragflow-20140-2026-09-24.json)
+- [Mem0 2.2.0 — semantic visibility vs memory authority](docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md)
 
-See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits, and [docs/EVIDENCE_LIFECYCLE.md](docs/EVIDENCE_LIFECYCLE.md) for the generalized stage model.
+See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits, and [docs/reality/EVIDENCE_LIFECYCLE.md](docs/reality/EVIDENCE_LIFECYCLE.md) for the generalized stage model.
 
 ## v0.14 — resumable multipart uploads
 
