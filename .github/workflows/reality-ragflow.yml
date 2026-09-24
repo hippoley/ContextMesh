@@ -29,6 +29,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libpcre2-dev
+          python -m pip install 'cmake>=4,<5'
           mkdir -p internal/binding/cpp/cmake-build-release
           cd internal/binding/cpp/cmake-build-release
           cmake .. -DCMAKE_BUILD_TYPE=Release
