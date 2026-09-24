@@ -10,6 +10,7 @@ from .audit import audit_corpus
 from .fidelity import NeedleProbe, run_live_needles
 from .ingest import ingest_paths
 from .judges import HeuristicJudge, OpenAICompatibleJudge
+from .memory_replay import run_memory_replay
 from .reader import CorpusReader
 from .reality_probe import (
     CogneeChunksBackend,
@@ -99,6 +100,9 @@ def main() -> None:
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--worker-id")
 
+    mr = sub.add_parser("memory-replay", help="replay temporal memory conflicts and compare authority policies")
+    mr.add_argument("--format", choices=["json", "markdown"], default="json")
+
     rp = sub.add_parser("reality-probe", help="compare retrieval eligibility against full-coverage execution")
     rp.add_argument("--backend", action="append", choices=["lexical", "head-tail", "contextmesh", "cognee"], default=[])
     rp.add_argument("--top-k", type=int, default=5)
@@ -126,6 +130,10 @@ def main() -> None:
             once=args.once,
             worker_id=args.worker_id,
         )
+        return
+    if args.cmd == "memory-replay":
+        report = run_memory_replay()
+        print(report.to_markdown() if args.format == "markdown" else report.model_dump_json(indent=2))
         return
     if args.cmd == "reality-probe":
         store = FileContextStore(args.store)
