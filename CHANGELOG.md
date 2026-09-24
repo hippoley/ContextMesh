@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.15.0
+
+- Added an issue-derived Reality Probe suite for retrieval-induced evidence blind spots.
+- Added rare-exception, later-contradiction, near-duplicate-crowding and unsupported-query scenarios.
+- Added a deterministic lexical top-k control and a real ProgressiveEvaluator full-coverage backend.
+- Added an optional live Cognee CHUNKS adapter using Cognee remember/search APIs and source markers.
+- Added optional same-model verdict judging through an existing ContextMesh model route.
+- Added decisive-evidence recall, decisive rank, exception/contradiction preservation, coverage and verdict-availability metrics.
+- Added explicit stop/continue criteria so ContextMesh can be falsified rather than justified by architecture alone.
+- Default CI does not claim Cognee behavior; live Cognee results require the optional integration run.
+
 ## v0.14.0
 
 - Added durable upload sessions with persisted part state and resume after browser/server interruption.
