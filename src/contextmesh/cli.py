@@ -107,6 +107,7 @@ def main() -> None:
     rp.add_argument("--store", default=".contextmesh/store")
     rp.add_argument("--route-id", help="optional configured model route for a live verdict pass")
     rp.add_argument("--cognee-extractor", help="optional Cognee extractor override")
+    rp.add_argument("--cognee-fetch-k", type=int, help="fetch deeper Cognee ranking while applying --top-k as the visible cutoff")
     rp.add_argument("--format", choices=["json", "markdown"], default="json")
 
     args = p.parse_args()
@@ -134,7 +135,11 @@ def main() -> None:
         if "contextmesh" in requested:
             backends.append(ContextMeshFullCoverageBackend(workers=args.workers))
         if "cognee" in requested:
-            backends.append(CogneeChunksBackend(args.top_k, extractor=args.cognee_extractor))
+            backends.append(CogneeChunksBackend(
+                args.top_k,
+                fetch_k=args.cognee_fetch_k,
+                extractor=args.cognee_extractor,
+            ))
 
         live_judge = None
         if args.route_id:
