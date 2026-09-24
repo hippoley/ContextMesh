@@ -48,6 +48,8 @@ export CONTEXTMESH_S3_REGION=us-east-1
 
 New endpoints include `/api/upload-sessions`, part upload/presign/status/complete/abort operations, and `/api/ingest-jobs/from-upload-sessions`.
 
+MinIO E2E is exercised in CI against a real temporary MinIO server: multipart creation, SigV4 presigned part uploads, `ListParts` resume reconciliation, completion, byte-for-byte download, and abort. AWS IAM/policy integration and multi-GB WAN stress remain separate production gates.
+
 ## v0.13 — durable execution queue
 
 Long-running ingest and evaluation no longer depend on an in-process `ThreadPoolExecutor`. Jobs are written to a WAL-mode SQLite queue and leased atomically by workers.
