@@ -4,8 +4,11 @@ import importlib.util
 from contextlib import asynccontextmanager
 import os
 import shutil
+import socket
+import threading
+import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
@@ -19,6 +22,7 @@ from .evidence import evidence_kind_counts
 from .explorer import build_explorer_groups
 from .ingest import ingest_paths
 from .judges import HeuristicJudge, OpenAICompatibleJudge
+from .jobqueue import QueueJob, SQLiteJobQueue
 from .providers import build_judge_from_route, provider_catalog
 from .models import AssetIngestState, EvaluationCheckpoint, EvaluationState, IngestJob, IngestStatus, ModelRoute
 from .observability import collect_runtime_telemetry
@@ -32,14 +36,32 @@ UPLOAD_ROOT = DATA_ROOT / "uploads"
 STORE = FileContextStore(DATA_ROOT / "store")
 WEB_ROOT = Path(__file__).with_name("web")
 EVENTS = EventBus()
-BACKGROUND = ThreadPoolExecutor(max_workers=int(os.getenv("CONTEXTMESH_BACKGROUND_WORKERS", "4")), thread_name_prefix="contextmesh-bg")
+QUEUE = SQLiteJobQueue(DATA_ROOT / "jobs.sqlite3")
+_WORKER_STOP = threading.Event()
+_WORKER_THREAD: threading.Thread | None = None
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI):
+    global _WORKER_THREAD
     STORE.reconcile_interrupted_jobs()
-    yield
+    QUEUE.recover_expired()
+    if os.getenv("CONTEXTMESH_EMBEDDED_WORKER", "1").strip().lower() not in {"0", "false", "no", "off"}:
+        _WORKER_STOP.clear()
+        _WORKER_THREAD = threading.Thread(
+            target=run_worker_loop,
+            kwargs={"stop_event": _WORKER_STOP, "poll_seconds": 0.2},
+            daemon=True,
+            name="contextmesh-embedded-worker",
+        )
+        _WORKER_THREAD.start()
+    try:
+        yield
+    finally:
+        _WORKER_STOP.set()
+        if _WORKER_THREAD and _WORKER_THREAD.is_alive():
+            _WORKER_THREAD.join(timeout=2.0)
 
-app = FastAPI(title="ContextMesh", version="0.12.0", lifespan=_lifespan)
+app = FastAPI(title="ContextMesh", version="0.13.0", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT)), name="static")
 
 
@@ -86,7 +108,7 @@ def admin_page():
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "0.12.0"}
+    return {"ok": True, "version": "0.13.0", "queue": QUEUE.stats(), "workers": len(QUEUE.workers())}
 
 
 @app.get("/api/events")
@@ -245,8 +267,13 @@ async def create_ingest_job(files: list[UploadFile] = File(...)):
         assets=[AssetIngestState(filename=p.name, path=str(p), bytes=p.stat().st_size) for p in paths],
     )
     STORE.put_ingest_job(job)
-    BACKGROUND.submit(_run_ingest_job, job_id, corpus_id, paths)
-    return job
+    queued = QUEUE.enqueue(
+        "ingest", job_id,
+        {"job_id": job_id, "corpus_id": corpus_id, "paths": [str(p) for p in paths]},
+        max_attempts=2,
+    )
+    EVENTS.publish("queue", {"queue_id": queued.id, "job_id": job_id, "corpus_id": corpus_id, "kind": "ingest", "status": "queued"})
+    return job.model_copy(update={"message": f"Queued as {queued.id}"})
 
 
 @app.get("/api/ingest-jobs")
@@ -277,8 +304,12 @@ def retry_ingest_job(job_id: str):
         asset.status = IngestStatus.QUEUED
         asset.message = ""
     STORE.put_ingest_job(job)
-    BACKGROUND.submit(_run_ingest_job, job.job_id, job.corpus_id, paths)
-    return {"accepted": True, "job_id": job.job_id, "corpus_id": job.corpus_id}
+    queued = QUEUE.enqueue(
+        "ingest", job.job_id,
+        {"job_id": job.job_id, "corpus_id": job.corpus_id, "paths": [str(p) for p in paths]},
+        max_attempts=2,
+    )
+    return {"accepted": True, "job_id": job.job_id, "corpus_id": job.corpus_id, "queue_id": queued.id}
 
 
 # Backward-compatible synchronous ingest endpoint.
@@ -425,7 +456,7 @@ def _run_evaluation_job(req: EvaluateRequest, job_id: str) -> None:
             req.answer,
             order=req.order,
             job_id=job_id,
-            resume=False,
+            resume=req.resume,
             max_blocks=None,
         )
     except Exception as exc:
@@ -451,9 +482,13 @@ def create_evaluation_job(req: EvaluateRequest):
     job_id = req.job_id or f"job_{uuid.uuid4().hex[:12]}"
     req = req.model_copy(update={"job_id": job_id, "resume": False, "max_blocks": None})
     STORE.clear_job_flags(req.corpus_id, job_id)
-    BACKGROUND.submit(_run_evaluation_job, req, job_id)
-    EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": req.corpus_id, "status": "queued", "coverage": 0.0})
-    return {"accepted": True, "job_id": job_id, "corpus_id": req.corpus_id, "events": "/api/events"}
+    queued = QUEUE.enqueue(
+        "evaluation", job_id,
+        {"request": req.model_dump(mode="json")},
+        max_attempts=1,
+    )
+    EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": req.corpus_id, "queue_id": queued.id, "status": "queued", "coverage": 0.0})
+    return {"accepted": True, "job_id": job_id, "queue_id": queued.id, "corpus_id": req.corpus_id, "events": "/api/events"}
 
 
 @app.post("/api/evaluation-jobs/{corpus_id}/{job_id}/cancel")
@@ -469,6 +504,7 @@ def cancel_evaluation_job(corpus_id: str, job_id: str):
     except FileNotFoundError:
         cp = None
     STORE.set_job_flag(corpus_id, job_id, cancel_requested=True)
+    QUEUE.request_cancel(logical_job_id=job_id)
     EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": corpus_id, "status": "cancelling"})
     return {"accepted": True, "job_id": job_id, "status": "cancelling"}
 
@@ -490,18 +526,86 @@ def resume_evaluation_job(corpus_id: str, job_id: str, route_id: str | None = No
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
     STORE.clear_job_flags(corpus_id, job_id)
-    def _resume():
+    req = req.model_copy(update={"order": cp.ordered_block_ids, "resume": True})
+    queued = QUEUE.enqueue(
+        "evaluation", job_id,
+        {"request": req.model_dump(mode="json")},
+        max_attempts=1,
+    )
+    EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": corpus_id, "queue_id": queued.id, "status": "queued"})
+    return {"accepted": True, "job_id": job_id, "queue_id": queued.id, "corpus_id": corpus_id, "status": "queued"}
+
+
+
+def _process_queue_job(item: QueueJob) -> str:
+    if item.kind == "ingest":
+        payload = item.payload
+        _run_ingest_job(
+            str(payload["job_id"]),
+            str(payload["corpus_id"]),
+            [Path(x) for x in payload.get("paths", [])],
+        )
+        job = STORE.get_ingest_job(str(payload["job_id"]))
+        if job.status == IngestStatus.FAILED:
+            raise RuntimeError(job.message or "ingest failed")
+        return job.status.value
+
+    if item.kind == "evaluation":
+        req = EvaluateRequest.model_validate(item.payload["request"])
+        _run_evaluation_job(req, req.job_id or item.logical_job_id)
         try:
-            judge = _judge_for_request(req)
-            ProgressiveEvaluator(
-                STORE, judge, reduction_batch_size=req.reduction_batch_size, max_workers=_effective_workers(req),
-                retry_attempts=req.retry_attempts, retry_backoff_seconds=0.75, progress_callback=_evaluation_progress,
-                cancellation_check=STORE.job_cancel_requested,
-            ).evaluate(corpus_id, cp.state.question, cp.state.answer, order=cp.ordered_block_ids, job_id=job_id, resume=True)
+            cp = STORE.get_checkpoint(req.corpus_id, req.job_id or item.logical_job_id)
+        except FileNotFoundError:
+            raise RuntimeError("evaluation finished without a checkpoint")
+        if cp.status == "failed":
+            raise RuntimeError(cp.final_rationale or "evaluation failed")
+        return cp.status
+
+    raise ValueError(f"unsupported queue job kind: {item.kind}")
+
+
+def run_worker_loop(
+    *, stop_event: threading.Event | None = None, poll_seconds: float = 0.5,
+    lease_seconds: float = 180.0, once: bool = False, worker_id: str | None = None,
+) -> None:
+    stop_event = stop_event or threading.Event()
+    worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:6]}"
+    while not stop_event.is_set():
+        QUEUE.heartbeat_worker(worker_id, pid=os.getpid(), hostname=socket.gethostname(), active_job_id=None)
+        item = QUEUE.lease(worker_id, lease_seconds=lease_seconds)
+        if item is None:
+            if once:
+                return
+            stop_event.wait(max(0.05, poll_seconds))
+            continue
+        QUEUE.heartbeat_worker(worker_id, pid=os.getpid(), hostname=socket.gethostname(), active_job_id=item.id)
+        EVENTS.publish("queue", {"queue_id": item.id, "job_id": item.logical_job_id, "kind": item.kind, "status": "running", "worker_id": worker_id})
+        try:
+            logical_status = _process_queue_job(item)
+            if logical_status == "cancelled":
+                QUEUE.mark_cancelled(item.id)
+            else:
+                QUEUE.complete(item.id, worker_id)
+            EVENTS.publish("queue", {"queue_id": item.id, "job_id": item.logical_job_id, "kind": item.kind, "status": logical_status, "worker_id": worker_id})
         except Exception as exc:
-            EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": corpus_id, "status": "failed", "error": f"{type(exc).__name__}: {exc}"})
-    BACKGROUND.submit(_resume)
-    return {"accepted": True, "job_id": job_id, "corpus_id": corpus_id, "status": "queued"}
+            failed = QUEUE.fail(item.id, f"{type(exc).__name__}: {exc}", retry_delay_seconds=min(30.0, 2.0 ** max(0, item.attempts - 1)))
+            EVENTS.publish("queue", {"queue_id": item.id, "job_id": item.logical_job_id, "kind": item.kind, "status": failed.status, "error": failed.last_error, "worker_id": worker_id})
+        finally:
+            QUEUE.heartbeat_worker(worker_id, pid=os.getpid(), hostname=socket.gethostname(), active_job_id=None)
+        if once:
+            return
+
+
+@app.get("/api/admin/queue")
+def queue_overview(limit: int = Query(100, ge=1, le=1000)):
+    return {
+        "stats": QUEUE.stats(),
+        "workers": QUEUE.workers(),
+        "jobs": [asdict(x) for x in QUEUE.list(limit=limit)],
+        "backend": "sqlite-wal",
+        "scope": "single-host durable queue; run contextmesh worker for process isolation",
+    }
+
 
 @app.post("/api/preflight")
 def evaluation_preflight(req: PreflightRequest):
@@ -715,7 +819,7 @@ def admin_overview():
 
     telemetry = collect_runtime_telemetry()
     runtime = {
-        "version": "0.12.0",
+        "version": "0.13.0",
         "store": str(STORE.root),
         "default judge": "heuristic / model route / OpenAI-compatible",
         "Docling": "available" if importlib.util.find_spec("docling") else "optional, not installed",
@@ -725,6 +829,8 @@ def admin_overview():
         "ranking policy": "scheduling only; never filtering",
         "overflow policy": "exhaustive map + bounded hierarchical reduce + source rehydration",
         "block payload backend": getattr(STORE.block_store, "backend", STORE.block_backend),
+        "job queue backend": "sqlite-wal",
+        "active workers": len(QUEUE.workers()),
     }
     storage_rows: list[dict] = []
     for manifest in corpora:
@@ -750,6 +856,8 @@ def admin_overview():
             "unresolved_units": sum(x.unresolved_units for x in corpora),
             "indexed_blocks": sum(STORE.catalog_stats(x.corpus_id).get("indexed_blocks", 0) for x in corpora),
             "stored_blocks": sum(int(x.get("stored_blocks", 0)) for x in storage_rows),
+            "queue_depth": QUEUE.stats()["queued"],
+            "active_workers": len(QUEUE.workers()),
         },
         "corpora": corpora,
         "ingest_jobs": ingest_jobs,
@@ -758,4 +866,9 @@ def admin_overview():
         "routes": routes,
         "telemetry": telemetry,
         "runtime": runtime,
+        "queue": {
+            "stats": QUEUE.stats(),
+            "workers": QUEUE.workers(),
+            "jobs": [asdict(x) for x in QUEUE.list(limit=100)],
+        },
     }
