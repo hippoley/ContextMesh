@@ -1,7 +1,7 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const fmt = new Intl.NumberFormat();
-const state = { corpora: [], selected: null, catalog: null, storage: null, routes: [], providers: [], lastJob: null, lastCorpus: null, ingestJob: null, eventSource: null };
+const state = { corpora: [], selected: null, catalog: null, storage: null, routes: [], providers: [], lastJob: null, lastCorpus: null, ingestJob: null, eventSource: null, uploadBackend: 'local' };
 
 function escapeHtml(s=''){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function pct(x){ return `${Math.round((Number(x)||0)*1000)/10}%`; }
@@ -12,7 +12,7 @@ function toast(msg,error=false){ const el=$('#toast'); if(!el)return; el.textCon
 async function api(path,options={}){ const r=await fetch(path,options); let d=null; try{d=await r.json()}catch{d={detail:await r.text()}} if(!r.ok) throw new Error(d.detail||`${r.status} ${r.statusText}`); return d; }
 function uploadForm(path,formData,onProgress){return new Promise((resolve,reject)=>{const x=new XMLHttpRequest();x.open('POST',path);x.responseType='json';x.upload.onprogress=e=>{if(e.lengthComputable&&onProgress)onProgress(e.loaded/e.total,e.loaded,e.total)};x.onerror=()=>reject(new Error('Upload connection failed'));x.onload=()=>{const d=x.response||{};if(x.status>=200&&x.status<300)resolve(d);else reject(new Error(d.detail||`${x.status} upload failed`));};x.send(formData);});}
 
-async function checkHealth(){ try{const d=await api('/health'); if($('#healthText'))$('#healthText').textContent=`Runtime ${d.version} online`; }catch(e){ if($('#healthText'))$('#healthText').textContent='Runtime unavailable'; } }
+async function checkHealth(){ try{const d=await api('/health'); state.uploadBackend=d.upload_backend||'local'; if($('#healthText'))$('#healthText').textContent=`Runtime ${d.version} online · ${d.resumable_uploads?'resumable '+state.uploadBackend:'legacy upload'}`; }catch(e){ if($('#healthText'))$('#healthText').textContent='Runtime unavailable'; } }
 
 function connectEvents(){
   if(!window.EventSource || state.eventSource) return;
@@ -32,6 +32,53 @@ function handleEvaluationEvent(d){
 let adminRefreshTimer=null; function scheduleAdminRefresh(){ clearTimeout(adminRefreshTimer); adminRefreshTimer=setTimeout(loadAdmin,350); }
 
 // ---- Workspace ingest -------------------------------------------------------
+async function sha256Blob(blob){
+  const buf=await blob.arrayBuffer();
+  const digest=await crypto.subtle.digest('SHA-256',buf);
+  return [...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+function uploadResumeKey(file){return `contextmesh:upload:${file.name}:${file.size}:${file.lastModified||0}:${state.uploadBackend}`;}
+async function getOrCreateUploadSession(file){
+  const key=uploadResumeKey(file);
+  const remembered=localStorage.getItem(key);
+  if(remembered){
+    try{
+      const st=await api(`/api/upload-sessions/${encodeURIComponent(remembered)}`);
+      if(st.filename===file.name&&Number(st.size_bytes)===file.size&&st.status!=='aborted') return st;
+    }catch{}
+    localStorage.removeItem(key);
+  }
+  const st=await api('/api/upload-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    filename:file.name,size_bytes:file.size,part_size:8*1024*1024,backend:state.uploadBackend,content_type:file.type||null
+  })});
+  localStorage.setItem(key,st.id);
+  return st;
+}
+async function resumableUploadFile(file,onProgress){
+  let st=await getOrCreateUploadSession(file);
+  if(st.status==='complete') return st.id;
+  const totalParts=st.expected_parts||Math.ceil(file.size/st.part_size);
+  const missing=new Set(st.missing_parts||Array.from({length:totalParts},(_,i)=>i+1));
+  let uploaded=Number(st.uploaded_bytes||0);
+  onProgress?.(uploaded/file.size,uploaded,file.size,st);
+  for(let part=1;part<=totalParts;part++){
+    if(!missing.has(part))continue;
+    const from=(part-1)*st.part_size,to=Math.min(file.size,part*st.part_size),blob=file.slice(from,to);
+    if(state.uploadBackend==='s3'){
+      const p=await api(`/api/upload-sessions/${encodeURIComponent(st.id)}/parts/${part}/presign`,{method:'POST'});
+      const resp=await fetch(p.url,{method:'PUT',body:blob});
+      if(!resp.ok)throw new Error(`S3 part ${part} failed: ${resp.status}`);
+    }else{
+      const digest=await sha256Blob(blob);
+      const resp=await fetch(`/api/upload-sessions/${encodeURIComponent(st.id)}/parts/${part}`,{method:'PUT',headers:{'X-Part-Sha256':digest},body:blob});
+      if(!resp.ok){let d={};try{d=await resp.json()}catch{}throw new Error(d.detail||`Part ${part} failed`);}
+    }
+    uploaded+=blob.size;
+    onProgress?.(Math.min(1,uploaded/file.size),uploaded,file.size,{...st,part,totalParts});
+  }
+  st=await api(`/api/upload-sessions/${encodeURIComponent(st.id)}/complete`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({parts:[]})});
+  return st.id;
+}
 function initUpload(){
   const input=$('#fileInput'), dz=$('#dropzone'), btn=$('#uploadBtn'); if(!input||!btn)return;
   const render=()=>{const files=[...input.files]; btn.disabled=!files.length; const list=$('#fileList'); list.className='file-list'+(files.length?'':' empty'); list.innerHTML=files.length?files.map(f=>`<span class="file-pill">${escapeHtml(f.name)} · ${bytes(f.size)}</span>`).join(''):'No files selected';};
@@ -41,9 +88,18 @@ function initUpload(){
   dz.addEventListener('drop',e=>{ input.files=e.dataTransfer.files; render(); });
   btn.addEventListener('click',async()=>{
     const files=[...input.files]; if(!files.length)return;
-    const fd=new FormData(); files.forEach(f=>fd.append('files',f)); btn.disabled=true; btn.textContent='Queueing…';
-    try{ renderIngestProgress({status:'uploading',progress:0,total_files:files.length,completed_files:0}); const job=await uploadForm('/api/ingest-jobs',fd,(p,loaded,total)=>{renderIngestProgress({status:'uploading',progress:p,total_files:files.length,completed_files:0,path:`${bytes(loaded)} / ${bytes(total)}`})}); state.ingestJob=job.job_id; renderIngestProgress({status:'queued',progress:0,total_files:job.total_files,completed_files:0}); btn.textContent='Queued'; await pollIngestJob(job.job_id); }
-    catch(e){toast(e.message,true);btn.disabled=false;btn.textContent='Queue ingest';}
+    btn.disabled=true; btn.textContent='Uploading…';
+    const totalBytes=files.reduce((n,f)=>n+f.size,0); let completedBytes=0; const sessions=[];
+    try{
+      renderIngestProgress({status:'resumable upload',progress:0,total_files:files.length,completed_files:0});
+      for(let i=0;i<files.length;i++){
+        const file=files[i],base=completedBytes;
+        const sid=await resumableUploadFile(file,(p,loaded)=>renderIngestProgress({status:`uploading · ${state.uploadBackend}`,progress:(base+loaded)/Math.max(1,totalBytes),total_files:files.length,completed_files:i,path:`${file.name} · ${bytes(loaded)} / ${bytes(file.size)}`}));
+        sessions.push(sid); completedBytes+=file.size;
+      }
+      const job=await api('/api/ingest-jobs/from-upload-sessions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_ids:sessions})});
+      state.ingestJob=job.job_id; renderIngestProgress({status:'queued',progress:0,total_files:job.total_files,completed_files:0}); btn.textContent='Queued'; await pollIngestJob(job.job_id);
+    }catch(e){toast(e.message,true);btn.disabled=false;btn.textContent='Queue ingest';}
   });
 }
 function renderIngestProgress(d){
