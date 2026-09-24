@@ -55,6 +55,8 @@ def test_probe_report_exposes_verdict_change_when_decisive_evidence_is_missing()
     assert topk.verdict_correct is False
     assert full.decisive_recall == 1.0
     assert full.evidence_available_verdict == ProbeVerdict.CONTRADICTS
+    assert full.decisive_semantic_visibility == 1.0
+    assert full.selected_source_visibility == 1.0
     assert full.verdict_correct is True
     assert full.coverage == 1.0
 
@@ -151,7 +153,13 @@ def test_head_tail_transport_can_select_source_but_hide_decisive_span():
     assert trace.selected is True
     assert trace.content_complete is False
     assert trace.semantic_available is False
+    assert trace.visible_bytes == 8192
+    assert 0.7 < trace.visible_ratio < 0.8
+    assert trace.visible_byte_ranges[0][0] == 0
+    assert trace.visible_byte_ranges[-1][1] == trace.source_bytes
     assert trace.decision == "selected-but-semantic-span-hidden"
+    assert truncated.decisive_semantic_visibility == 0.0
+    assert 0.7 < truncated.selected_source_visibility < 0.8
 
     assert full.coverage == 1.0
     assert full.decisive_recall == 1.0
