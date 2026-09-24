@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import contextmesh.api as api_module
+from contextmesh import __version__
 from contextmesh.evidence import evidence_kind_counts, render_typed_evidence
 from contextmesh.ingest import ingest_paths
 from contextmesh.runtime import ProgressiveEvaluator
@@ -101,7 +102,7 @@ def test_v11_workspace_surfaces_catalog_and_typed_evidence():
     client = TestClient(api_module.app)
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json()["version"] == "0.13.0"
+    assert health.json()["version"] == __version__
     page = client.get("/")
     assert page.status_code == 200
     assert "Typed evidence inspector" in page.text
