@@ -21,7 +21,7 @@
     <div class="sidebar-contract"><span class="contract-dot"></span><div><strong>Runtime invariant</strong><small>No score before complete coverage.</small></div></div>
   </aside>
   <main class="os-main admin-surface">
-    <header class="os-topbar"><div><p class="eyebrow">Operations · v0.11</p><h1>Control the context runtime, not just the model.</h1><p class="subhead">Context control plane. Routes, queues, corpus health, failed blocks, cache efficiency, latency and model spend in one operating surface.</p></div><div class="topbar-actions"><button id="adminRefresh" class="btn secondary">Refresh</button></div></header>
+    <header class="os-topbar"><div><p class="eyebrow">Operations · v0.12</p><h1>Control the context runtime, not just the model.</h1><p class="subhead">Context control plane. Routes, queues, corpus health, failed blocks, cache efficiency, latency and model spend in one operating surface.</p></div><div class="topbar-actions"><button id="adminRefresh" class="btn secondary">Refresh</button></div></header>
 
     <section id="adminMetrics" class="metric-grid admin-metrics expanded">
       <div class="metric jumbo"><span>Corpora</span><strong>—</strong><small>collections</small></div><div class="metric jumbo"><span>Ingest jobs</span><strong>—</strong><small>pipelines</small></div><div class="metric jumbo"><span>Eval jobs</span><strong>—</strong><small>checkpoints</small></div><div class="metric jumbo"><span>Prompt tokens</span><strong>—</strong><small>model input</small></div><div class="metric jumbo"><span>Est. cost</span><strong>—</strong><small>route pricing</small></div><div class="metric jumbo"><span>Failures</span><strong>—</strong><small>pending retry</small></div>
@@ -70,7 +70,7 @@
 
 <script>
 (() => {
- const metrics=[12,31,148,'1.42M','9.8M','$43.72',2];
+ const metrics=[12,31,148,'1.42M','1.42M','9.8M','$43.72',2];
  document.querySelectorAll('#adminMetrics strong').forEach((el,i)=>el.textContent=metrics[i] ?? '—');
  const btn=document.querySelector('#adminRefresh'); if(btn) btn.addEventListener('click',()=>{btn.textContent='Updated'; setTimeout(()=>btn.textContent='Refresh',900)});
  document.querySelectorAll('button').forEach(b=>{

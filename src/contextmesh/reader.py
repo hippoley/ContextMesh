@@ -93,10 +93,16 @@ class CorpusReader:
     def related(self, block_id: str, *, limit: int = 12) -> list[ContextBlock]:
         """Return structurally co-located blocks without changing the coverage set.
 
-        Examples: PDF page text + rendered page image, PPT slide text + slide image,
-        or multiple modalities covering the same timeline interval.
+        v0.12 uses indexed locator lookup when available, avoiding an O(N) scan of
+        every required payload for each inspected block.
         """
         center = self.read(block_id)
+        try:
+            ids = self.store.catalog.related_ids(center, limit=limit)
+            return self.store.get_blocks(self.corpus_id, ids)
+        except Exception:
+            pass
+        # Portable fallback for custom stores/catalogs.
         sig = self._location_signature(center)
         if sig is None:
             return []
@@ -106,9 +112,7 @@ class CorpusReader:
                 continue
             candidate = self.read(candidate_id)
             csig = self._location_signature(candidate)
-            if csig is None:
-                continue
-            if sig[:2] != csig[:2]:
+            if csig is None or sig[:2] != csig[:2]:
                 continue
             if sig[1] == "timeline":
                 _, _, a0, a1 = sig
@@ -134,11 +138,19 @@ class CorpusReader:
         return None
 
     def references(self, block_id: str, *, limit: int = 12) -> list[ContextBlock]:
-        """Resolve explicit in-document references such as page/slide/sheet pointers."""
+        """Resolve explicit page/slide/sheet references using the structural catalog."""
         center = self.read(block_id)
         hints = extract_reference_hints(center.text)
         if not hints:
             return []
+        try:
+            ids = self.store.catalog.reference_ids(
+                self.corpus_id, center.source.asset_id, hints, limit=limit
+            )
+            ids = [x for x in ids if x != block_id]
+            return self.store.get_blocks(self.corpus_id, ids[:limit])
+        except Exception:
+            pass
         out: list[ContextBlock] = []
         seen: set[str] = set()
         for candidate_id in self.required_ids:

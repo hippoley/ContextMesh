@@ -8,6 +8,7 @@ import uuid
 from pathlib import Path
 
 from .catalog import SQLiteContextCatalog
+from .blockstore import JsonBlockPayloadStore, SQLiteBlockPayloadStore
 from .models import ContextBlock, CorpusManifest, EvaluationCheckpoint, IngestJob, IngestStatus, ModelRoute
 
 
@@ -18,12 +19,24 @@ class FileContextStore:
     serving layer. v0.7 adds durable ingest jobs and model-route configuration.
     """
 
-    def __init__(self, root: str | Path):
+    def __init__(self, root: str | Path, *, block_backend: str | None = None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         (self.root / "_control").mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         self.catalog = SQLiteContextCatalog(self.root / "_catalog.sqlite3")
+        requested_backend = (block_backend or os.getenv("CONTEXTMESH_BLOCK_BACKEND", "sqlite")).strip().lower()
+        if requested_backend in {"sqlite", "sqlite-payload", "auto"}:
+            self.block_store = SQLiteBlockPayloadStore(self.root / "_blocks.sqlite3")
+            self.block_backend = "sqlite"
+        elif requested_backend in {"json", "json-files", "filesystem"}:
+            self.block_store = JsonBlockPayloadStore(self.root)
+            self.block_backend = "json"
+        else:
+            raise ValueError(f"unsupported ContextMesh block backend: {requested_backend}")
+        # Always keep a legacy JSON reader available so v0.1-v0.11 corpora can be
+        # opened and lazily migrated after upgrading to the SQLite runtime backend.
+        self._legacy_blocks = JsonBlockPayloadStore(self.root)
 
 
     @staticmethod
@@ -45,18 +58,35 @@ class FileContextStore:
     def put_blocks(self, blocks: list[ContextBlock]) -> None:
         if not blocks:
             return
-        by_corpus: dict[str, list[ContextBlock]] = {}
-        for block in blocks:
-            d = self._corpus_dir(block.corpus_id) / "blocks"
-            d.mkdir(parents=True, exist_ok=True)
-            self._atomic_write(d / f"{block.id}.json", block.model_dump_json(indent=2))
-            by_corpus.setdefault(block.corpus_id, []).append(block)
-        for items in by_corpus.values():
-            self.catalog.upsert_many(items)
+        # One batch write for payloads + one batch write for catalog metadata.
+        # SQLite mode avoids the millions-of-small-files bottleneck while preserving
+        # the manifest as the authoritative coverage contract.
+        self.block_store.put_many(blocks)
+        self.catalog.upsert_many(blocks)
 
     def get_block(self, corpus_id: str, block_id: str) -> ContextBlock:
-        p = self._corpus_dir(corpus_id, create=False) / "blocks" / f"{block_id}.json"
-        return ContextBlock.model_validate_json(p.read_text(encoding="utf-8"))
+        try:
+            return self.block_store.get(corpus_id, block_id)
+        except FileNotFoundError:
+            if self.block_backend != "sqlite":
+                raise
+            # Backwards compatibility: v0.1-v0.11 stored one JSON file per block.
+            # Read it once, then lazily migrate it into the SQLite payload backend.
+            block = self._legacy_blocks.get(corpus_id, block_id)
+            self.block_store.put_many([block])
+            return block
+
+    def get_blocks(self, corpus_id: str, block_ids: list[str]) -> list[ContextBlock]:
+        if not block_ids:
+            return []
+        found = {b.id: b for b in self.block_store.get_many(corpus_id, block_ids)}
+        if len(found) < len(set(block_ids)) and self.block_backend == "sqlite":
+            missing = [x for x in block_ids if x not in found]
+            legacy = self._legacy_blocks.get_many(corpus_id, missing)
+            if legacy:
+                self.block_store.put_many(legacy)
+                found.update({b.id: b for b in legacy})
+        return [found[x] for x in block_ids if x in found]
 
     def put_manifest(self, manifest: CorpusManifest) -> None:
         p = self._corpus_dir(manifest.corpus_id) / "manifest.json"
@@ -85,7 +115,44 @@ class FileContextStore:
             return False
         shutil.rmtree(p)
         self.catalog.delete_corpus(corpus_id)
+        self.block_store.delete_corpus(corpus_id)
         return True
+
+    def ensure_block_store(self, corpus_id: str) -> dict:
+        """Ensure the configured payload backend can serve every addressable block.
+
+        When upgrading an older JSON-per-block corpus into SQLite mode, missing
+        payloads are migrated in deterministic batches. No coverage IDs are changed.
+        """
+        manifest = self.get_manifest(corpus_id)
+        expected_ids = list(dict.fromkeys([*manifest.structural_block_ids, *manifest.block_ids]))
+        stored_before = self.block_store.count(corpus_id)
+        migrated = 0
+        if self.block_backend == "sqlite" and stored_before < len(expected_ids):
+            existing = self.block_store.existing_ids(corpus_id, expected_ids)
+            missing = [x for x in expected_ids if x not in existing]
+            for start in range(0, len(missing), 1000):
+                legacy = self._legacy_blocks.get_many(corpus_id, missing[start:start + 1000])
+                if legacy:
+                    migrated += self.block_store.put_many(legacy)
+        stored = self.block_store.count(corpus_id)
+        legacy = self._legacy_blocks.count(corpus_id)
+        base = self.block_store.stats(corpus_id) if hasattr(self.block_store, "stats") else {
+            "backend": getattr(self.block_store, "backend", self.block_backend),
+            "stored_blocks": stored,
+        }
+        base.update({
+            "configured_backend": self.block_backend,
+            "addressable_manifest_blocks": len(expected_ids),
+            "legacy_json_blocks": legacy,
+            "migrated_blocks": migrated,
+            "ready": stored >= len(expected_ids),
+            "policy": "payload storage only; manifest remains coverage authority",
+        })
+        return base
+
+    def block_store_stats(self, corpus_id: str) -> dict:
+        return self.ensure_block_store(corpus_id)
 
     def ensure_catalog(self, corpus_id: str) -> dict:
         """Backfill the SQLite catalog for corpora created by older ContextMesh versions."""
@@ -93,11 +160,13 @@ class FileContextStore:
         expected_ids = list(dict.fromkeys([*manifest.structural_block_ids, *manifest.block_ids]))
         indexed_before = self.catalog.count(corpus_id)
         if indexed_before < len(expected_ids):
-            for block_id in expected_ids:
-                try:
-                    self.catalog.upsert(self.get_block(corpus_id, block_id))
-                except FileNotFoundError:
-                    continue
+            # Ensure old payloads are migrated first, then batch catalog writes instead
+            # of opening one SQLite transaction per block.
+            self.ensure_block_store(corpus_id)
+            for start in range(0, len(expected_ids), 1000):
+                blocks = self.get_blocks(corpus_id, expected_ids[start:start + 1000])
+                if blocks:
+                    self.catalog.upsert_many(blocks)
         stats = self.catalog.stats(corpus_id)
         stats["manifest_blocks"] = manifest.total_blocks
         stats["manifest_required_blocks"] = manifest.required_blocks

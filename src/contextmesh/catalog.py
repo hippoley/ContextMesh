@@ -27,6 +27,20 @@ class SQLiteContextCatalog:
         self._fts_enabled = True
         self._init_schema()
 
+    @staticmethod
+    def _locator_fields(block: ContextBlock) -> tuple[str, float | None, float | None]:
+        loc = block.source.locator or {}
+        for key in ("page", "slide", "sheet_name", "sheet", "workbook_page"):
+            if loc.get(key) is not None:
+                return f"{key}:{str(loc.get(key)).strip().lower()}", None, None
+        start = loc.get("start_time") if loc.get("start_time") is not None else loc.get("time_start")
+        end = loc.get("end_time") if loc.get("end_time") is not None else loc.get("time_end")
+        if start is not None or end is not None:
+            a = float(start or 0.0)
+            b = float(end if end is not None else start or 0.0)
+            return "timeline", min(a, b), max(a, b)
+        return "", None, None
+
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.path, timeout=30.0)
         conn.row_factory = sqlite3.Row
@@ -49,13 +63,26 @@ class SQLiteContextCatalog:
                     text TEXT NOT NULL DEFAULT '',
                     processable INTEGER NOT NULL DEFAULT 1,
                     locator_json TEXT NOT NULL DEFAULT '{}',
+                    location_key TEXT NOT NULL DEFAULT '',
+                    time_start REAL,
+                    time_end REAL,
                     updated_at REAL NOT NULL,
                     PRIMARY KEY (corpus_id, block_id)
                 )
                 """
             )
+            # Online schema migration for catalogs created before v0.12.
+            columns = {str(row[1]) for row in conn.execute("PRAGMA table_info(blocks)").fetchall()}
+            if "location_key" not in columns:
+                conn.execute("ALTER TABLE blocks ADD COLUMN location_key TEXT NOT NULL DEFAULT ''")
+            if "time_start" not in columns:
+                conn.execute("ALTER TABLE blocks ADD COLUMN time_start REAL")
+            if "time_end" not in columns:
+                conn.execute("ALTER TABLE blocks ADD COLUMN time_end REAL")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_corpus ON blocks(corpus_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_asset ON blocks(corpus_id, asset_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_location ON blocks(corpus_id, asset_id, location_key)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_blocks_timeline ON blocks(corpus_id, asset_id, time_start, time_end)")
             try:
                 conn.execute(
                     """
@@ -71,8 +98,9 @@ class SQLiteContextCatalog:
             except sqlite3.OperationalError:
                 self._fts_enabled = False
 
-    @staticmethod
-    def _row(block: ContextBlock) -> tuple:
+    @classmethod
+    def _row(cls, block: ContextBlock) -> tuple:
+        location_key, time_start, time_end = cls._locator_fields(block)
         return (
             block.corpus_id,
             block.id,
@@ -84,6 +112,9 @@ class SQLiteContextCatalog:
             block.text or "",
             1 if block.processable else 0,
             json.dumps(block.source.locator, ensure_ascii=False, sort_keys=True),
+            location_key,
+            time_start,
+            time_end,
             time.time(),
         )
 
@@ -111,8 +142,8 @@ class SQLiteContextCatalog:
                         existing.add((corpus_id, str(row[0])))
             conn.executemany(
                 """
-                INSERT INTO blocks(corpus_id, block_id, asset_id, path, modality, kind, title, text, processable, locator_json, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO blocks(corpus_id, block_id, asset_id, path, modality, kind, title, text, processable, locator_json, location_key, time_start, time_end, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(corpus_id, block_id) DO UPDATE SET
                     asset_id=excluded.asset_id,
                     path=excluded.path,
@@ -122,6 +153,9 @@ class SQLiteContextCatalog:
                     text=excluded.text,
                     processable=excluded.processable,
                     locator_json=excluded.locator_json,
+                    location_key=excluded.location_key,
+                    time_start=excluded.time_start,
+                    time_end=excluded.time_end,
                     updated_at=excluded.updated_at
                 """,
                 rows,
@@ -187,6 +221,67 @@ class SQLiteContextCatalog:
                     scored.append((-score, str(row[0])))
             scored.sort()
             return [block_id for _, block_id in scored[:limit]]
+
+    def related_ids(self, block: ContextBlock, *, limit: int = 12) -> list[str]:
+        """Return structurally co-located IDs using indexed locator columns.
+
+        This replaces O(corpus-size) payload scans for PDF pages, PPT slides, sheets
+        and timeline overlap checks. It is structural lookup, not semantic retrieval.
+        """
+        location_key, time_start, time_end = self._locator_fields(block)
+        with self._lock, self._connect() as conn:
+            if location_key and location_key != "timeline":
+                rows = conn.execute(
+                    """
+                    SELECT block_id FROM blocks
+                    WHERE corpus_id=? AND asset_id=? AND location_key=? AND block_id<>?
+                    ORDER BY block_id LIMIT ?
+                    """,
+                    (block.corpus_id, block.source.asset_id, location_key, block.id, limit),
+                ).fetchall()
+            elif location_key == "timeline" and time_start is not None and time_end is not None:
+                rows = conn.execute(
+                    """
+                    SELECT block_id FROM blocks
+                    WHERE corpus_id=? AND asset_id=? AND location_key='timeline' AND block_id<>?
+                      AND COALESCE(time_start, 0) <= ? AND COALESCE(time_end, time_start, 0) >= ?
+                    ORDER BY time_start, block_id LIMIT ?
+                    """,
+                    (block.corpus_id, block.source.asset_id, block.id, time_end, time_start, limit),
+                ).fetchall()
+            else:
+                return []
+        return [str(row[0]) for row in rows]
+
+    def reference_ids(self, corpus_id: str, asset_id: str, hints: Iterable[Any], *, limit: int = 12) -> list[str]:
+        keys: list[str] = []
+        for hint in hints:
+            kind = str(getattr(hint, "kind", ""))
+            value = str(getattr(hint, "value", "")).strip().lower()
+            if kind in {"page", "slide", "sheet_name", "sheet", "workbook_page"} and value:
+                keys.append(f"{kind}:{value}")
+                if kind == "sheet_name":
+                    keys.append(f"sheet:{value}")
+        keys = list(dict.fromkeys(keys))
+        if not keys:
+            return []
+        out: list[str] = []
+        with self._lock, self._connect() as conn:
+            for start in range(0, len(keys), 200):
+                chunk = keys[start:start + 200]
+                marks = ",".join("?" for _ in chunk)
+                rows = conn.execute(
+                    f"""
+                    SELECT block_id FROM blocks
+                    WHERE corpus_id=? AND asset_id=? AND location_key IN ({marks})
+                    ORDER BY block_id LIMIT ?
+                    """,
+                    [corpus_id, asset_id, *chunk, max(1, limit - len(out))],
+                ).fetchall()
+                out.extend(str(row[0]) for row in rows)
+                if len(out) >= limit:
+                    break
+        return list(dict.fromkeys(out))[:limit]
 
     def count(self, corpus_id: str) -> int:
         with self._lock, self._connect() as conn:

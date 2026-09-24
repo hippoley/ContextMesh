@@ -39,7 +39,7 @@ async def _lifespan(_app: FastAPI):
     STORE.reconcile_interrupted_jobs()
     yield
 
-app = FastAPI(title="ContextMesh", version="0.11.0", lifespan=_lifespan)
+app = FastAPI(title="ContextMesh", version="0.12.0", lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT)), name="static")
 
 
@@ -86,7 +86,7 @@ def admin_page():
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "0.11.0"}
+    return {"ok": True, "version": "0.12.0"}
 
 
 @app.get("/api/events")
@@ -302,6 +302,14 @@ async def create_corpus(files: list[UploadFile] = File(...)):
 def corpus(corpus_id: str):
     try:
         return STORE.get_manifest(corpus_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="corpus not found") from e
+
+
+@app.get("/api/corpora/{corpus_id}/storage")
+def corpus_storage(corpus_id: str):
+    try:
+        return STORE.block_store_stats(corpus_id)
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus not found") from e
 
@@ -570,8 +578,7 @@ def list_blocks(
         manifest = STORE.get_manifest(corpus_id)
         ids = manifest.coverage_ids() if processable_only else [*manifest.structural_block_ids, *manifest.coverage_ids()]
         page = ids[offset : offset + limit]
-        reader = CorpusReader(STORE, corpus_id)
-        return {"corpus_id": corpus_id, "offset": offset, "limit": limit, "total": len(ids), "blocks": [reader.read(x) for x in page]}
+        return {"corpus_id": corpus_id, "offset": offset, "limit": limit, "total": len(ids), "blocks": STORE.get_blocks(corpus_id, page)}
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus not found") from e
 
@@ -591,7 +598,7 @@ def search_blocks(corpus_id: str, q: str = Query(..., min_length=1), limit: int 
         reader = CorpusReader(STORE, corpus_id)
         ids = reader.lexical_order(q)[:limit]
         return {
-            "corpus_id": corpus_id, "query": q, "blocks": [reader.read(x) for x in ids],
+            "corpus_id": corpus_id, "query": q, "blocks": STORE.get_blocks(corpus_id, ids),
             "catalog": STORE.catalog_stats(corpus_id),
             "ranking_policy": "scheduling/navigation only; never coverage eligibility",
         }
@@ -708,7 +715,7 @@ def admin_overview():
 
     telemetry = collect_runtime_telemetry()
     runtime = {
-        "version": "0.11.0",
+        "version": "0.12.0",
         "store": str(STORE.root),
         "default judge": "heuristic / model route / OpenAI-compatible",
         "Docling": "available" if importlib.util.find_spec("docling") else "optional, not installed",
@@ -717,7 +724,15 @@ def admin_overview():
         "coverage policy": "ingest + semantic + execution coverage must all pass before final score",
         "ranking policy": "scheduling only; never filtering",
         "overflow policy": "exhaustive map + bounded hierarchical reduce + source rehydration",
+        "block payload backend": getattr(STORE.block_store, "backend", STORE.block_backend),
     }
+    storage_rows: list[dict] = []
+    for manifest in corpora:
+        try:
+            storage_rows.append(STORE.block_store_stats(manifest.corpus_id))
+        except Exception:
+            continue
+
     return {
         "metrics": {
             "corpora": len(corpora),
@@ -734,6 +749,7 @@ def admin_overview():
             "semantic_incomplete_corpora": sum(1 for x in corpora if not x.coverage_ready),
             "unresolved_units": sum(x.unresolved_units for x in corpora),
             "indexed_blocks": sum(STORE.catalog_stats(x.corpus_id).get("indexed_blocks", 0) for x in corpora),
+            "stored_blocks": sum(int(x.get("stored_blocks", 0)) for x in storage_rows),
         },
         "corpora": corpora,
         "ingest_jobs": ingest_jobs,

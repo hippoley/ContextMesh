@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.12.0
+
+- Added a WAL-mode SQLite ContextBlock payload backend; new corpora no longer require one JSON file per block.
+- Kept the legacy JSON-per-block backend selectable with `CONTEXTMESH_BLOCK_BACKEND=json`.
+- Added lazy migration for v0.1-v0.11 JSON block corpora into the SQLite payload backend without changing manifest coverage IDs.
+- Added batched `get_blocks()` reads for Explorer/API pagination.
+- Added indexed page/slide/sheet/timeline co-location lookups and indexed explicit-reference resolution to avoid O(N²) corpus payload scans.
+- Added `/api/corpora/{corpus_id}/storage` and surfaced payload backend/stored-block state in Workspace/Admin.
+- Added `examples/storage_benchmark.py` and v0.12 storage regression tests.
+- Local 100K smoke: ~1.50s payload write, ~0.63ms for five random reads. This is a smoke benchmark, not a million-block production SLA.
+
 ## v0.11.0
 
 - Added a portable SQLite Context Catalog with FTS5 acceleration and automatic backfill for older corpora.

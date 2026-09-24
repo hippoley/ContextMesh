@@ -1,6 +1,6 @@
 # ContextMesh
 
-> v0.11: Full-Coverage Context Runtime with typed evidence preservation and a scalable SQLite/FTS context catalog.
+> v0.12: Full-Coverage Context Runtime with typed evidence preservation and a scalable SQLite/FTS context catalog.
 
 **Full-coverage external context runtime for evaluating AI answers against corpora larger than a model context window.**
 
@@ -13,6 +13,37 @@ question + uploaded corpus + candidate answer -> score
 A top-k RAG pipeline can omit the one low-ranked page, slide, sheet, table, transcript segment, or exception that changes the score. ContextMesh instead turns the uploaded material into an addressable external context space and enforces 100% coverage before a final score is valid.
 
 
+
+## v0.12 — scalable block payload storage
+
+ContextMesh now separates three runtime persistence roles:
+
+```text
+Manifest                  coverage authority
+SQLite payload store      addressable ContextBlock bodies
+SQLite/FTS catalog        navigation + scheduling index
+```
+
+New corpora use a WAL-mode SQLite payload store by default instead of writing one JSON file per block. This removes the small-file/inode bottleneck that appears when a corpus grows toward hundreds of thousands or millions of blocks. Legacy JSON-per-block corpora remain readable and can be lazily migrated without changing any manifest coverage IDs.
+
+```bash
+# default
+export CONTEXTMESH_BLOCK_BACKEND=sqlite
+
+# compatibility / portable JSON-per-block mode
+export CONTEXTMESH_BLOCK_BACKEND=json
+```
+
+The Context Explorer now batches block reads, and page/slide/sheet/timeline co-location plus explicit source references use structural catalog indexes rather than scanning every block on every inspection. Search and relationship indexes still **never alter coverage eligibility**.
+
+Measured local smoke benchmark (not a production SLA):
+
+- 100,000 block payloads: ~1.50 s batched SQLite write
+- 5 random block reads: ~0.63 ms total
+- 100,000 catalog rows: ~1.96 s index build, ~1.62 ms FTS query (v0.11 benchmark)
+
+Reproduce with `examples/storage_benchmark.py` and `examples/catalog_benchmark.py`.
+
 ## v0.11: typed evidence + scalable catalog
 
 ContextMesh now separates the **raw evidence ledger**, **typed evidence state**, and **model-facing reduced state**. Relevant blocks produce source-linked atoms for claims, numbers, dates, exceptions, contradictions and requirements. The final judge receives this typed channel alongside hierarchical reductions, so critical values and exception clauses do not have to survive only as free-form summaries.
@@ -20,12 +51,12 @@ ContextMesh now separates the **raw evidence ledger**, **typed evidence state**,
 The portable filesystem store also gains a SQLite catalog with FTS5 acceleration:
 
 ```text
-raw block JSON = source of truth
+payload store = addressable block bodies
 SQLite/FTS   = navigation + scheduling index
 manifest     = coverage eligibility
 ```
 
-Search can rank millions of addressable blocks without scanning every JSON file for each query, but it still **cannot remove any required block from execution**. Existing corpora are lazily backfilled into the catalog.
+Search can rank large address spaces without scanning every payload for each query, but it still **cannot remove any required block from execution**. Existing corpora are lazily backfilled into the catalog.
 
 ```text
 GET /api/corpora/{corpus_id}/catalog
