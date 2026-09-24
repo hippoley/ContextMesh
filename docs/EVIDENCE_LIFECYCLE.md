@@ -154,3 +154,40 @@ Saved evidence:
 Public surface:
 
 - `site/reality.html`
+
+
+## Authority
+
+Evidence can survive every transport stage and still be unsafe to treat as current truth.
+
+The authority stage records lifecycle facts such as:
+
+- active
+- contested
+- superseded
+- refuted
+- expired
+- verified / unverified
+- validity interval
+
+A contested fact can therefore be present end-to-end while authority remains unresolved:
+
+```text
+ingested      present
+stored        present
+retrieved     present
+model-visible present
+authority     unresolved
+```
+
+That is not retrieval loss. The model may have both sides of a conflict and still need an explicit policy for which fact is authoritative now.
+
+This stage was added after a live Mem0 2.2.0 probe preserved both a verified active database-port fact and a newer contested transient observation. Default semantic search returned both with close scores; an explicit lifecycle filter excluded the contested fact.
+
+See [the Mem0 2.2.0 temporal-authority result](reality/Mem0-2.2.0-temporal-authority-2026-09-24.md).
+
+The narrow invariant is:
+
+> visibility is not authority.
+
+ContextMesh should preserve conflicting history and make authority decisions inspectable rather than destructively hiding the losing side.
