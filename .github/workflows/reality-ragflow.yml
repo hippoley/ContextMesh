@@ -1,0 +1,87 @@
+name: Reality Probe - RAGFlow
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reality-ragflow.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  context-length-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout current RAGFlow main
+        uses: actions/checkout@v7
+        with:
+          repository: infiniflow/ragflow
+          ref: main
+          path: ragflow
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: ragflow/go.mod
+          cache-dependency-path: ragflow/go.sum
+      - name: Add external regression probe
+        working-directory: ragflow
+        run: |
+          cat > internal/dao/contextmesh_external_probe_test.go <<'EOF'
+          package dao
+
+          import (
+              "testing"
+
+              "ragflow/internal/entity"
+          )
+
+          // A 2-part model@provider reference means "use the provider's default
+          // tenant instance" in the agent credential path. If the provider has
+          // exactly one active instance but it is not literally named "default",
+          // context-length resolution should reach the same tenant model row and
+          // preserve its explicit extra.max_tokens override.
+          func TestContextMeshProbe_TwoPartCompositeUsesSoleActiveInstance(t *testing.T) {
+              db := openModelContextTestDB(t)
+              pushDB(t, db)
+              ctx := t.Context()
+
+              seedOpenAIChatModel(t, db, `{"max_tokens": 32000}`)
+              if err := db.Model(&entity.TenantModelInstance{}).
+                  Where("id = ?", "instance-1").
+                  Update("instance_name", "primary").Error; err != nil {
+                  t.Fatalf("rename instance: %v", err)
+              }
+
+              got := ResolveModelContentLength(
+                  ctx,
+                  db,
+                  "tenant-1",
+                  "gpt-4o@OpenAI",
+                  "",
+                  "",
+              )
+              if got != 32000 {
+                  t.Fatalf(
+                      "two-part model@provider resolved context length = %d, want 32000 from the sole active tenant model override",
+                      got,
+                  )
+              }
+          }
+          EOF
+      - name: Reproduce current-main parity bug
+        working-directory: ragflow
+        shell: bash
+        run: |
+          set +e
+          go test ./internal/dao -run TestContextMeshProbe_TwoPartCompositeUsesSoleActiveInstance -count=1 -v 2>&1 | tee /tmp/contextmesh-ragflow-probe.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "Probe unexpectedly passed: upstream may already be fixed."
+            exit 1
+          fi
+
+          grep -q "want 32000 from the sole active tenant model override" /tmp/contextmesh-ragflow-probe.log
+          echo "Confirmed on current RAGFlow main: two-part model@provider falls past the tenant override when the sole active instance is not literally named default."
