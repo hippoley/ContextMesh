@@ -2,7 +2,9 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+import contextmesh.api as api_module
 from contextmesh.uploads import UploadSessionStore
 
 
@@ -43,3 +45,32 @@ def test_complete_rejects_missing_parts(tmp_path: Path):
     store.put_local_part(session.id, 1, b"a" * (1024 * 1024))
     with pytest.raises(ValueError, match="missing upload parts"):
         store.complete_local(session.id, tmp_path / "completed")
+
+
+def test_resumable_upload_api_survives_status_roundtrip(tmp_path: Path, monkeypatch):
+    sessions = UploadSessionStore(tmp_path / "uploads.sqlite3", tmp_path / "staging")
+    monkeypatch.setattr(api_module, "UPLOAD_SESSIONS", sessions)
+    client = TestClient(api_module.app)
+
+    payload = b"hello resumable"
+    created = client.post("/api/upload-sessions", json={
+        "filename": "hello.txt",
+        "size_bytes": len(payload),
+        "part_size": 1024 * 1024,
+        "backend": "local",
+    })
+    assert created.status_code == 200
+    session_id = created.json()["id"]
+
+    part = client.put(f"/api/upload-sessions/{session_id}/parts/1", content=payload)
+    assert part.status_code == 200
+    assert part.json()["session"]["progress"] == 1.0
+
+    status = client.get(f"/api/upload-sessions/{session_id}")
+    assert status.status_code == 200
+    assert status.json()["missing_parts"] == []
+
+    completed = client.post(f"/api/upload-sessions/{session_id}/complete", json={"parts": []})
+    assert completed.status_code == 200
+    assert completed.json()["status"] == "complete"
+    assert Path(completed.json()["completed_path"]).read_bytes() == payload
