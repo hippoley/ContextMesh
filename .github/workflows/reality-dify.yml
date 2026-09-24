@@ -33,9 +33,13 @@ jobs:
           layer_path = root / "dify-agent/src/dify_agent/layers/shell/layer.py"
           output_path = root / "dify-agent/src/dify_agent/layers/shell/output_text.py"
 
+          values = {}
+
           def const_int(node):
               if isinstance(node, ast.Constant) and isinstance(node.value, int):
                   return node.value
+              if isinstance(node, ast.Name) and node.id in values:
+                  return values[node.id]
               if isinstance(node, ast.BinOp):
                   left, right = const_int(node.left), const_int(node.right)
                   if isinstance(node.op, ast.Mult):
@@ -47,7 +51,6 @@ jobs:
               raise ValueError(f"unsupported constant expression: {ast.dump(node)}")
 
           tree = ast.parse(layer_path.read_text(encoding="utf-8"))
-          values = {}
           for node in tree.body:
               if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
                   name = node.targets[0].id
@@ -108,9 +111,13 @@ jobs:
           layer = Path("dify/dify-agent/src/dify_agent/layers/shell/layer.py").read_text(encoding="utf-8")
           config = Path("dify/dify-agent/src/dify_agent/layers/config/layer.py").read_text(encoding="utf-8")
 
+          values = {}
+
           def const_int(node):
               if isinstance(node, ast.Constant) and isinstance(node.value, int):
                   return node.value
+              if isinstance(node, ast.Name) and node.id in values:
+                  return values[node.id]
               if isinstance(node, ast.BinOp):
                   left, right = const_int(node.left), const_int(node.right)
                   if isinstance(node.op, ast.Mult):
@@ -125,8 +132,13 @@ jobs:
           max_bytes = None
           for node in tree.body:
               if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-                  if node.targets[0].id == "_REMOTE_COMPLETE_OUTPUT_MAX_BYTES":
-                      max_bytes = const_int(node.value)
+                  name = node.targets[0].id
+                  try:
+                      values[name] = const_int(node.value)
+                  except ValueError:
+                      pass
+                  if name == "_REMOTE_COMPLETE_OUTPUT_MAX_BYTES" and name in values:
+                      max_bytes = values[name]
 
           assert max_bytes == 1024 * 1024
           assert "self.deps.shell.run_remote_script(" in config
