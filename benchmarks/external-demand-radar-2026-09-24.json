@@ -1,0 +1,76 @@
+{
+  "snapshot_date": "2026-09-24",
+  "purpose": "Reality-first external demand radar for ContextMesh. Prioritize places where a reproducible benchmark, verifier contract, or focused patch can add value without duplicating an active contributor.",
+  "repositories": [
+    {"repo":"infiniflow/ragflow","stars":91243,"active":true},
+    {"repo":"mem0ai/mem0","stars":65922,"active":true},
+    {"repo":"run-llama/llama_index","stars":52307,"active":true},
+    {"repo":"HKUDS/LightRAG","stars":39836,"active":true},
+    {"repo":"getzep/graphiti","stars":31116,"active":true}
+  ],
+  "targets": [
+    {
+      "repo":"getzep/graphiti",
+      "issue":1880,
+      "url":"https://github.com/getzep/graphiti/issues/1880",
+      "title":"Ingestion-Time Extension Hook for Knowledge Graph Hygiene",
+      "status":"open",
+      "collision":"none-found",
+      "intervention":"high-value-rfc",
+      "why":"The issue explicitly asks for a pre-persistence verification hook over raw source text and resolved graph facts. This is a natural integration boundary for a coverage/provenance-aware verification receipt rather than another memory store.",
+      "next_artifact":"propose a minimal hook contract: input source span + resolved fact + conflicts + provenance; output accept/refuse/contested + reason + evidence ids + verifier metadata"
+    },
+    {
+      "repo":"infiniflow/ragflow",
+      "issue":20140,
+      "url":"https://github.com/infiniflow/ragflow/issues/20140",
+      "title":"Go max_tokens context-window semantics diverge across paths",
+      "status":"open",
+      "collision":"no-pr-found",
+      "intervention":"focused-pr-candidate",
+      "why":"Silent context-window mis-resolution changes what evidence reaches the model. It matches ContextMesh route-budget correctness work and is currently unclaimed.",
+      "next_artifact":"reproduce on current main, add parity test for model@provider and unify context-window semantics before proposing a focused Go PR"
+    },
+    {
+      "repo":"infiniflow/ragflow",
+      "issue":20141,
+      "url":"https://github.com/infiniflow/ragflow/issues/20141",
+      "title":"Go/Python media-context truncation parity",
+      "status":"open",
+      "collision":"no-pr-found",
+      "intervention":"focused-pr-candidate",
+      "why":"The same source produces different stored chunk bodies and IDs depending on backend. This is directly about source fidelity and context-window boundaries.",
+      "next_artifact":"pin a shared fixture and make Go sentence-boundary truncation match Python; keep markdown/HTML and legacy parser_config follow-ups separate if needed"
+    },
+    {
+      "repo":"infiniflow/ragflow",
+      "issue":20148,
+      "url":"https://github.com/infiniflow/ragflow/issues/20148",
+      "title":"Retrieval test should explain why chunks were dropped",
+      "status":"open",
+      "collision":"pr-20147-open",
+      "intervention":"evidence-comment-not-pr",
+      "why":"Their requested retrieval funnel is the same missing diagnostic that our rank-17 reality run exposed. We can contribute measured evidence for why rank/cutoff/drop reasons matter without competing with the existing PR.",
+      "next_artifact":"share the Cognee rank-17 controlled result and suggest a per-candidate eligibility trace: rank, threshold/cutoff, reason, selected, source id"
+    },
+    {
+      "repo":"mem0ai/mem0",
+      "issue":5352,
+      "url":"https://github.com/mem0ai/mem0/issues/5352",
+      "title":"Time-blindness, semantic conflicts, and memory hygiene",
+      "status":"open",
+      "collision":"active-discussion",
+      "intervention":"benchmark-contribution",
+      "why":"The thread has real production users and an explicit unresolved question: recency is not truth. ContextMesh can add a verifier-style replay corpus measuring whether contradiction/invalidation policies preserve load-bearing facts.",
+      "next_artifact":"build a temporal-conflict replay probe before commenting; do not advertise ContextMesh until there is a measured result"
+    }
+  ],
+  "avoid_for_now": [
+    {"repo":"run-llama/llama_index","issue":23090,"reason":"multiple PRs already exist"},
+    {"repo":"run-llama/llama_index","issue":21950,"reason":"many competing PRs already exist"},
+    {"repo":"mem0ai/mem0","issue":7302,"reason":"another contributor has reproduced and prepared a fix with maintainer engagement"},
+    {"repo":"HKUDS/LightRAG","issue":2904,"reason":"multiple contributors already proposed/implemented fixes"},
+    {"repo":"infiniflow/ragflow","issue":16362,"reason":"PR #16364 already open"},
+    {"repo":"getzep/graphiti","issue":1728,"reason":"multiple active PRs and extensive ongoing measurement"}
+  ]
+}
