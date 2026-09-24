@@ -106,3 +106,27 @@ def test_first_decisive_rank_can_live_beyond_visible_top_k():
     assert outcome.decisive_recall == 0.0
     assert outcome.first_decisive_rank == 17
     assert outcome.evidence_available_verdict == ProbeVerdict.UNSUPPORTED
+
+
+def test_eligibility_trace_explains_rank_cutoff():
+    scenario = _by_id()["near-duplicate-crowding"]
+    selection = LexicalTopKBackend(5).select(scenario)
+    outcome = evaluate_selection(scenario, selection)
+    decisive = next(x for x in outcome.eligibility_trace if x.document_id == "atlas-manual-stop")
+    assert decisive.decisive is True
+    assert decisive.rank is not None
+    assert decisive.rank > 5
+    assert decisive.selected is False
+    assert decisive.decision == "excluded"
+    assert "outside backend visible eligibility" in decisive.reason
+
+
+def test_full_coverage_trace_keeps_late_ranked_decisive_source_eligible():
+    scenario = _by_id()["rare-exception"]
+    selection = ContextMeshFullCoverageBackend(workers=2).select(scenario)
+    outcome = evaluate_selection(scenario, selection)
+    decisive = next(x for x in outcome.eligibility_trace if x.document_id == "transfer-legal-hold")
+    assert decisive.rank is not None
+    assert decisive.selected is True
+    assert decisive.decision == "required-and-visited"
+    assert "regardless of rank" in decisive.reason
