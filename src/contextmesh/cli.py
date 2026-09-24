@@ -102,6 +102,7 @@ def main() -> None:
     rp.add_argument("--backend", action="append", choices=["lexical", "contextmesh", "cognee"], default=[])
     rp.add_argument("--top-k", type=int, default=5)
     rp.add_argument("--crowding", type=int, default=24)
+    rp.add_argument("--scenario", action="append", default=[], help="run only named scenario(s)")
     rp.add_argument("--workers", type=int, default=4)
     rp.add_argument("--store", default=".contextmesh/store")
     rp.add_argument("--route-id", help="optional configured model route for a live verdict pass")
@@ -155,10 +156,18 @@ def main() -> None:
             )
             live_judge = LiveProbeVerdictJudge(judge)
 
+        scenarios = issue_derived_scenarios(crowding=args.crowding)
+        if args.scenario:
+            wanted = set(args.scenario)
+            known = {x.id for x in scenarios}
+            unknown = sorted(wanted - known)
+            if unknown:
+                raise SystemExit(f"unknown reality-probe scenario(s): {', '.join(unknown)}")
+            scenarios = [x for x in scenarios if x.id in wanted]
         report = run_reality_probe_suite(
             top_k=args.top_k,
             backends=backends,
-            scenarios=issue_derived_scenarios(crowding=args.crowding),
+            scenarios=scenarios,
             live_judge=live_judge,
         )
         print(report.to_markdown() if args.format == "markdown" else report.model_dump_json(indent=2))
