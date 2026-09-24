@@ -12,6 +12,7 @@ from typing import Any, Protocol
 
 from pydantic import BaseModel, Field, computed_field
 
+from .diagnostics import EvidenceLifecycleTrace, build_probe_lifecycle
 from .models import BlockKind, ContextBlock, CorpusManifest, Modality, SourceRef, UsageMetrics
 from .runtime import ProgressiveEvaluator
 from .store import FileContextStore
@@ -84,6 +85,7 @@ class EligibilityTraceItem(BaseModel):
     visible_ratio: float = 0.0
     visible_byte_ranges: list[list[int]] = Field(default_factory=list)
     visible_chars: int | None = None
+    lifecycle: EvidenceLifecycleTrace | None = None
     decision: str = ""
     reason: str = ""
 
@@ -175,10 +177,13 @@ class RealityProbeReport(BaseModel):
             decisive = [t for t in x.eligibility_trace if t.decisive]
             for item in decisive:
                 rank = item.rank if item.rank is not None else "n/a"
+                failure = item.lifecycle.failure_class.value if item.lifecycle else "unknown"
+                stage = item.lifecycle.first_non_present_stage if item.lifecycle else None
                 lines.append(
                     f"- {x.scenario_id} / {x.backend}: {item.document_id} "
                     f"rank={rank}, selected={'yes' if item.selected else 'no'}, "
                     f"visible={item.visible_ratio:.0%}, semantic={'yes' if item.semantic_available else 'no'}, "
+                    f"failure={failure}, first_loss={stage or 'none'}, "
                     f"decision={item.decision} — {item.reason}"
                 )
         lines.extend(["", "## Aggregate", "", "JSON:", json.dumps(self.by_backend, indent=2)])
@@ -627,6 +632,17 @@ def evaluate_selection(
                 if is_selected else
                 "manifest-required source was not visited; this violates the probe invariant"
             )
+        lifecycle = build_probe_lifecycle(
+            source_id=doc.id,
+            decisive=doc.decisive,
+            rank=rank,
+            selected=is_selected,
+            source_bytes=source_bytes,
+            visible_bytes=visible_bytes,
+            visible_ranges=visible_ranges,
+            semantic_visible=semantic_available,
+            live_judged=(live_judge is not None) if doc.decisive else None,
+        )
         trace.append(EligibilityTraceItem(
             document_id=doc.id,
             rank=rank,
@@ -641,6 +657,7 @@ def evaluate_selection(
             visible_ratio=visible_ratio,
             visible_byte_ranges=visible_ranges,
             visible_chars=len(visible_text) if is_selected else 0,
+            lifecycle=lifecycle,
             decision=decision,
             reason=reason,
         ))
