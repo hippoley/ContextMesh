@@ -45,9 +45,11 @@ contextmesh reality-probe --backend cognee --backend contextmesh --top-k 5 --for
 
 A configured ContextMesh model route can be added with `--route-id` so every backend's selected evidence is judged by the same model. This separates retrieval failure from reasoning failure.
 
-**Important:** the repository does not claim Cognee fails these probes until the live Cognee backend has actually been run. CI validates the benchmark mechanism and ContextMesh coverage invariant only.
+A first live external run has now been completed against **Cognee 1.6.0 / SearchType.CHUNKS / top_k=5**. In the two targeted controlled probes, Cognee returned chunks normally but recalled **0/2 decisive sources**, while ContextMesh preserved both under 100% coverage. This is evidence for the blind-spot mechanism, not a claim that Cognee is globally worse or that every downstream LLM would answer incorrectly.
 
-See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md).
+Saved result: [Cognee 1.6.0 reality result](docs/reality/Cognee-1.6.0-2026-09-24.md).
+
+See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits.
 
 ## v0.14 — resumable multipart uploads
 
