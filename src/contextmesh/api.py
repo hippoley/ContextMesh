@@ -137,7 +137,14 @@ def admin_page():
 
 @app.get("/health")
 def health():
-    return {"ok": True, "version": "0.13.0", "queue": QUEUE.stats(), "workers": len(QUEUE.workers())}
+    return {
+        "ok": True,
+        "version": "0.14.0",
+        "queue": QUEUE.stats(),
+        "workers": len(QUEUE.workers()),
+        "upload_backend": os.getenv("CONTEXTMESH_UPLOAD_BACKEND", "local"),
+        "resumable_uploads": True,
+    }
 
 
 @app.get("/api/events")
@@ -1006,7 +1013,7 @@ def admin_overview():
 
     telemetry = collect_runtime_telemetry()
     runtime = {
-        "version": "0.13.0",
+        "version": "0.14.0",
         "store": str(STORE.root),
         "default judge": "heuristic / model route / OpenAI-compatible",
         "Docling": "available" if importlib.util.find_spec("docling") else "optional, not installed",
