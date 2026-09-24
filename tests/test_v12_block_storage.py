@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import contextmesh.api as api_module
+from contextmesh import __version__
 from contextmesh.ingest import ingest_paths
 from contextmesh.models import BlockKind, ContextBlock, CorpusManifest, Modality, SourceRef
 from contextmesh.reader import CorpusReader
@@ -99,4 +100,4 @@ def test_storage_api_reports_runtime_payload_backend(tmp_path: Path, monkeypatch
     assert body["backend"] == "sqlite-payload"
     assert body["stored_blocks"] >= manifest.required_blocks
     assert body["policy"].startswith("payload storage only")
-    assert client.get("/health").json()["version"] == "0.13.0"
+    assert client.get("/health").json()["version"] == __version__
