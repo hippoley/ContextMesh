@@ -24,6 +24,13 @@ jobs:
         with:
           go-version-file: ragflow/go.mod
           cache-dependency-path: ragflow/go.sum
+      - name: Build RAGFlow tokenizer C API required by Go packages
+        working-directory: ragflow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcre2-dev
+          make -C internal/binding/cpp c_api
+
       - name: Add external regression probe
         working-directory: ragflow
         run: |
