@@ -112,7 +112,7 @@ jobs:
 
           default_search = memory.search(
               "What is the production database port?",
-              user_id=user_id,
+              filters={"user_id": user_id},
               top_k=10,
               threshold=0.0,
               rerank=False,
@@ -124,7 +124,7 @@ jobs:
               threshold=0.0,
               rerank=False,
           )
-          all_rows = memory.get_all(user_id=user_id)
+          all_rows = memory.get_all(filters={"user_id": user_id})
 
           def rows(result):
               if isinstance(result, dict):
