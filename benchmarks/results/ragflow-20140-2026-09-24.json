@@ -1,0 +1,34 @@
+{
+  "kind": "external-upstream-regression",
+  "date": "2026-09-24",
+  "upstream": "infiniflow/ragflow",
+  "issue": 20140,
+  "upstream_commit": "e651d8f7a4440f8f55b06b7deaadc214176e2d56",
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/35965439893",
+  "probe": "TestContextMeshProbe_TwoPartCompositeUsesSoleActiveInstance",
+  "scenario": {
+    "tenant_model_extra_max_tokens": 32000,
+    "catalog_context_length": 128000,
+    "composite_reference": "gpt-4o@OpenAI",
+    "sole_active_instance_name": "primary"
+  },
+  "before_patch": {
+    "resolved_context_length": 128000,
+    "expected": 32000,
+    "test": "failed as expected"
+  },
+  "candidate_patch": {
+    "path": "benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch",
+    "behavior": "when two-part model@provider implies default but no literal default instance exists, use the provider's sole active instance; do not guess when multiple active instances exist"
+  },
+  "after_patch": {
+    "resolved_context_length": 32000,
+    "test": "passed"
+  },
+  "interpretation": "Current RAGFlow main resolves the same two-part model reference differently between credential resolution and context-length resolution. The candidate patch restores sole-active-instance parity for context length without changing explicit three-part references.",
+  "limits": [
+    "External probe targets the specific sole-active-instance case from issue #20140.",
+    "The patch has been validated by the targeted regression, not by RAGFlow's entire test suite.",
+    "No upstream PR has been opened because the current GitHub integration has read-only access to infiniflow/ragflow."
+  ]
+}
