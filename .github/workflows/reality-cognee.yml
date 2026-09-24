@@ -37,6 +37,7 @@ jobs:
             --scenario rare-exception \
             --scenario near-duplicate-crowding \
             --top-k 5 \
+            --cognee-fetch-k 50 \
             --crowding 16 \
             --cognee-extractor gliner \
             --format markdown | tee cognee-reality-probe.md
