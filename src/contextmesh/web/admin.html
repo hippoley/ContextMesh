@@ -25,6 +25,13 @@
       <div class="panel runtime-panel"><div class="panel-head"><div><p class="eyebrow">Runtime</p><h2>Health & invariants</h2></div><span class="status ok">online</span></div><div id="runtimeDetails" class="kv-list"></div></div>
     </section>
 
+    <section class="panel table-panel top-gap">
+      <div class="panel-head"><div><p class="eyebrow">Durable execution plane</p><h2>Queue & workers</h2></div><div class="row-actions"><span id="queueBackend" class="chip">sqlite-wal</span><span id="workersCount" class="chip">0 workers</span></div></div>
+      <div id="queueMetrics" class="metric-grid four"><div class="metric"><span>Queued</span><strong>—</strong></div><div class="metric"><span>Running</span><strong>—</strong></div><div class="metric"><span>Failed</span><strong>—</strong></div><div class="metric"><span>Complete</span><strong>—</strong></div></div>
+      <p id="workerSummary" class="panel-copy">No active workers reported yet.</p>
+      <div class="table-wrap"><table><thead><tr><th>Queue item</th><th>Kind</th><th>Logical job</th><th>Status</th><th>Attempts</th><th>Lease owner</th><th>Last error</th></tr></thead><tbody id="queueJobsTable"></tbody></table></div>
+    </section>
+
     <section class="control-split top-gap">
       <div class="panel route-panel">
         <div class="panel-head"><div><p class="eyebrow">Model routing center</p><h2>Provider adapters</h2></div><span id="routesCount" class="chip">0</span></div>
