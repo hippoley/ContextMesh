@@ -1,6 +1,6 @@
 # ContextMesh
 
-> v0.12: Full-Coverage Context Runtime with typed evidence preservation and a scalable SQLite/FTS context catalog.
+> v0.13: Full-Coverage Context Runtime with typed evidence, scalable SQLite storage, and a durable leased job queue.
 
 **Full-coverage external context runtime for evaluating AI answers against corpora larger than a model context window.**
 
@@ -13,6 +13,41 @@ question + uploaded corpus + candidate answer -> score
 A top-k RAG pipeline can omit the one low-ranked page, slide, sheet, table, transcript segment, or exception that changes the score. ContextMesh instead turns the uploaded material into an addressable external context space and enforces 100% coverage before a final score is valid.
 
 
+
+## v0.13 — durable execution queue
+
+Long-running ingest and evaluation no longer depend on an in-process `ThreadPoolExecutor`. Jobs are written to a WAL-mode SQLite queue and leased atomically by workers.
+
+```text
+FastAPI submit
+    |
+    v
+SQLite WAL durable queue
+    |
+    +--> worker A
+    +--> worker B
+    |
+    v
+checkpointed ingest / full-coverage evaluation
+```
+
+Worker leases have expiry/recovery semantics, retries are persisted, queued jobs can be cancelled before execution, and worker heartbeats are visible in Admin.
+
+For local development, the web server starts one embedded worker by default. For production-style process isolation:
+
+```bash
+export CONTEXTMESH_EMBEDDED_WORKER=0
+contextmesh serve --host 0.0.0.0 --port 8765
+
+# separate process
+contextmesh worker --data .contextmesh
+```
+
+`docker compose up --build` now starts the API/UI and a separate worker service sharing the same persistent data volume.
+
+The SQLite queue is intentionally a **single-host** durable backend. It removes job loss on web-process restart and is suitable for one-machine multi-process deployments. Multi-node deployments should implement the same queue contract with Redis/NATS/Postgres rather than placing SQLite WAL on a network filesystem.
+
+Admin exposes queue depth, running/failed/completed items, attempt counts, lease owners and active worker heartbeats.
 
 ## v0.12 — scalable block payload storage
 
@@ -78,7 +113,7 @@ ContextMesh now treats a model route's context window as an execution constraint
 
 Operational UX now includes resumable checkpoints, cancel/resume, retryable ingest jobs, byte-level browser upload progress, scoped SSE streams, route health checks, per-route concurrency caps, request timeouts, and restart reconciliation. These controls reduce common failure modes when a corpus requires thousands of provider calls.
 
-The remaining production-scale boundaries are deliberately separate: object storage/resumable multipart uploads, durable distributed workers, multi-tenant auth/RBAC, scalable metadata/search indexing, and provider-specific native video/audio adapters.
+The remaining production-scale boundaries are deliberately separate: object storage/resumable multipart uploads, multi-node Redis/NATS/Postgres queue backends, multi-tenant auth/RBAC, and deeper provider-specific native video/audio validation.
 
 ## v0.7 in one picture
 
