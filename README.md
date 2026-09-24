@@ -1,6 +1,6 @@
 # ContextMesh
 
-> v0.13: Full-Coverage Context Runtime with typed evidence, scalable SQLite storage, and a durable leased job queue.
+> v0.14: Full-Coverage Context Runtime with typed evidence, durable workers, and resumable local/S3/MinIO multipart uploads.
 
 **Full-coverage external context runtime for evaluating AI answers against corpora larger than a model context window.**
 
@@ -13,6 +13,40 @@ question + uploaded corpus + candidate answer -> score
 A top-k RAG pipeline can omit the one low-ranked page, slide, sheet, table, transcript segment, or exception that changes the score. ContextMesh instead turns the uploaded material into an addressable external context space and enforces 100% coverage before a final score is valid.
 
 
+
+## v0.14 — resumable multipart uploads
+
+Large uploads now use durable upload sessions instead of one all-or-nothing browser request.
+
+```text
+Browser
+  -> create upload session
+  -> upload only missing parts
+  -> per-part SHA-256 (local backend)
+  -> complete / verify
+  -> durable ingest queue
+```
+
+The Workspace stores the upload-session ID in browser local storage, so reconnecting and pressing upload again resumes missing parts instead of re-sending confirmed parts.
+
+Two transports are supported:
+
+- `local` — durable part files + SQLite upload-session metadata. The server verifies each supplied part checksum and computes the final object SHA-256 while assembling.
+- `s3` — native S3-compatible multipart upload using a server-created upload ID and presigned `UploadPart` URLs. Status recovery reconciles remote `ListParts`, then completion supplies ordered `PartNumber + ETag` entries. This also works with MinIO-compatible endpoints when configured.
+
+```bash
+# local durable staging
+export CONTEXTMESH_UPLOAD_BACKEND=local
+
+# S3 / MinIO
+pip install -e '.[s3]'
+export CONTEXTMESH_UPLOAD_BACKEND=s3
+export CONTEXTMESH_S3_BUCKET=my-bucket
+export CONTEXTMESH_S3_ENDPOINT_URL=http://minio:9000   # omit for AWS S3
+export CONTEXTMESH_S3_REGION=us-east-1
+```
+
+New endpoints include `/api/upload-sessions`, part upload/presign/status/complete/abort operations, and `/api/ingest-jobs/from-upload-sessions`.
 
 ## v0.13 — durable execution queue
 
