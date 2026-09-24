@@ -67,6 +67,17 @@ class ProbeSelection(BaseModel):
     note: str = ""
 
 
+class EligibilityTraceItem(BaseModel):
+    document_id: str
+    rank: int | None = None
+    selected: bool = False
+    required: bool = True
+    decisive: bool = False
+    roles: list[str] = Field(default_factory=list)
+    decision: str = ""
+    reason: str = ""
+
+
 class ProbeOutcome(BaseModel):
     scenario_id: str
     scenario_title: str
@@ -92,6 +103,7 @@ class ProbeOutcome(BaseModel):
     live_verdict: str | None = None
     live_verdict_correct: bool | None = None
     live_source_ids: list[str] = Field(default_factory=list)
+    eligibility_trace: list[EligibilityTraceItem] = Field(default_factory=list)
     note: str = ""
 
 
@@ -143,6 +155,16 @@ class RealityProbeReport(BaseModel):
                 f"{x.evidence_available_verdict} | {x.expected_verdict} | "
                 f"{'yes' if x.verdict_correct else 'no'} |"
             )
+        lines.extend(["", "## Decisive eligibility trace", ""])
+        for x in self.outcomes:
+            decisive = [t for t in x.eligibility_trace if t.decisive]
+            for item in decisive:
+                rank = item.rank if item.rank is not None else "n/a"
+                lines.append(
+                    f"- {x.scenario_id} / {x.backend}: {item.document_id} "
+                    f"rank={rank}, selected={'yes' if item.selected else 'no'}, "
+                    f"decision={item.decision} — {item.reason}"
+                )
         lines.extend(["", "## Aggregate", "", "JSON:", json.dumps(self.by_backend, indent=2)])
         return "\n".join(lines)
 
@@ -469,6 +491,38 @@ def evaluate_selection(
     available = _available_verdict(scenario, selected)
 
     known_ids = {x.id for x in scenario.documents}
+    by_doc = {x.id: x for x in scenario.documents}
+    trace: list[EligibilityTraceItem] = []
+    for doc in scenario.documents:
+        rank = ranks.get(doc.id)
+        is_selected = doc.id in selected
+        if is_selected:
+            decision = "selected"
+            reason = "backend exposed this source to downstream evidence"
+        elif rank is not None:
+            decision = "excluded"
+            reason = f"rank {rank} fell outside backend visible eligibility"
+        else:
+            decision = "unranked"
+            reason = "backend did not expose this source in the measured ranking"
+        if selection.backend == "contextmesh-full-coverage":
+            decision = "required-and-visited" if is_selected else "required-missing"
+            reason = (
+                "manifest-required source remained eligible regardless of rank"
+                if is_selected else
+                "manifest-required source was not visited; this violates the probe invariant"
+            )
+        trace.append(EligibilityTraceItem(
+            document_id=doc.id,
+            rank=rank,
+            selected=is_selected,
+            required=True,
+            decisive=doc.decisive,
+            roles=list(doc.roles),
+            decision=decision,
+            reason=reason,
+        ))
+
     live_verdict = None
     live_sources: list[str] = []
     live_correct = None
@@ -507,6 +561,7 @@ def evaluate_selection(
         live_verdict=live_verdict,
         live_verdict_correct=live_correct,
         live_source_ids=live_sources,
+        eligibility_trace=trace,
         note=selection.note,
     )
 
