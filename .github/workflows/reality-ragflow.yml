@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - '.github/workflows/reality-ragflow.yml'
+      - 'benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch'
 
 permissions:
   contents: read
@@ -14,6 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
+      - name: Checkout ContextMesh probe artifacts
+        uses: actions/checkout@v7
+        with:
+          path: contextmesh
+
       - name: Checkout current RAGFlow main
         uses: actions/checkout@v7
         with:
@@ -96,3 +102,11 @@ jobs:
 
           grep -q "want 32000 from the sole active tenant model override" /tmp/contextmesh-ragflow-probe.log
           echo "Confirmed on current RAGFlow main: two-part model@provider falls past the tenant override when the sole active instance is not literally named default."
+
+      - name: Apply candidate parity patch
+        working-directory: ragflow
+        run: git apply ../contextmesh/benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch
+
+      - name: Verify candidate patch with the same regression
+        working-directory: ragflow
+        run: go test ./internal/dao -run TestContextMeshProbe_TwoPartCompositeUsesSoleActiveInstance -count=1 -v
