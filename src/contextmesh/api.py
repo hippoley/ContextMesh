@@ -10,11 +10,12 @@ import time
 import uuid
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .benchmark import ScorePreservationBenchmark
 from .events import EventBus
@@ -29,6 +30,7 @@ from .observability import collect_runtime_telemetry
 from .reader import CorpusReader
 from .runtime import ProgressiveEvaluator
 from .store import FileContextStore
+from .uploads import S3MultipartAdapter, UploadSessionStore
 from .audit import audit_corpus
 
 DATA_ROOT = Path(os.getenv("CONTEXTMESH_DATA", ".contextmesh"))
@@ -37,6 +39,7 @@ STORE = FileContextStore(DATA_ROOT / "store")
 WEB_ROOT = Path(__file__).with_name("web")
 EVENTS = EventBus()
 QUEUE = SQLiteJobQueue(DATA_ROOT / "jobs.sqlite3")
+UPLOAD_SESSIONS = UploadSessionStore(DATA_ROOT / "uploads.sqlite3", UPLOAD_ROOT / "_sessions")
 _WORKER_STOP = threading.Event()
 _WORKER_THREAD: threading.Thread | None = None
 
@@ -103,6 +106,23 @@ class PreflightRequest(BaseModel):
     model: str | None = None
     base_url: str | None = None
     api_key: str | None = None
+
+
+class CreateUploadSessionRequest(BaseModel):
+    filename: str
+    size_bytes: int
+    sha256: str | None = None
+    part_size: int = 8 * 1024 * 1024
+    backend: str = "local"
+    content_type: str | None = None
+
+
+class CompleteUploadSessionRequest(BaseModel):
+    parts: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class IngestFromUploadSessionsRequest(BaseModel):
+    session_ids: list[str]
 
 
 @app.get("/", include_in_schema=False)
@@ -175,6 +195,160 @@ def _save_uploads(files: list[UploadFile], corpus_id: str) -> list[Path]:
             raise
         paths.append(p)
     return paths
+
+
+# ---- Resumable upload sessions -----------------------------------------------
+@app.post("/api/upload-sessions")
+def create_upload_session(req: CreateUploadSessionRequest):
+    try:
+        session = UPLOAD_SESSIONS.create(
+            req.filename, req.size_bytes, sha256=req.sha256,
+            part_size=req.part_size, backend=req.backend,
+        )
+        if req.backend == "s3":
+            adapter = S3MultipartAdapter.from_env()
+            key, remote_id = adapter.begin(session.id, session.filename, req.content_type)
+            session = UPLOAD_SESSIONS.set_remote(session.id, object_key=key, remote_upload_id=remote_id)
+        return UPLOAD_SESSIONS.status(session.id)
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.get("/api/upload-sessions/{session_id}")
+def upload_session_status(session_id: str):
+    try:
+        session = UPLOAD_SESSIONS.get(session_id)
+        if session.backend == "s3" and session.status not in {"complete", "aborted"}:
+            adapter = S3MultipartAdapter.from_env()
+            for part in adapter.list_parts(key=session.object_key or "", upload_id=session.remote_upload_id or ""):
+                UPLOAD_SESSIONS.record_remote_part(
+                    session_id, int(part["part_number"]), etag=str(part["etag"]), size_bytes=int(part.get("size_bytes") or 0)
+                )
+        return UPLOAD_SESSIONS.status(session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="upload session not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.put("/api/upload-sessions/{session_id}/parts/{part_number}")
+async def upload_local_part(session_id: str, part_number: int, request: Request):
+    try:
+        payload = await request.body()
+        expected = request.headers.get("x-part-sha256")
+        result = UPLOAD_SESSIONS.put_local_part(session_id, part_number, payload, expected_sha256=expected)
+        return {**result, "session": UPLOAD_SESSIONS.status(session_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="upload session not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/upload-sessions/{session_id}/parts/{part_number}/presign")
+def presign_s3_part(session_id: str, part_number: int):
+    try:
+        session = UPLOAD_SESSIONS.get(session_id)
+        if session.backend != "s3":
+            raise ValueError("presign is only valid for s3 upload sessions")
+        adapter = S3MultipartAdapter.from_env()
+        return {
+            "session_id": session_id,
+            "part_number": part_number,
+            "url": adapter.presign_part(
+                key=session.object_key or "",
+                upload_id=session.remote_upload_id or "",
+                part_number=part_number,
+            ),
+        }
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="upload session not found") from exc
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/upload-sessions/{session_id}/complete")
+def complete_upload_session(session_id: str, req: CompleteUploadSessionRequest):
+    try:
+        session = UPLOAD_SESSIONS.get(session_id)
+        if session.backend == "local":
+            completed = UPLOAD_SESSIONS.complete_local(session_id, UPLOAD_ROOT / "_completed")
+        else:
+            adapter = S3MultipartAdapter.from_env()
+            parts = req.parts or adapter.list_parts(
+                key=session.object_key or "", upload_id=session.remote_upload_id or ""
+            )
+            if not parts:
+                raise ValueError("no uploaded S3 parts found")
+            for part in parts:
+                UPLOAD_SESSIONS.record_remote_part(
+                    session_id, int(part["part_number"]), etag=str(part["etag"]), size_bytes=int(part.get("size_bytes") or 0)
+                )
+            uri = adapter.complete(
+                key=session.object_key or "", upload_id=session.remote_upload_id or "", parts=parts
+            )
+            completed = UPLOAD_SESSIONS.mark_remote_complete(session_id, uri)
+        return UPLOAD_SESSIONS.status(completed.id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="upload session not found") from exc
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.delete("/api/upload-sessions/{session_id}")
+def abort_upload_session(session_id: str):
+    try:
+        session = UPLOAD_SESSIONS.get(session_id)
+        if session.backend == "s3" and session.remote_upload_id and session.object_key:
+            S3MultipartAdapter.from_env().abort(key=session.object_key, upload_id=session.remote_upload_id)
+        return UPLOAD_SESSIONS.status(UPLOAD_SESSIONS.abort(session_id).id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="upload session not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/ingest-jobs/from-upload-sessions")
+def create_ingest_job_from_upload_sessions(req: IngestFromUploadSessionsRequest):
+    if not req.session_ids:
+        raise HTTPException(status_code=400, detail="at least one upload session is required")
+    corpus_id = f"corp_{uuid.uuid4().hex[:12]}"
+    paths: list[Path] = []
+    for session_id in req.session_ids:
+        try:
+            session = UPLOAD_SESSIONS.get(session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=f"upload session not found: {session_id}") from exc
+        if session.status != "complete" or not session.completed_path:
+            raise HTTPException(status_code=409, detail=f"upload session is not complete: {session_id}")
+        if session.backend == "local":
+            path = Path(session.completed_path)
+        else:
+            target = UPLOAD_ROOT / corpus_id / f"{session.id}-{session.filename}"
+            path = S3MultipartAdapter.from_env().materialize(key=session.object_key or "", destination=target)
+        if not path.is_file():
+            raise HTTPException(status_code=409, detail=f"completed upload payload is unavailable: {session_id}")
+        paths.append(path)
+
+    job_id = f"ingest_{uuid.uuid4().hex[:12]}"
+    job = IngestJob(
+        job_id=job_id,
+        corpus_id=corpus_id,
+        total_files=len(paths),
+        total_bytes=sum(p.stat().st_size for p in paths),
+        assets=[AssetIngestState(filename=p.name, path=str(p), bytes=p.stat().st_size) for p in paths],
+    )
+    STORE.put_ingest_job(job)
+    queued = QUEUE.enqueue(
+        "ingest", job_id,
+        {"job_id": job_id, "corpus_id": corpus_id, "paths": [str(p) for p in paths]},
+        max_attempts=2,
+    )
+    _ensure_embedded_worker()
+    return {
+        **job.model_dump(),
+        "queue_id": queued.id,
+        "upload_sessions": req.session_ids,
+    }
 
 
 # ---- Ingest queue ------------------------------------------------------------
