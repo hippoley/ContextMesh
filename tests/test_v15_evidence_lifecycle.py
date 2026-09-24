@@ -1,6 +1,7 @@
 from contextmesh.diagnostics import (
     EvidenceFailureClass,
     EvidenceStage,
+    build_authority_lifecycle,
     build_probe_lifecycle,
 )
 
@@ -51,3 +52,32 @@ def test_fully_visible_source_has_no_failure():
     assert trace.failure_class == EvidenceFailureClass.NONE
     assert trace.first_non_present_stage is None
     assert trace.model_visible_ratio == 1.0
+
+
+def test_authority_stage_distinguishes_visible_from_authoritative():
+    trace = build_authority_lifecycle(
+        source_id="memory-transient",
+        status="contested",
+        verified=False,
+        selected_as_authority=False,
+        reason="newer observation is visible but unverified and contested",
+    )
+    assert trace.stage(EvidenceStage.RETRIEVED).present is True
+    authority = trace.stage(EvidenceStage.AUTHORITY)
+    assert authority is not None
+    assert authority.disposition.value == "unknown"
+    assert trace.failure_class == EvidenceFailureClass.AUTHORITY_UNRESOLVED
+
+
+def test_closed_memory_can_be_non_authoritative_without_being_a_failure():
+    trace = build_authority_lifecycle(
+        source_id="memory-old",
+        status="superseded",
+        verified=True,
+        selected_as_authority=False,
+        reason="preserved for audit but superseded by a verified successor",
+    )
+    authority = trace.stage(EvidenceStage.AUTHORITY)
+    assert authority is not None
+    assert authority.disposition.value == "excluded"
+    assert trace.failure_class == EvidenceFailureClass.NONE
