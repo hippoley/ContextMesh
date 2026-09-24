@@ -1,0 +1,193 @@
+name: Reality Probe - Mem0
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reality-mem0.yml'
+      - 'src/contextmesh/memory_replay.py'
+
+permissions:
+  contents: read
+
+jobs:
+  temporal-authority:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      OPENAI_API_KEY: sk-contextmesh-probe-not-used
+      MEM0_TELEMETRY: "false"
+    steps:
+      - name: Checkout ContextMesh
+        uses: actions/checkout@v7
+        with:
+          path: contextmesh
+
+      - name: Checkout current Mem0 main
+        uses: actions/checkout@v7
+        with:
+          repository: mem0ai/mem0
+          ref: main
+          path: mem0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: mem0/pyproject.toml
+
+      - name: Install current Mem0 + local embedding
+        run: |
+          python -m pip install --upgrade pip
+          pip install ./mem0 fastembed
+
+      - name: Run live OSS temporal-authority probe
+        run: |
+          python - <<'PY'
+          import json
+          import tempfile
+          from pathlib import Path
+
+          import mem0
+          from mem0 import Memory
+
+          root = Path(tempfile.mkdtemp(prefix="contextmesh-mem0-live-"))
+          qdrant_path = root / "qdrant"
+          history_path = root / "history.db"
+
+          config = {
+              "vector_store": {
+                  "provider": "qdrant",
+                  "config": {
+                      "collection_name": "contextmesh_temporal_probe",
+                      "path": str(qdrant_path),
+                      "embedding_model_dims": 384,
+                  },
+              },
+              "embedder": {
+                  "provider": "fastembed",
+                  "config": {
+                      "model": "BAAI/bge-small-en-v1.5",
+                      "embedding_dims": 384,
+                  },
+              },
+              # infer=False below guarantees this LLM is never called.
+              "llm": {
+                  "provider": "openai",
+                  "config": {
+                      "model": "gpt-4o-mini",
+                      "api_key": "sk-contextmesh-probe-not-used",
+                  },
+              },
+              "history_db_path": str(history_path),
+          }
+
+          memory = Memory.from_config(config)
+          user_id = "contextmesh-temporal-probe"
+
+          stable = memory.add(
+              "The production database port is 5432.",
+              user_id=user_id,
+              infer=False,
+              metadata={
+                  "fact_key": "database.port",
+                  "status": "active",
+                  "verified": True,
+                  "event_time": "2026-09-01T09:00:00Z",
+                  "source_kind": "signed_configuration",
+              },
+          )
+          transient = memory.add(
+              "The production database port is 6543.",
+              user_id=user_id,
+              infer=False,
+              metadata={
+                  "fact_key": "database.port",
+                  "status": "contested",
+                  "verified": False,
+                  "event_time": "2026-09-23T18:00:00Z",
+                  "source_kind": "transient_runtime_observation",
+              },
+          )
+
+          default_search = memory.search(
+              "What is the production database port?",
+              user_id=user_id,
+              top_k=10,
+              threshold=0.0,
+              rerank=False,
+          )
+          active_only = memory.search(
+              "What is the production database port?",
+              filters={"AND": [{"user_id": user_id}, {"status": "active"}]},
+              top_k=10,
+              threshold=0.0,
+              rerank=False,
+          )
+          all_rows = memory.get_all(user_id=user_id)
+
+          def rows(result):
+              if isinstance(result, dict):
+                  return result.get("results", [])
+              return result or []
+
+          default_rows = rows(default_search)
+          active_rows = rows(active_only)
+          stored_rows = rows(all_rows)
+
+          def text_of(row):
+              return row.get("memory") or row.get("data") or row.get("text") or ""
+
+          default_texts = [text_of(x) for x in default_rows]
+          active_texts = [text_of(x) for x in active_rows]
+
+          assert len(stored_rows) == 2, stored_rows
+          assert any("5432" in x for x in default_texts), default_rows
+          assert any("6543" in x for x in default_texts), default_rows
+          assert any("5432" in x for x in active_texts), active_rows
+          assert all("6543" not in x for x in active_texts), active_rows
+
+          result = {
+              "mem0_version": mem0.__version__,
+              "mem0_commit": "CURRENT_MAIN_CHECKOUT",
+              "storage": "local-qdrant",
+              "embedder": "fastembed/BAAI-bge-small-en-v1.5",
+              "llm_called": False,
+              "stored_count": len(stored_rows),
+              "default_search": [
+                  {
+                      "id": row.get("id"),
+                      "memory": text_of(row),
+                      "score": row.get("score"),
+                      "status": row.get("status") or (row.get("metadata") or {}).get("status"),
+                      "verified": row.get("verified") if "verified" in row else (row.get("metadata") or {}).get("verified"),
+                  }
+                  for row in default_rows
+              ],
+              "active_filter_search": [
+                  {
+                      "id": row.get("id"),
+                      "memory": text_of(row),
+                      "score": row.get("score"),
+                      "status": row.get("status") or (row.get("metadata") or {}).get("status"),
+                  }
+                  for row in active_rows
+              ],
+              "observation": (
+                  "Default semantic search exposed both conflicting memories. "
+                  "Explicit lifecycle metadata filtering removed the contested transient memory."
+              ),
+          }
+          print(json.dumps(result, indent=2))
+          print("Confirmed: current Mem0 OSS can store and retrieve both conflicting facts; temporal authority is caller policy unless expressed as a retrieval filter.")
+          PY
+
+      - name: Record upstream commit
+        if: always()
+        working-directory: mem0
+        run: |
+          echo "mem0_commit=$(git rev-parse HEAD)"
+          python - <<'PY'
+          import mem0
+          print("mem0_version=" + mem0.__version__)
+          PY
