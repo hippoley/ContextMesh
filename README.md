@@ -24,7 +24,7 @@ The project now keeps a public **Reality Lab** of current-main reproductions ins
 These are specific mechanism tests, not global product rankings.
 
 - [Reality Lab static surface](site/reality.html)
-- [Evidence lifecycle contract](docs/reality/EVIDENCE_LIFECYCLE.md)
+- [Evidence lifecycle contract](docs/EVIDENCE_LIFECYCLE.md)
 - [External demand radar](docs/reality/EXTERNAL_DEMAND_RADAR.md)
 
 The resulting diagnostic model follows evidence through:
@@ -83,7 +83,7 @@ Additional current-main evidence:
 - [RAGFlow #20140 — validated 32K vs 128K context-resolution delta](benchmarks/results/ragflow-20140-2026-09-24.json)
 - [Mem0 2.2.0 — semantic visibility vs memory authority](docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md)
 
-See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits, and [docs/reality/EVIDENCE_LIFECYCLE.md](docs/reality/EVIDENCE_LIFECYCLE.md) for the generalized stage model.
+See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits, and [docs/EVIDENCE_LIFECYCLE.md](docs/EVIDENCE_LIFECYCLE.md) for the generalized stage model.
 
 ## v0.14 — resumable multipart uploads
 
