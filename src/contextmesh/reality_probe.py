@@ -64,6 +64,7 @@ class ProbeSelection(BaseModel):
     selected_ids: list[str]
     ranked_ids: list[str] = Field(default_factory=list)
     visible_text_by_id: dict[str, str] = Field(default_factory=dict)
+    visible_byte_ranges_by_id: dict[str, list[list[int]]] = Field(default_factory=dict)
     latency_seconds: float = 0.0
     usage: UsageMetrics = Field(default_factory=UsageMetrics)
     note: str = ""
@@ -78,6 +79,10 @@ class EligibilityTraceItem(BaseModel):
     roles: list[str] = Field(default_factory=list)
     content_complete: bool = True
     semantic_available: bool = False
+    source_bytes: int = 0
+    visible_bytes: int = 0
+    visible_ratio: float = 0.0
+    visible_byte_ranges: list[list[int]] = Field(default_factory=list)
     visible_chars: int | None = None
     decision: str = ""
     reason: str = ""
@@ -103,6 +108,8 @@ class ProbeOutcome(BaseModel):
     contradiction_preserved: bool | None
     source_traceable: bool
     forced_context_when_unsupported: bool
+    selected_source_visibility: float
+    decisive_semantic_visibility: float | None
     latency_seconds: float
     usage: UsageMetrics = Field(default_factory=UsageMetrics)
     live_verdict: str | None = None
@@ -134,6 +141,9 @@ class RealityProbeReport(BaseModel):
                 "full_coverage_runs": sum(1 for x in rows if math.isclose(x.coverage, 1.0)),
                 "forced_context_on_unsupported": sum(
                     1 for x in rows if x.forced_context_when_unsupported
+                ),
+                "mean_selected_source_visibility": (
+                    sum(x.selected_source_visibility for x in rows) / len(rows) if rows else 0.0
                 ),
             }
             live_rows = [x for x in rows if x.live_verdict_correct is not None]
@@ -168,6 +178,7 @@ class RealityProbeReport(BaseModel):
                 lines.append(
                     f"- {x.scenario_id} / {x.backend}: {item.document_id} "
                     f"rank={rank}, selected={'yes' if item.selected else 'no'}, "
+                    f"visible={item.visible_ratio:.0%}, semantic={'yes' if item.semantic_available else 'no'}, "
                     f"decision={item.decision} — {item.reason}"
                 )
         lines.extend(["", "## Aggregate", "", "JSON:", json.dumps(self.by_backend, indent=2)])
@@ -237,22 +248,29 @@ class HeadTailByteBudgetBackend:
     def select(self, scenario: ProbeScenario) -> ProbeSelection:
         started = time.perf_counter()
         visible: dict[str, str] = {}
+        ranges: dict[str, list[list[int]]] = {}
         for doc in scenario.documents:
             raw = doc.text.encode("utf-8")
             if len(raw) <= self.edge_bytes * 2:
                 visible[doc.id] = doc.text
+                ranges[doc.id] = [[0, len(raw)]]
                 continue
             visible[doc.id] = (
                 self._utf8_prefix(doc.text, self.edge_bytes)
                 + "\n... (truncated in middle because the output byte budget was exceeded) ...\n"
                 + self._utf8_suffix(doc.text, self.edge_bytes)
             )
+            ranges[doc.id] = [
+                [0, self.edge_bytes],
+                [max(self.edge_bytes, len(raw) - self.edge_bytes), len(raw)],
+            ]
         ids = [doc.id for doc in scenario.documents]
         return ProbeSelection(
             backend=self.name,
             selected_ids=ids,
             ranked_ids=ids,
             visible_text_by_id=visible,
+            visible_byte_ranges_by_id=ranges,
             latency_seconds=time.perf_counter() - started,
             note=(
                 f"Source IDs remain selected, but only the first/last {self.edge_bytes} bytes "
@@ -503,6 +521,36 @@ Rules:
         return verdict, ids
 
 
+def _visible_byte_ranges(doc: ProbeDocument, selection: ProbeSelection) -> list[list[int]]:
+    if doc.id not in set(selection.selected_ids):
+        return []
+    explicit = selection.visible_byte_ranges_by_id.get(doc.id)
+    if explicit is not None:
+        return explicit
+    return [[0, len(doc.text.encode("utf-8"))]]
+
+
+def _covered_bytes(ranges: list[list[int]], source_bytes: int) -> int:
+    normalized: list[tuple[int, int]] = []
+    for item in ranges:
+        if len(item) != 2:
+            continue
+        start = max(0, min(source_bytes, int(item[0])))
+        end = max(start, min(source_bytes, int(item[1])))
+        if end > start:
+            normalized.append((start, end))
+    if not normalized:
+        return 0
+    normalized.sort()
+    merged: list[tuple[int, int]] = []
+    for start, end in normalized:
+        if not merged or start > merged[-1][1]:
+            merged.append((start, end))
+        else:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+    return sum(end - start for start, end in merged)
+
+
 def _semantic_available(doc: ProbeDocument, selection: ProbeSelection) -> bool:
     if doc.id not in set(selection.selected_ids):
         return False
@@ -554,7 +602,11 @@ def evaluate_selection(
         rank = ranks.get(doc.id)
         is_selected = doc.id in selected
         visible_text = selection.visible_text_by_id.get(doc.id, doc.text) if is_selected else ""
-        content_complete = (visible_text == doc.text) if is_selected else False
+        source_bytes = len(doc.text.encode("utf-8"))
+        visible_ranges = _visible_byte_ranges(doc, selection)
+        visible_bytes = _covered_bytes(visible_ranges, source_bytes)
+        visible_ratio = (visible_bytes / source_bytes) if source_bytes else (1.0 if is_selected else 0.0)
+        content_complete = bool(is_selected and visible_bytes >= source_bytes)
         semantic_available = _semantic_available(doc, selection)
         if is_selected and not semantic_available:
             decision = "selected-but-semantic-span-hidden"
@@ -584,6 +636,10 @@ def evaluate_selection(
             roles=list(doc.roles),
             content_complete=content_complete,
             semantic_available=semantic_available,
+            source_bytes=source_bytes,
+            visible_bytes=visible_bytes,
+            visible_ratio=visible_ratio,
+            visible_byte_ranges=visible_ranges,
             visible_chars=len(visible_text) if is_selected else 0,
             decision=decision,
             reason=reason,
@@ -601,6 +657,17 @@ def evaluate_selection(
         ]
         live_verdict, live_sources = live_judge.judge(scenario, docs)
         live_correct = live_verdict == scenario.expected_verdict
+
+    selected_trace = [x for x in trace if x.selected]
+    selected_source_visibility = (
+        sum(x.visible_ratio for x in selected_trace) / len(selected_trace)
+        if selected_trace else 0.0
+    )
+    decisive_trace = [x for x in trace if x.decisive]
+    decisive_semantic_visibility = (
+        sum(1.0 if x.semantic_available else 0.0 for x in decisive_trace) / len(decisive_trace)
+        if decisive_trace else None
+    )
 
     return ProbeOutcome(
         scenario_id=scenario.id,
@@ -626,6 +693,8 @@ def evaluate_selection(
             and bool(selection.selected_ids)
             and not scenario.decisive_ids
         ),
+        selected_source_visibility=selected_source_visibility,
+        decisive_semantic_visibility=decisive_semantic_visibility,
         latency_seconds=selection.latency_seconds,
         usage=selection.usage,
         live_verdict=live_verdict,
