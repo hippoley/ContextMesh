@@ -15,7 +15,7 @@ index 9eb6c7d..0000000 100644
  		if err != nil || instance == nil || instance.Status != "active" {
  			return nil
  		}
-@@ -128,6 +134,25 @@ func lookupTenantModel(ctx context.Context, db *gorm.DB, tenantID, modelRef, pur
+@@ -128,6 +134,28 @@ func lookupTenantModel(ctx context.Context, db *gorm.DB, tenantID, modelRef, pur
  	return obj
  }
  
