@@ -28,6 +28,7 @@ class ProbeDocument(BaseModel):
     id: str
     text: str
     decisive: bool = False
+    decisive_marker: str | None = None
     stance: str = "neutral"
     roles: list[str] = Field(default_factory=list)
 
@@ -62,6 +63,7 @@ class ProbeSelection(BaseModel):
     backend: str
     selected_ids: list[str]
     ranked_ids: list[str] = Field(default_factory=list)
+    visible_text_by_id: dict[str, str] = Field(default_factory=dict)
     latency_seconds: float = 0.0
     usage: UsageMetrics = Field(default_factory=UsageMetrics)
     note: str = ""
@@ -74,6 +76,9 @@ class EligibilityTraceItem(BaseModel):
     required: bool = True
     decisive: bool = False
     roles: list[str] = Field(default_factory=list)
+    content_complete: bool = True
+    semantic_available: bool = False
+    visible_chars: int | None = None
     decision: str = ""
     reason: str = ""
 
@@ -210,6 +215,49 @@ class LexicalTopKBackend:
             ranked_ids=ranked,
             latency_seconds=time.perf_counter() - started,
             note="Deterministic lexical control. It is a mechanism baseline, not a claim about Cognee.",
+        )
+
+
+class HeadTailByteBudgetBackend:
+    """Model a transport that exposes only source head/tail bytes to the model."""
+
+    name = "head-tail-byte-budget"
+
+    def __init__(self, edge_bytes: int = 4096):
+        self.edge_bytes = max(1, int(edge_bytes))
+
+    @staticmethod
+    def _utf8_prefix(text: str, limit: int) -> str:
+        return text.encode("utf-8")[:limit].decode("utf-8", errors="ignore")
+
+    @staticmethod
+    def _utf8_suffix(text: str, limit: int) -> str:
+        return text.encode("utf-8")[-limit:].decode("utf-8", errors="ignore")
+
+    def select(self, scenario: ProbeScenario) -> ProbeSelection:
+        started = time.perf_counter()
+        visible: dict[str, str] = {}
+        for doc in scenario.documents:
+            raw = doc.text.encode("utf-8")
+            if len(raw) <= self.edge_bytes * 2:
+                visible[doc.id] = doc.text
+                continue
+            visible[doc.id] = (
+                self._utf8_prefix(doc.text, self.edge_bytes)
+                + "\n... (truncated in middle because the output byte budget was exceeded) ...\n"
+                + self._utf8_suffix(doc.text, self.edge_bytes)
+            )
+        ids = [doc.id for doc in scenario.documents]
+        return ProbeSelection(
+            backend=self.name,
+            selected_ids=ids,
+            ranked_ids=ids,
+            visible_text_by_id=visible,
+            latency_seconds=time.perf_counter() - started,
+            note=(
+                f"Source IDs remain selected, but only the first/last {self.edge_bytes} bytes "
+                "are model-visible when a document exceeds the transport budget."
+            ),
         )
 
 
@@ -455,11 +503,20 @@ Rules:
         return verdict, ids
 
 
-def _available_verdict(scenario: ProbeScenario, selected_ids: set[str]) -> str:
+def _semantic_available(doc: ProbeDocument, selection: ProbeSelection) -> bool:
+    if doc.id not in set(selection.selected_ids):
+        return False
+    if not doc.decisive_marker:
+        return True
+    visible = selection.visible_text_by_id.get(doc.id, doc.text)
+    return doc.decisive_marker in visible
+
+
+def _available_verdict(scenario: ProbeScenario, selection: ProbeSelection) -> str:
     stances = {
         doc.stance
         for doc in scenario.documents
-        if doc.decisive and doc.id in selected_ids and doc.stance in {"support", "contradict"}
+        if doc.decisive and _semantic_available(doc, selection) and doc.stance in {"support", "contradict"}
     }
     if stances == {"support", "contradict"}:
         return ProbeVerdict.MIXED
@@ -484,11 +541,11 @@ def evaluate_selection(
 ) -> ProbeOutcome:
     selected = set(selection.selected_ids)
     decisive = set(scenario.decisive_ids)
-    found = decisive & selected
+    found = {doc.id for doc in scenario.documents if doc.decisive and _semantic_available(doc, selection)}
     recall = len(found) / len(decisive) if decisive else None
     ranks = {doc_id: index + 1 for index, doc_id in enumerate(selection.ranked_ids)}
     decisive_ranks = [ranks[x] for x in decisive if x in ranks]
-    available = _available_verdict(scenario, selected)
+    available = _available_verdict(scenario, selection)
 
     known_ids = {x.id for x in scenario.documents}
     by_doc = {x.id: x for x in scenario.documents}
@@ -496,7 +553,13 @@ def evaluate_selection(
     for doc in scenario.documents:
         rank = ranks.get(doc.id)
         is_selected = doc.id in selected
-        if is_selected:
+        visible_text = selection.visible_text_by_id.get(doc.id, doc.text) if is_selected else ""
+        content_complete = (visible_text == doc.text) if is_selected else False
+        semantic_available = _semantic_available(doc, selection)
+        if is_selected and not semantic_available:
+            decision = "selected-but-semantic-span-hidden"
+            reason = "source was selected, but the decisive span is absent from model-visible content"
+        elif is_selected:
             decision = "selected"
             reason = "backend exposed this source to downstream evidence"
         elif rank is not None:
@@ -519,6 +582,9 @@ def evaluate_selection(
             required=True,
             decisive=doc.decisive,
             roles=list(doc.roles),
+            content_complete=content_complete,
+            semantic_available=semantic_available,
+            visible_chars=len(visible_text) if is_selected else 0,
             decision=decision,
             reason=reason,
         ))
@@ -528,7 +594,11 @@ def evaluate_selection(
     live_correct = None
     if live_judge is not None:
         by_id = {x.id: x for x in scenario.documents}
-        docs = [by_id[x] for x in selection.selected_ids if x in by_id]
+        docs = [
+            by_id[x].model_copy(update={"text": selection.visible_text_by_id.get(x, by_id[x].text)})
+            for x in selection.selected_ids
+            if x in by_id
+        ]
         live_verdict, live_sources = live_judge.judge(scenario, docs)
         live_correct = live_verdict == scenario.expected_verdict
 
@@ -698,7 +768,41 @@ def issue_derived_scenarios(*, crowding: int = 24) -> list[ProbeScenario]:
         ],
         reality_sources=["https://github.com/topoteretes/cognee/issues/4462"],
     )
-    return [rare_exception, contradiction, near_duplicate, unsupported]
+
+    middle_guard = (
+        "CRITICAL_IMPORT_GUARD: Before importing any record, cross-check source totals "
+        "against the signed reconciliation report. If reconciliation does not match, abort the import."
+    )
+    middle_truncation = ProbeScenario(
+        id="middle-instruction-truncation",
+        title="Selected source loses its decisive middle span",
+        description=(
+            "Models a tool transport that returns a large instruction file as head + tail only. "
+            "The source is selected, but the decisive instruction never becomes model-visible."
+        ),
+        question="May the agent import records without reconciling source totals first?",
+        candidate_answer="Yes. Proceed directly with the import and reconcile later.",
+        expected_verdict=ProbeVerdict.CONTRADICTS,
+        documents=[
+            ProbeDocument(
+                id="skill-md",
+                text=(
+                    "# Import Skill\n"
+                    + ("General setup guidance and field mapping notes. " * 115)
+                    + "\n"
+                    + middle_guard
+                    + "\n"
+                    + ("General completion guidance and reporting notes. " * 115)
+                ),
+                decisive=True,
+                decisive_marker=middle_guard,
+                stance="contradict",
+                roles=["requirement", "transport-middle-span"],
+            )
+        ],
+        reality_sources=["https://github.com/langgenius/dify/issues/42889"],
+    )
+    return [rare_exception, contradiction, near_duplicate, unsupported, middle_truncation]
 
 
 def run_reality_probe_suite(
