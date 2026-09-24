@@ -1,0 +1,54 @@
+name: Reality Probe - Cognee
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reality-cognee.yml'
+      - 'src/contextmesh/reality_probe.py'
+
+permissions:
+  contents: read
+
+jobs:
+  cognee-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      TOKENIZERS_PARALLELISM: "false"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install ContextMesh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+      - name: Install current Cognee local-memory stack
+        run: pip install 'cognee[gliner]==1.6.0'
+      - name: Run live Cognee CHUNKS versus ContextMesh
+        run: |
+          contextmesh reality-probe \
+            --backend cognee \
+            --backend contextmesh \
+            --scenario rare-exception \
+            --scenario near-duplicate-crowding \
+            --top-k 5 \
+            --crowding 16 \
+            --cognee-extractor gliner \
+            --format markdown | tee cognee-reality-probe.md
+      - name: Record dependency versions
+        if: always()
+        run: |
+          python - <<'PY'
+          import contextmesh
+          print("contextmesh", contextmesh.__version__)
+          try:
+              import cognee
+              print("cognee", cognee.__version__)
+          except Exception as exc:
+              print("cognee import failed:", repr(exc))
+          PY
