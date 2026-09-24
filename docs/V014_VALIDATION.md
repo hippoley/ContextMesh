@@ -47,26 +47,29 @@ The Workspace now stores upload-session IDs in browser local storage and asks th
 
 ## S3 / MinIO status
 
-Implemented:
+A dedicated GitHub Actions integration job now starts a real MinIO server and exercises the S3-compatible multipart transport end to end.
+
+Verified against live MinIO in CI:
 
 - `CreateMultipartUpload`;
-- persisted remote upload ID/object key;
-- presigned `UploadPart` URLs;
-- remote `ListParts` reconciliation for resume;
+- SigV4 path-style presigned `UploadPart`;
+- upload of a multipart object with a >=5 MiB non-final part;
+- remote `ListParts` reconciliation after the first part (resume boundary);
 - ordered `PartNumber + ETag` completion;
-- abort;
-- materialization into the existing parser pipeline.
+- materialization/download with byte-for-byte payload verification;
+- abort of an incomplete multipart upload.
 
-Not yet validated in this repository environment:
+The live test discovered a real compatibility issue during development: boto3 initially emitted a legacy SigV2 presigned URL for the custom MinIO endpoint and MinIO returned `SignatureDoesNotMatch`. The adapter now explicitly uses SigV4 with path-style S3 addressing, and the MinIO integration passes.
 
-- a live AWS S3 bucket;
-- a live MinIO deployment;
-- browser interruption/reconnect against a real remote object store;
+Still not validated in this repository environment:
+
+- a live AWS S3 account with IAM policies;
+- browser interruption/reconnect over a real WAN;
 - multipart retry behavior under injected packet loss;
-- IAM/bucket policy variants;
-- very large 1–5 GB remote upload stress.
+- multi-GB 1–5 GB upload stress;
+- lifecycle cleanup of abandoned remote multipart uploads at scale.
 
-Therefore the S3/MinIO transport should be described as **implemented, not yet live-E2E verified**.
+Therefore the MinIO-compatible transport is now **live-E2E verified in CI**. AWS S3 compatibility follows the same S3 multipart protocol but should still receive a separate IAM/policy integration pass before being called production-verified.
 
 ## Compatibility
 
@@ -76,9 +79,10 @@ The original multipart-form ingest endpoint remains available for API compatibil
 
 Before calling remote multipart storage production-ready:
 
-1. run a MinIO integration job in CI or a disposable test environment;
-2. test interrupted upload/resume with missing-part reconciliation;
+1. test browser interruption/reconnect across a real network boundary;
+2. inject failed/retried part uploads;
 3. test duplicate/retried part writes;
-4. test final object checksum and parser input identity;
+4. verify final object checksum and parser input identity for remote ingest;
 5. stress at multi-GB size;
-6. validate cleanup/abort of stale incomplete uploads.
+6. validate lifecycle cleanup of stale incomplete uploads;
+7. run the same integration against AWS S3 with least-privilege IAM.
