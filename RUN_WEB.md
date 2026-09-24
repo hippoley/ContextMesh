@@ -45,3 +45,24 @@ curl -X POST http://127.0.0.1:8765/api/evaluation-jobs \
 ```
 
 The request returns a `job_id` immediately. Subscribe to `/api/events` for SSE progress or read `/api/jobs/{corpus_id}/{job_id}`.
+
+## Durable worker mode
+
+Development mode starts one embedded worker automatically:
+
+```bash
+contextmesh serve --host 127.0.0.1 --port 8765
+```
+
+For process isolation, disable the embedded worker and run one or more worker processes on the same host:
+
+```bash
+export CONTEXTMESH_DATA=.contextmesh
+export CONTEXTMESH_EMBEDDED_WORKER=0
+contextmesh serve --host 0.0.0.0 --port 8765
+
+# another process
+contextmesh worker --data .contextmesh --poll-seconds 0.25 --lease-seconds 180
+```
+
+The SQLite WAL queue is single-host. Do not place its database on NFS/network filesystems. Use the future Redis/NATS/Postgres backend for multi-node workers.
