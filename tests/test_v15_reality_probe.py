@@ -1,7 +1,9 @@
 from contextmesh.reality_probe import (
     ContextMeshFullCoverageBackend,
     LexicalTopKBackend,
+    ProbeSelection,
     ProbeVerdict,
+    evaluate_selection,
     extract_document_markers,
     issue_derived_scenarios,
     run_reality_probe_suite,
@@ -89,3 +91,18 @@ def test_markdown_report_contains_aggregate_and_backends():
     assert "lexical-topk" in md
     assert "contextmesh-full-coverage" in md
     assert report.by_backend["contextmesh-full-coverage"]["mean_decisive_recall"] == 1.0
+
+
+def test_first_decisive_rank_can_live_beyond_visible_top_k():
+    scenario = _by_id()["rare-exception"]
+    ranked = [x.id for x in scenario.documents if x.id != "transfer-legal-hold"]
+    ranked.insert(16, "transfer-legal-hold")
+    selection = ProbeSelection(
+        backend="deep-rank-control",
+        selected_ids=ranked[:5],
+        ranked_ids=ranked,
+    )
+    outcome = evaluate_selection(scenario, selection)
+    assert outcome.decisive_recall == 0.0
+    assert outcome.first_decisive_rank == 17
+    assert outcome.evidence_available_verdict == ProbeVerdict.UNSUPPORTED
