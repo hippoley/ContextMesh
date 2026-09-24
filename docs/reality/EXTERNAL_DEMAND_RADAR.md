@@ -15,6 +15,7 @@ The rule is simple:
 | LlamaIndex | ~52.3k | strong context/memory ecosystem, but many obvious issues are already crowded with PRs |
 | LightRAG | ~39.8k | context isolation and workspace correctness matter, but the most relevant issue is already crowded |
 | Graphiti | ~31.1k | explicit graph-memory correctness and ingestion verification discussions |
+| Haystack | active | retrieval diagnostics RFC maps directly to evidence-lifecycle tracing |
 
 All five were active on GitHub on 2026-09-24.
 
@@ -40,7 +41,9 @@ A useful hook contract would separate:
 
 There is currently no linked PR.
 
-**Intervention shape:** RFC contribution first, not a ContextMesh link dump.
+**Reality status:** public ContextMesh comment posted. It points to the actual single/bulk pre-persistence seams on current Graphiti main and proposes a typed verification receipt rather than a product integration pitch.
+
+**Intervention shape:** wait for maintainer feedback before adding more surface area.
 
 ### RAGFlow #20140 — context-window semantics
 
@@ -52,7 +55,14 @@ This is exactly the class of bug ContextMesh v0.9 addressed internally: a model 
 
 No PR was found for the issue.
 
-**Intervention shape:** reproduce current main, add a focused parity test, then submit a small Go fix.
+**Reality status:** reproduced against current RAGFlow main. With a tenant `extra.max_tokens=32000`, composite ref `gpt-4o@OpenAI`, and a sole active instance named `primary`, `ResolveModelContentLength` returned the 128000 catalog value instead of the tenant override. A candidate sole-active-instance parity patch made the exact same regression pass.
+
+Evidence:
+- `benchmarks/results/ragflow-20140-2026-09-24.json`
+- `benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch`
+- Actions run 35965439893
+
+**Intervention shape:** upstream PR is ready in patch form, but the current GitHub connection has no upstream-fork/write path. Do not re-investigate unless upstream main changes.
 
 ### RAGFlow #20141 — Go/Python truncation parity
 
@@ -88,6 +98,13 @@ ContextMesh now has a matching `middle-instruction-truncation` Reality Probe and
 **Intervention shape:** propose a bounded/paginated full-read contract for instruction sources (or an explicit skill-read tool), plus a regression fixture with the decisive instruction placed in the hidden middle. Avoid simply raising the global shell-output constant.
 
 No PR or assignee was found at scan time.
+
+**Reality status:** current-main code-path probe succeeded. A synthetic 11,343-byte `SKILL.md` with a decisive middle instruction lost that instruction under the 8 KiB shell-rendering path, while the eager-pull complete-output path exposes a 1 MiB budget. A public evidence comment was posted to #42889.
+
+Evidence:
+- `benchmarks/results/dify-42889-2026-09-24.json`
+- `docs/reality/Dify-42889-2026-09-24.md`
+- Actions run 35966935382
 
 ## B — enter with evidence, not code competition
 
@@ -132,6 +149,27 @@ The unresolved problem is not merely CRUD. It is epistemic:
 
 **Intervention shape:** first build a temporal-conflict replay corpus. Only comment after we can show measured failure/success rates for policies such as last-write-wins, recency+NLI, soft supersession, and verifier-assisted resolution.
 
+### Haystack #11867 — retrieval diagnostics should preserve the loss stage
+
+https://github.com/deepset-ai/haystack/issues/11867
+
+The RFC already distinguishes empty retrieval, filter exclusion, score cutoff and reranker context loss. External reality probes add a second axis: evidence can survive selection but disappear at rendering/model-visible transport.
+
+Two measured examples now support a stage-transition model:
+
+- Cognee: decisive source ranked 17, then lost at top-k eligibility.
+- Dify: decisive source selected/read, then lost at model-visible rendering.
+
+ContextMesh now represents this as:
+
+`ingested → stored → retrieved → eligible → rendered → model-visible → judged`
+
+with source-level failure classes and visible byte ranges.
+
+**Reality status:** evidence-backed comment prepared in `docs/reality/interventions/haystack-11867.md`, but posting through the current GitHub integration returned 403.
+
+**Intervention shape:** when write access exists, contribute stage-transition fixtures rather than another observability product pitch.
+
 ## C — do not pile on
 
 These issues are relevant but already have active contributors or multiple PRs:
@@ -142,6 +180,10 @@ These issues are relevant but already have active contributors or multiple PRs:
 - LightRAG #2904 — workspace context leakage
 - RAGFlow #16362 — silent 8K truncation
 - Graphiti #1728 — unrelated edge invalidation
+- CrewAI #7616 — silent knowledge chunk loss; PR #7617 already active
+- CrewAI #7013 — provider truncation detection; multiple PRs already active
+- CrewAI #7303 — model context windows; multiple PRs already active
+- LangChain #36745 — embedding count mismatch; multiple PRs already active
 
 The useful lesson is to absorb their failure mechanisms into our probes, not compete for the same patch.
 
@@ -156,3 +198,17 @@ A good external intervention should contain at least two of these three:
 3. a small patch or interface proposal that upstream can adopt without adopting ContextMesh.
 
 If an intervention needs the phrase “check out my project” to be useful, it is not ready.
+
+
+## Current external-contact status
+
+| Target | State | Reality delta |
+| --- | --- | --- |
+| Graphiti #1880 | **public comment posted** | exact verifier hook boundary + receipt contract |
+| Dify #42889 | **public comment posted** | selected/read source can lose decisive middle span |
+| RAGFlow #20140 | **validated patch ready; upstream write blocked** | 32K tenant override resolved as 128K before patch |
+| RAGFlow #20148 | **draft ready; upstream write blocked** | rank/cutoff/drop-reason diagnostic proposal |
+| Cognee #3706 | **draft ready; upstream write blocked** | Cognee 1.6.0 decisive source rank 17 in two probes |
+| Haystack #11867 | **draft ready; upstream write blocked** | retrieval diagnostics extended through model-visible stage |
+
+The target is not maximum comment count. A useful Reality Delta is a maintainer reply, accepted test fixture, patch review, merged change, or upstream adoption of the diagnostic contract.
