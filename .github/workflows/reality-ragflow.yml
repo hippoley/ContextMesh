@@ -29,7 +29,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libpcre2-dev
-          make -C internal/binding/cpp c_api
+          mkdir -p internal/binding/cpp/cmake-build-release
+          cd internal/binding/cpp/cmake-build-release
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --target rag_tokenizer_c_api -j2
 
       - name: Add external regression probe
         working-directory: ragflow
