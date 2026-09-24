@@ -132,13 +132,14 @@ class RealityProbeReport(BaseModel):
             "",
             f"top_k = {self.top_k}",
             "",
-            "| Scenario | Backend | Coverage | Decisive recall | Evidence verdict | Expected | Correct |",
-            "| --- | --- | ---: | ---: | --- | --- | --- |",
+            "| Scenario | Backend | Coverage | Decisive recall | First decisive rank | Evidence verdict | Expected | Correct |",
+            "| --- | --- | ---: | ---: | ---: | --- | --- | --- |",
         ]
         for x in self.outcomes:
             recall = "n/a" if x.decisive_recall is None else f"{x.decisive_recall:.0%}"
             lines.append(
                 f"| {x.scenario_id} | {x.backend} | {x.coverage:.0%} | {recall} | "
+                f"{x.first_decisive_rank if x.first_decisive_rank is not None else 'n/a'} | "
                 f"{x.evidence_available_verdict} | {x.expected_verdict} | "
                 f"{'yes' if x.verdict_correct else 'no'} |"
             )
@@ -337,10 +338,12 @@ class CogneeChunksBackend:
         self,
         top_k: int = 5,
         *,
+        fetch_k: int | None = None,
         dataset_prefix: str = "contextmesh_reality_probe",
         extractor: str | None = None,
     ):
         self.top_k = max(1, int(top_k))
+        self.fetch_k = max(self.top_k, int(fetch_k or self.top_k))
         self.dataset_prefix = dataset_prefix
         self.extractor = extractor
 
@@ -368,17 +371,17 @@ class CogneeChunksBackend:
             scenario.question,
             query_type=SearchType.CHUNKS,
             datasets=[dataset],
-            top_k=self.top_k,
+            top_k=self.fetch_k,
         )
-        selected = extract_document_markers(results)
+        ranked = extract_document_markers(results)
         return ProbeSelection(
             backend=self.name,
-            selected_ids=selected[: self.top_k],
-            ranked_ids=selected,
+            selected_ids=ranked[: self.top_k],
+            ranked_ids=ranked,
             latency_seconds=time.perf_counter() - started,
             note=(
-                f"Live Cognee SearchType.CHUNKS dataset={dataset}. "
-                "Probe source markers map returned short chunks back to benchmark IDs."
+                f"Live Cognee SearchType.CHUNKS dataset={dataset}; decision_top_k={self.top_k}, "
+                f"fetch_k={self.fetch_k}. Probe source markers map returned short chunks back to benchmark IDs."
             ),
         )
 
