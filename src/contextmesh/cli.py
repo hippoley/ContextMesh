@@ -11,6 +11,14 @@ from .fidelity import NeedleProbe, run_live_needles
 from .ingest import ingest_paths
 from .judges import HeuristicJudge, OpenAICompatibleJudge
 from .reader import CorpusReader
+from .reality_probe import (
+    CogneeChunksBackend,
+    ContextMeshFullCoverageBackend,
+    LexicalTopKBackend,
+    LiveProbeVerdictJudge,
+    issue_derived_scenarios,
+    run_reality_probe_suite,
+)
 from .runtime import ProgressiveEvaluator
 from .store import FileContextStore
 
@@ -90,6 +98,16 @@ def main() -> None:
     worker.add_argument("--once", action="store_true")
     worker.add_argument("--worker-id")
 
+    rp = sub.add_parser("reality-probe", help="compare retrieval eligibility against full-coverage execution")
+    rp.add_argument("--backend", action="append", choices=["lexical", "contextmesh", "cognee"], default=[])
+    rp.add_argument("--top-k", type=int, default=5)
+    rp.add_argument("--crowding", type=int, default=24)
+    rp.add_argument("--workers", type=int, default=4)
+    rp.add_argument("--store", default=".contextmesh/store")
+    rp.add_argument("--route-id", help="optional configured model route for a live verdict pass")
+    rp.add_argument("--cognee-extractor", help="optional Cognee extractor override")
+    rp.add_argument("--format", choices=["json", "markdown"], default="json")
+
     args = p.parse_args()
     if args.cmd == "serve":
         import uvicorn
@@ -105,6 +123,45 @@ def main() -> None:
             once=args.once,
             worker_id=args.worker_id,
         )
+        return
+    if args.cmd == "reality-probe":
+        store = FileContextStore(args.store)
+        requested = args.backend or ["lexical", "contextmesh"]
+        backends = []
+        if "lexical" in requested:
+            backends.append(LexicalTopKBackend(args.top_k))
+        if "contextmesh" in requested:
+            backends.append(ContextMeshFullCoverageBackend(workers=args.workers))
+        if "cognee" in requested:
+            backends.append(CogneeChunksBackend(args.top_k, extractor=args.cognee_extractor))
+
+        live_judge = None
+        if args.route_id:
+            routes = {route.id: route for route in store.list_model_routes() if route.enabled}
+            route = routes.get(args.route_id)
+            if route is None:
+                raise SystemExit(f"enabled route not found: {args.route_id}")
+            api_key = os.getenv(route.api_key_env, "EMPTY") if route.api_key_env else "EMPTY"
+            judge = OpenAICompatibleJudge(
+                route.model,
+                route.base_url,
+                api_key,
+                route_id=route.id,
+                input_cost_per_million=route.input_cost_per_million,
+                output_cost_per_million=route.output_cost_per_million,
+                capabilities=route.capabilities,
+                max_context_tokens=route.max_context_tokens,
+                request_timeout_seconds=route.request_timeout_seconds,
+            )
+            live_judge = LiveProbeVerdictJudge(judge)
+
+        report = run_reality_probe_suite(
+            top_k=args.top_k,
+            backends=backends,
+            scenarios=issue_derived_scenarios(crowding=args.crowding),
+            live_judge=live_judge,
+        )
+        print(report.to_markdown() if args.format == "markdown" else report.model_dump_json(indent=2))
         return
 
     store = FileContextStore(args.store)
