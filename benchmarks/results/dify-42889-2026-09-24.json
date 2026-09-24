@@ -1,0 +1,31 @@
+{
+  "kind": "external-upstream-semantic-visibility-regression",
+  "date": "2026-09-24",
+  "upstream": "langgenius/dify",
+  "issue": 42889,
+  "upstream_commit": "989ba1a78ffd1b9cb73a0f5cbce37b8ab39f5890",
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/35966935382",
+  "scenario": {
+    "source_kind": "SKILL.md",
+    "source_bytes": 11343,
+    "decisive_marker_location": "middle",
+    "ordinary_shell_edge_bytes": 4096,
+    "ordinary_shell_model_visible_limit_bytes": 8192,
+    "ordinary_shell_visible_bytes": 8339,
+    "eager_pull_complete_output_max_bytes": 1048576
+  },
+  "observed": {
+    "source_selected": true,
+    "source_read": true,
+    "decisive_middle_marker_present_in_source": true,
+    "decisive_middle_marker_visible_to_model_via_shell": false,
+    "truncation_marker_visible": true,
+    "eager_pull_has_larger_complete_output_budget": true
+  },
+  "interpretation": "The failure is not source selection or retrieval. It is path-dependent semantic visibility: an instruction source can be successfully selected/read while its decisive middle span is removed from the model-visible observation.",
+  "limits": [
+    "The probe exercises the current shell output renderer and config-layer budget semantics, not a full browser Agent V2 conversation.",
+    "It does not claim every skill over 8 KiB causes a wrong final answer.",
+    "Raising the global shell-output limit is not proposed as the fix; a skill/instruction-specific complete or paginated read path is safer."
+  ]
+}
