@@ -1,10 +1,22 @@
 services:
   contextmesh:
     build: .
+    command: ["contextmesh", "serve", "--host", "0.0.0.0", "--port", "8765"]
     ports:
       - "8765:8765"
     environment:
-      CONTEXTMESH_DATA_DIR: /data
+      CONTEXTMESH_DATA: /data
+      CONTEXTMESH_EMBEDDED_WORKER: "0"
+    volumes:
+      - contextmesh-data:/data
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["contextmesh", "worker", "--data", "/data", "--poll-seconds", "0.25", "--lease-seconds", "180"]
+    environment:
+      CONTEXTMESH_DATA: /data
+      CONTEXTMESH_EMBEDDED_WORKER: "0"
     volumes:
       - contextmesh-data:/data
     restart: unless-stopped
