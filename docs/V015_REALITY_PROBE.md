@@ -153,6 +153,43 @@ A statement about Cognee is allowed only after the optional Cognee backend has b
 
 Likewise, a retrieval miss does not automatically imply a wrong LLM answer; the optional same-model verdict pass measures that second step separately.
 
+## First live external result — Cognee 1.6.0
+
+A real GitHub Actions run completed successfully on 2026-09-24:
+
+https://github.com/hippoley/ContextMesh/actions/runs/35947688454
+
+Configuration:
+
+- Cognee 1.6.0
+- SearchType.CHUNKS
+- GLiNER extraction
+- Cognee local default / fastembed embedding path
+- top_k = 5
+- crowding = 16
+- scenarios: rare-exception, near-duplicate-crowding
+- no live LLM verdict pass
+
+Observed evidence eligibility:
+
+| Scenario | Backend | Coverage | Decisive recall | Evidence-available verdict | Expected |
+| --- | --- | ---: | ---: | --- | --- |
+| rare-exception | ContextMesh | 100% | 100% | contradicts | contradicts |
+| rare-exception | Cognee CHUNKS | 29% | 0% | unsupported | contradicts |
+| near-duplicate-crowding | ContextMesh | 100% | 100% | contradicts | contradicts |
+| near-duplicate-crowding | Cognee CHUNKS | 29% | 0% | unsupported | contradicts |
+
+This establishes the retrieval-induced blind-spot mechanism for these two controlled corpora: Cognee completed normally and returned top-k chunks, but the decisive source did not survive the top-five eligibility cut. ContextMesh preserved it because ranking affected order, not eligibility.
+
+It does not establish that Cognee is globally worse, nor that a downstream LLM would necessarily produce the wrong answer. Other Cognee search modes were not tested here, and the final verdict was computed from benchmark ground-truth evidence labels rather than a live LLM.
+
+Saved artifacts:
+
+- benchmarks/results/cognee-1.6.0-2026-09-24.json
+- docs/reality/Cognee-1.6.0-2026-09-24.md
+
+The next stronger causal test is a rank-depth sweep plus the same-model verdict pass.
+
 ## Stop / continue rule
 
 The probe is intended to decide whether ContextMesh should keep existing.
