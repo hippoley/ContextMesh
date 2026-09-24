@@ -1,0 +1,61 @@
+{
+  "kind": "contextmesh-reality-probe-rank-depth-result",
+  "date": "2026-09-24",
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/35948269281",
+  "contextmesh_version": "0.15.0",
+  "cognee_version": "1.6.0",
+  "python_version": "3.12.14",
+  "configuration": {
+    "cognee_search_type": "CHUNKS",
+    "cognee_extractor": "gliner",
+    "embedding_mode": "cognee local default / fastembed",
+    "decision_top_k": 5,
+    "cognee_fetch_k": 50,
+    "crowding": 16,
+    "live_llm_verdict": false
+  },
+  "results": [
+    {
+      "scenario": "rare-exception",
+      "decisive_rank": 17,
+      "contextmesh": {
+        "visible_eligibility": "all required documents",
+        "coverage": 1.0,
+        "decisive_recall": 1.0,
+        "evidence_available_verdict": "contradicts"
+      },
+      "cognee_chunks": {
+        "visible_cutoff": 5,
+        "coverage": 0.2941176471,
+        "decisive_recall_within_cutoff": 0.0,
+        "decisive_rank_in_deeper_fetch": 17,
+        "evidence_available_verdict": "unsupported"
+      }
+    },
+    {
+      "scenario": "near-duplicate-crowding",
+      "decisive_rank": 17,
+      "contextmesh": {
+        "visible_eligibility": "all required documents",
+        "coverage": 1.0,
+        "decisive_recall": 1.0,
+        "evidence_available_verdict": "contradicts"
+      },
+      "cognee_chunks": {
+        "visible_cutoff": 5,
+        "coverage": 0.2941176471,
+        "decisive_recall_within_cutoff": 0.0,
+        "decisive_rank_in_deeper_fetch": 17,
+        "evidence_available_verdict": "unsupported"
+      }
+    }
+  ],
+  "key_observation": "In both probes the decisive source is rank 17. ContextMesh does not improve its rank; it preserves eligibility beyond the ranking cutoff.",
+  "interpretation_limits": [
+    "Synthetic controlled corpora.",
+    "Cognee SearchType.CHUNKS only.",
+    "A deeper Cognee fetch was used only to measure rank; the decision evidence cutoff remained top 5.",
+    "No live LLM verdict pass was run.",
+    "This validates an eligibility mechanism, not a global product ranking."
+  ]
+}
