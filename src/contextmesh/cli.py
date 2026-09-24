@@ -83,10 +83,28 @@ def main() -> None:
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--reload", action="store_true")
 
+    worker = sub.add_parser("worker", help="run a durable ContextMesh ingest/evaluation worker")
+    worker.add_argument("--data", default=".contextmesh")
+    worker.add_argument("--poll-seconds", type=float, default=0.5)
+    worker.add_argument("--lease-seconds", type=float, default=180.0)
+    worker.add_argument("--once", action="store_true")
+    worker.add_argument("--worker-id")
+
     args = p.parse_args()
     if args.cmd == "serve":
         import uvicorn
         uvicorn.run("contextmesh.api:app", host=args.host, port=args.port, reload=args.reload)
+        return
+    if args.cmd == "worker":
+        os.environ["CONTEXTMESH_DATA"] = args.data
+        os.environ["CONTEXTMESH_EMBEDDED_WORKER"] = "0"
+        from .api import run_worker_loop
+        run_worker_loop(
+            poll_seconds=args.poll_seconds,
+            lease_seconds=args.lease_seconds,
+            once=args.once,
+            worker_id=args.worker_id,
+        )
         return
 
     store = FileContextStore(args.store)
