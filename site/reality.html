@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>ContextMesh — Reality Lab</title>
+<style>
+:root{--bg:#090b0e;--panel:#11151a;--panel2:#0d1115;--line:#242a31;--text:#f5f7fa;--muted:#84909d;--soft:#cbd3dc;--accent:#a9ed45;--warn:#f4c764;--danger:#ff7582;--blue:#78aaff}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(1000px 600px at 54% -12%,rgba(169,237,69,.08),transparent 64%),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:inherit}.wrap{max-width:1180px;margin:0 auto;padding:34px 24px 88px}.top{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:72px}.brand{font-weight:800;text-decoration:none}.brand small{color:var(--muted);font-weight:500;margin-left:8px}.nav{display:flex;gap:20px}.nav a{font-size:12px;color:#9ba5b1;text-decoration:none}.nav a:hover,.nav a.active{color:white}.ey{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6d7885;font-weight:700}.hero{max-width:930px}.hero h1{font-size:64px;line-height:.98;letter-spacing:-.06em;margin:12px 0 20px}.hero p{font-size:16px;line-height:1.7;color:#909ba8;max-width:820px}.claim{color:#d8e0e8}.claim strong{color:var(--accent)}.proofbar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:34px 0 56px}.metric{border:1px solid var(--line);border-radius:14px;padding:16px;background:#0d1115}.metric span{display:block;font-size:9px;color:#68737f;text-transform:uppercase;letter-spacing:.1em}.metric strong{display:block;font-size:24px;margin-top:7px;letter-spacing:-.04em}.metric small{display:block;color:#6f7a87;font-size:10px;margin-top:5px;line-height:1.45}.section{margin-top:64px}.section-head{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:18px}.section h2{font-size:28px;letter-spacing:-.04em;margin:5px 0 0}.section-head p{margin:0;max-width:520px;color:#7d8895;font-size:12px;line-height:1.6}.cases{display:grid;gap:13px}.case{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#11151a,#0d1115);padding:22px}.case-top{display:grid;grid-template-columns:165px 1fr auto;gap:20px;align-items:start}.project{font-size:11px;color:#7a8592}.project strong{display:block;color:#e4e9ee;font-size:15px;margin-bottom:5px}.case h3{font-size:18px;margin:0 0 7px;letter-spacing:-.025em}.case p{font-size:12px;line-height:1.6;color:#8994a1;margin:0}.status{display:inline-flex;border:1px solid #34422c;border-radius:99px;color:var(--accent);padding:5px 8px;font-size:9px;white-space:nowrap}.status.patch{color:#f5ce78;border-color:#4b4029}.numbers{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:18px}.number{border:1px solid #20262d;border-radius:11px;background:#0a0d11;padding:11px}.number span{display:block;color:#68737f;font-size:8px;text-transform:uppercase;letter-spacing:.08em}.number strong{display:block;font-size:15px;margin-top:5px}.number strong.bad{color:var(--danger)}.number strong.good{color:var(--accent)}.trace{display:flex;align-items:center;gap:7px;overflow:auto;margin-top:18px;padding:12px;border:1px solid #20262d;border-radius:12px;background:#090c0f}.stage{flex:0 0 auto;border:1px solid #2a313a;border-radius:9px;padding:8px 10px;font-size:9px;color:#c3cbd5}.stage.ok{border-color:#35452c;color:#cce9a4}.stage.loss{border-color:#542d32;color:#ff9aa4;background:#170e11}.arrow{color:#4f5965}.links{display:flex;gap:13px;flex-wrap:wrap;margin-top:16px}.links a{font-size:10px;color:#a7b1bd;text-decoration:none;border-bottom:1px solid #3a424b;padding-bottom:2px}.links a:hover{color:white}.lifecycle{display:grid;grid-template-columns:repeat(7,1fr);gap:7px;margin-top:20px}.life{border:1px solid var(--line);border-radius:12px;padding:13px 9px;background:#0d1115;text-align:center;min-height:86px}.life b{display:grid;place-items:center;width:24px;height:24px;margin:0 auto 8px;border-radius:50%;background:#171d14;color:var(--accent);font-size:9px}.life strong{font-size:10px}.life small{display:block;color:#626d79;font-size:8px;margin-top:5px}.rule{border-left:2px solid var(--accent);padding:4px 0 4px 17px;margin:24px 0;color:#bcc5cf;font-size:14px;line-height:1.7}.interventions{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.intervention{border:1px solid var(--line);border-radius:14px;padding:17px;background:#0d1115}.intervention header{display:flex;justify-content:space-between;gap:10px}.intervention h3{font-size:14px;margin:0}.intervention p{font-size:11px;color:#7f8a97;line-height:1.55}.badge{font-size:8px;border:1px solid #35422d;color:var(--accent);border-radius:99px;padding:4px 7px;height:max-content}.badge.blocked{color:#f2c96d;border-color:#4c4129}.limits{border:1px solid var(--line);border-radius:14px;padding:18px;background:#0b0f13;color:#7d8895;font-size:11px;line-height:1.65}.limits strong{color:#c8d0d9}.footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;color:#626d79;font-size:10px}
+@media(max-width:900px){.hero h1{font-size:48px}.proofbar{grid-template-columns:1fr 1fr}.case-top{grid-template-columns:1fr}.numbers{grid-template-columns:1fr 1fr}.lifecycle{grid-template-columns:repeat(4,1fr)}.interventions{grid-template-columns:1fr}}
+@media(max-width:600px){.wrap{padding:24px 14px 60px}.top{display:block;margin-bottom:45px}.nav{margin-top:18px;gap:13px;flex-wrap:wrap}.hero h1{font-size:38px}.proofbar,.numbers{grid-template-columns:1fr}.lifecycle{grid-template-columns:1fr 1fr}.section-head{display:block}.section-head p{margin-top:9px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./">ContextMesh <small>v0.15</small></a>
+    <nav class="nav">
+      <a href="./">Workspace</a>
+      <a href="./admin.html">Admin</a>
+      <a class="active" href="./reality.html">Reality Lab</a>
+      <a href="./api.html">API</a>
+      <a href="https://github.com/hippoley/ContextMesh">GitHub</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="ey">Reality Lab · external failure evidence</div>
+    <h1>Where did the evidence disappear?</h1>
+    <p class="claim">ContextMesh is not trying to rank every source better. It tests a narrower claim: <strong>ranking, truncation and routing must not silently decide what evidence is allowed to exist at judgment time.</strong></p>
+    <p>Every case below was reproduced against a real open-source project or current dependency path. Each card separates the measured result from the interpretation limits.</p>
+  </section>
+
+  <section class="proofbar">
+    <div class="metric"><span>Current Python CI</span><strong>96 passed</strong><small>Python 3.11 and 3.12 · 5 skipped</small></div>
+    <div class="metric"><span>Object storage E2E</span><strong>2 passed</strong><small>Real temporary MinIO multipart flow</small></div>
+    <div class="metric"><span>External current-main probes</span><strong>3 classes</strong><small>eligibility · visibility · route semantics</small></div>
+    <div class="metric"><span>Public interventions</span><strong>2 sent</strong><small>Graphiti RFC + Dify current-main evidence</small></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><div class="ey">Verified cases</div><h2>Reality deltas, not architecture claims.</h2></div><p>The useful question is not whether a system returned plausible context. It is whether the decisive source survived every stage needed to reach the judge.</p></div>
+    <div class="cases">
+      <article class="case">
+        <div class="case-top">
+          <div class="project"><strong>Cognee 1.6.0</strong>SearchType.CHUNKS</div>
+          <div><h3>Decisive evidence existed at rank 17 — top-5 made it ineligible.</h3><p>Two controlled corpora each contained 16 high-overlap/near-duplicate distractors and one decisive exception. A deeper fetch located the decisive source at rank 17 in both cases.</p></div>
+          <span class="status">live external run</span>
+        </div>
+        <div class="numbers">
+          <div class="number"><span>decisive rank</span><strong>17</strong></div>
+          <div class="number"><span>Cognee top-5 recall</span><strong class="bad">0 / 2</strong></div>
+          <div class="number"><span>ContextMesh recall</span><strong class="good">2 / 2</strong></div>
+          <div class="number"><span>claimed advantage</span><strong>eligibility</strong></div>
+        </div>
+        <div class="trace"><span class="stage ok">ingested</span><span class="arrow">→</span><span class="stage ok">retrieved · #17</span><span class="arrow">→</span><span class="stage loss">eligible · no at top-5</span><span class="arrow">→</span><span class="stage loss">model-visible · no</span></div>
+        <div class="links"><a href="https://github.com/hippoley/ContextMesh/actions/runs/35948269281">workflow run ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-1.6.0-rank-depth-2026-09-24.md">method + limits ↗</a></div>
+      </article>
+
+      <article class="case">
+        <div class="case-top">
+          <div class="project"><strong>RAGFlow main</strong>issue #20140</div>
+          <div><h3>The same model reference resolved to the wrong context budget on one code path.</h3><p>With a sole active tenant instance named <code>primary</code>, the tenant override was 32K. Context-length resolution looked for literal <code>default</code>, missed the row and fell through to the 128K catalog value. The candidate parity patch made the same regression pass.</p></div>
+          <span class="status patch">before/after patch</span>
+        </div>
+        <div class="numbers">
+          <div class="number"><span>tenant override</span><strong class="good">32,000</strong></div>
+          <div class="number"><span>before patch</span><strong class="bad">128,000</strong></div>
+          <div class="number"><span>after patch</span><strong class="good">32,000</strong></div>
+          <div class="number"><span>failure class</span><strong>route semantics</strong></div>
+        </div>
+        <div class="trace"><span class="stage ok">model ref</span><span class="arrow">→</span><span class="stage loss">instance resolution drift</span><span class="arrow">→</span><span class="stage loss">wrong context budget</span><span class="arrow">→</span><span class="stage ok">candidate patch verified</span></div>
+        <div class="links"><a href="https://github.com/hippoley/ContextMesh/actions/runs/35965439893">workflow run ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/benchmarks/results/ragflow-20140-2026-09-24.json">machine-readable result ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch">candidate patch ↗</a></div>
+      </article>
+
+      <article class="case">
+        <div class="case-top">
+          <div class="project"><strong>Dify main</strong>issue #42889</div>
+          <div><h3>The source was selected and read — but its decisive middle span never reached the model.</h3><p>A synthetic 11,343-byte <code>SKILL.md</code> placed a required import guard in the middle. Ordinary shell rendering preserved only first 4 KiB + last 4 KiB. The eager-pull path, by contrast, has a 1 MiB complete-output budget.</p></div>
+          <span class="status">current-main reproduced</span>
+        </div>
+        <div class="numbers">
+          <div class="number"><span>source size</span><strong>11,343 B</strong></div>
+          <div class="number"><span>shell budget</span><strong>8,192 B</strong></div>
+          <div class="number"><span>decisive span</span><strong class="bad">hidden</strong></div>
+          <div class="number"><span>eager-pull budget</span><strong class="good">1 MiB</strong></div>
+        </div>
+        <div class="trace"><span class="stage ok">selected</span><span class="arrow">→</span><span class="stage ok">read</span><span class="arrow">→</span><span class="stage loss">rendered · partial</span><span class="arrow">→</span><span class="stage loss">model-visible · decisive span absent</span></div>
+        <div class="links"><a href="https://github.com/hippoley/ContextMesh/actions/runs/35966935382">workflow run ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Dify-42889-2026-09-24.md">method + limits ↗</a><a href="https://github.com/langgenius/dify/issues/42889">upstream issue ↗</a></div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><div class="ey">Evidence lifecycle</div><h2>Coverage is a path, not a single percentage.</h2></div><p>ContextMesh now records where a source stopped being usable, including byte-range visibility when a transport truncates content.</p></div>
+    <div class="lifecycle">
+      <div class="life"><b>1</b><strong>Ingested</strong><small>source entered runtime</small></div>
+      <div class="life"><b>2</b><strong>Stored</strong><small>addressable payload exists</small></div>
+      <div class="life"><b>3</b><strong>Retrieved</strong><small>rank / candidate state</small></div>
+      <div class="life"><b>4</b><strong>Eligible</strong><small>allowed downstream</small></div>
+      <div class="life"><b>5</b><strong>Rendered</strong><small>byte ranges transported</small></div>
+      <div class="life"><b>6</b><strong>Model-visible</strong><small>decisive semantics survive</small></div>
+      <div class="life"><b>7</b><strong>Judged</strong><small>verdict over visible evidence</small></div>
+    </div>
+    <div class="rule">A source can be “retrieved” and still be lost at eligibility. It can be “selected” and still be lost at rendering. The diagnostic should name the first stage where evidence stopped being trustworthy.</div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><div><div class="ey">Reality contact</div><h2>Intervene with evidence, not promotion.</h2></div><p>External threads are treated as product tests. We enter only when we can contribute a current-main reproduction, measurement, patch, or reviewable contract.</p></div>
+    <div class="interventions">
+      <div class="intervention"><header><h3>Graphiti #1880</h3><span class="badge">posted</span></header><p>Mapped the exact pre-persistence hook boundary and proposed a typed verification receipt separating source faithfulness, store conflict and persistence policy.</p><a href="https://github.com/getzep/graphiti/issues/1880">open RFC ↗</a></div>
+      <div class="intervention"><header><h3>Dify #42889</h3><span class="badge">posted</span></header><p>Shared the current-main 11,343B → 8KiB middle-span reproduction and argued for an instruction-specific complete/paginated read contract rather than a global shell-budget increase.</p><a href="https://github.com/langgenius/dify/issues/42889">open issue ↗</a></div>
+      <div class="intervention"><header><h3>RAGFlow #20140 / #20148</h3><span class="badge blocked">write blocked</span></header><p>Current-main bug + candidate patch are verified locally in Actions. The connected GitHub integration cannot currently write to the upstream repository.</p></div>
+      <div class="intervention"><header><h3>Haystack #11867 / Cognee #3706</h3><span class="badge blocked">write blocked</span></header><p>Evidence-backed intervention drafts are ready; upstream comment attempts returned 403 through the current GitHub integration.</p></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="limits"><strong>Interpretation boundary.</strong> These are controlled reproductions of specific failure mechanisms, not global rankings of Cognee, RAGFlow or Dify. Cognee was tested on CHUNKS, not every retrieval mode. Dify was tested at the current renderer/config-layer code boundary, not every Agent V2 trajectory. RAGFlow's candidate patch passed the targeted regression, not its entire upstream suite. ContextMesh keeps those limits attached to the evidence rather than turning them into marketing claims.</div>
+  </section>
+
+  <footer class="footer"><span>ContextMesh Reality Lab · 2026-09-24 snapshot</span><span>Ranking is scheduling. Visibility is evidence.</span></footer>
+</div>
+</body>
+</html>
