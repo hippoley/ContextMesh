@@ -45,9 +45,13 @@ contextmesh reality-probe --backend cognee --backend contextmesh --top-k 5 --for
 
 A configured ContextMesh model route can be added with `--route-id` so every backend's selected evidence is judged by the same model. This separates retrieval failure from reasoning failure.
 
-A first live external run has now been completed against **Cognee 1.6.0 / SearchType.CHUNKS / top_k=5**. In the two targeted controlled probes, Cognee returned chunks normally but recalled **0/2 decisive sources**, while ContextMesh preserved both under 100% coverage. This is evidence for the blind-spot mechanism, not a claim that Cognee is globally worse or that every downstream LLM would answer incorrectly.
+A first live external run has now been completed against **Cognee 1.6.0 / SearchType.CHUNKS / top_k=5**. In the two targeted controlled probes, Cognee returned chunks normally but recalled **0/2 decisive sources**, while ContextMesh preserved both under 100% coverage.
 
-Saved result: [Cognee 1.6.0 reality result](docs/reality/Cognee-1.6.0-2026-09-24.md).
+A deeper rank fetch then located both decisive sources at **rank 17**. ContextMesh did **not** rank them better — its scheduler also placed them at rank 17. The difference is eligibility: Cognee's visible top-5 omitted rank 17, while ContextMesh read it later because ranking cannot remove a required source. This is evidence for the blind-spot mechanism, not a claim that Cognee is globally worse or that every downstream LLM would answer incorrectly.
+
+Saved results:
+- [Cognee 1.6.0 reality result](docs/reality/Cognee-1.6.0-2026-09-24.md)
+- [Rank-depth: rank 17 vs eligibility](docs/reality/Cognee-1.6.0-rank-depth-2026-09-24.md)
 
 See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md) for methodology and limits.
 
