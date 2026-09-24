@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.14.0
+
+- Added durable upload sessions with persisted part state and resume after browser/server interruption.
+- Added per-part SHA-256 validation and final SHA-256 computation for the local resumable backend.
+- Added native S3/MinIO multipart transport with server-side upload IDs, presigned part URLs, remote part reconciliation, completion and abort.
+- Added `/api/ingest-jobs/from-upload-sessions` so completed uploads hand off directly into the durable ingest queue.
+- Workspace uploads now resume missing parts using browser-persisted session IDs rather than restarting whole-file multipart requests.
+- Added optional `s3` dependency group for boto3 and S3/MinIO runtime configuration.
+- Added resumable upload persistence/integrity/API regression tests.
+
 ## v0.13.0
 
 - Replaced API-side `ThreadPoolExecutor` job submission with a durable SQLite WAL queue.
