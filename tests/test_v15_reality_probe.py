@@ -1,5 +1,6 @@
 from contextmesh.reality_probe import (
     ContextMeshFullCoverageBackend,
+    HeadTailByteBudgetBackend,
     LexicalTopKBackend,
     ProbeSelection,
     ProbeVerdict,
@@ -21,6 +22,7 @@ def test_issue_derived_scenarios_keep_public_reality_sources():
         "later-contradiction",
         "near-duplicate-crowding",
         "unsupported-query",
+        "middle-instruction-truncation",
     }
     assert all(x.reality_sources for x in scenarios)
     assert any("3706" in url for x in scenarios for url in x.reality_sources)
@@ -130,3 +132,27 @@ def test_full_coverage_trace_keeps_late_ranked_decisive_source_eligible():
     assert decisive.selected is True
     assert decisive.decision == "required-and-visited"
     assert "regardless of rank" in decisive.reason
+
+
+def test_head_tail_transport_can_select_source_but_hide_decisive_span():
+    scenario = _by_id()["middle-instruction-truncation"]
+    report = run_reality_probe_suite(
+        top_k=5,
+        scenarios=[scenario],
+        backends=[HeadTailByteBudgetBackend(edge_bytes=4096), ContextMeshFullCoverageBackend(workers=2)],
+    )
+    truncated = next(x for x in report.outcomes if x.backend == "head-tail-byte-budget")
+    full = next(x for x in report.outcomes if x.backend == "contextmesh-full-coverage")
+
+    assert truncated.coverage == 1.0
+    assert truncated.decisive_recall == 0.0
+    assert truncated.evidence_available_verdict == ProbeVerdict.UNSUPPORTED
+    trace = next(x for x in truncated.eligibility_trace if x.document_id == "skill-md")
+    assert trace.selected is True
+    assert trace.content_complete is False
+    assert trace.semantic_available is False
+    assert trace.decision == "selected-but-semantic-span-hidden"
+
+    assert full.coverage == 1.0
+    assert full.decisive_recall == 1.0
+    assert full.evidence_available_verdict == ProbeVerdict.CONTRADICTS
