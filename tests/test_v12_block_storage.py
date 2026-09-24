@@ -99,4 +99,4 @@ def test_storage_api_reports_runtime_payload_backend(tmp_path: Path, monkeypatch
     assert body["backend"] == "sqlite-payload"
     assert body["stored_blocks"] >= manifest.required_blocks
     assert body["policy"].startswith("payload storage only")
-    assert client.get("/health").json()["version"] == "0.12.0"
+    assert client.get("/health").json()["version"] == "0.13.0"
