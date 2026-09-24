@@ -315,6 +315,29 @@ class S3MultipartAdapter:
             ExpiresIn=int(expires_seconds),
         )
 
+    def list_parts(self, *, key: str, upload_id: str) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        marker: int | None = None
+        while True:
+            kwargs: dict[str, Any] = {
+                "Bucket": self.bucket,
+                "Key": key,
+                "UploadId": upload_id,
+            }
+            if marker is not None:
+                kwargs["PartNumberMarker"] = marker
+            response = self.client.list_parts(**kwargs)
+            for part in response.get("Parts", []):
+                out.append({
+                    "part_number": int(part["PartNumber"]),
+                    "etag": str(part["ETag"]),
+                    "size_bytes": int(part.get("Size") or 0),
+                })
+            if not response.get("IsTruncated"):
+                break
+            marker = int(response.get("NextPartNumberMarker") or 0)
+        return out
+
     def complete(self, *, key: str, upload_id: str, parts: list[dict[str, Any]]) -> str:
         normalized = [
             {"PartNumber": int(x["part_number"]), "ETag": str(x["etag"])}
