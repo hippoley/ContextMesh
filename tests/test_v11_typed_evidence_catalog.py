@@ -101,7 +101,7 @@ def test_v11_workspace_surfaces_catalog_and_typed_evidence():
     client = TestClient(api_module.app)
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json()["version"] == "0.12.0"
+    assert health.json()["version"] == "0.13.0"
     page = client.get("/")
     assert page.status_code == 200
     assert "Typed evidence inspector" in page.text
