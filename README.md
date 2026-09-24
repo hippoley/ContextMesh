@@ -1,6 +1,6 @@
 # ContextMesh
 
-> v0.14: Full-Coverage Context Runtime with typed evidence, durable workers, and resumable local/S3/MinIO multipart uploads.
+> v0.15: Full-Coverage Context Runtime with a reality-probe harness for testing retrieval-induced evidence blind spots.
 
 **Full-coverage external context runtime for evaluating AI answers against corpora larger than a model context window.**
 
@@ -13,6 +13,41 @@ question + uploaded corpus + candidate answer -> score
 A top-k RAG pipeline can omit the one low-ranked page, slide, sheet, table, transcript segment, or exception that changes the score. ContextMesh instead turns the uploaded material into an addressable external context space and enforces 100% coverage before a final score is valid.
 
 
+
+## v0.15 — Reality Probe
+
+ContextMesh now includes an executable falsification harness rather than assuming full coverage is useful.
+
+The first scenarios are derived from public failure classes observed in Cognee issues: near-duplicate top-k crowding, unconditional nearest-neighbor context, unsupported assertions, and structured information loss. The included corpora are synthetic mechanism probes; they do not copy external user data.
+
+Run the deterministic control against the real ContextMesh traversal path:
+
+```bash
+contextmesh reality-probe --format markdown
+```
+
+The default comparison is:
+
+```text
+lexical top-k
+vs
+ContextMesh full-coverage execution
+```
+
+The ContextMesh backend creates a real manifest and executes `ProgressiveEvaluator`; lexical ranking controls reading order but cannot remove a required document.
+
+An optional Cognee integration uses the current Cognee Python `remember` + `SearchType.CHUNKS` path:
+
+```bash
+pip install -e '.[cognee]'
+contextmesh reality-probe --backend cognee --backend contextmesh --top-k 5 --format markdown
+```
+
+A configured ContextMesh model route can be added with `--route-id` so every backend's selected evidence is judged by the same model. This separates retrieval failure from reasoning failure.
+
+**Important:** the repository does not claim Cognee fails these probes until the live Cognee backend has actually been run. CI validates the benchmark mechanism and ContextMesh coverage invariant only.
+
+See [docs/V015_REALITY_PROBE.md](docs/V015_REALITY_PROBE.md).
 
 ## v0.14 — resumable multipart uploads
 
