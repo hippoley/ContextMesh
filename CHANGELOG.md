@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.13.0
+
+- Replaced API-side `ThreadPoolExecutor` job submission with a durable SQLite WAL queue.
+- Added atomic worker leases, lease expiry/recovery, persistent retry state, cancel requests and worker heartbeats.
+- Added `contextmesh worker` for running ingest/evaluation workers independently from FastAPI.
+- Kept an embedded development worker enabled by default; production can set `CONTEXTMESH_EMBEDDED_WORKER=0`.
+- Added `GET /api/admin/queue` and Admin Queue & Workers observability.
+- Docker Compose now runs the Web/API and worker as separate services against the same durable data volume.
+- Corrected the Compose data environment variable to `CONTEXTMESH_DATA`.
+- Added v0.13 queue persistence, lease-recovery, cancellation, retry and heartbeat regression tests.
+- SQLite WAL is explicitly scoped to single-host deployments; the queue interface is designed for a later Redis/NATS/Postgres backend.
+
 ## v0.12.0
 
 - Added a WAL-mode SQLite ContextBlock payload backend; new corpora no longer require one JSON file per block.
