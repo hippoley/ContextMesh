@@ -66,6 +66,29 @@ No PR was found for the issue.
 
 **Intervention shape:** a shared boundary fixture plus the smallest parity fix. Do not bundle all related parser-config follow-ups unless maintainers ask.
 
+### Dify #42889 — selected source, hidden middle span
+
+https://github.com/langgenius/dify/issues/42889
+
+Agent V2 can successfully pull a Skill and still expose only the first/last 4 KiB of a large `SKILL.md` when the model reads it through ordinary `shell_run`.
+
+Current-main nuance matters:
+
+- prompt-mentioned skills use `DifyConfigLayer._run_mentioned_pull()` → `run_remote_script()`, whose complete-output path is bounded at 1 MiB and carries the full `skill_md`;
+- ordinary agent-driven `shell_run -> dify-agent config skills pull / cat SKILL.md` uses `render_prompt_observation_from_result()`, which applies the fixed 4 KiB head + 4 KiB tail model-visible budget.
+
+So this is not “the source failed to load.” It is a path-dependent semantic visibility bug: the same source can be complete or incomplete depending on how the agent reaches it.
+
+ContextMesh now has a matching `middle-instruction-truncation` Reality Probe and distinguishes:
+
+- source not selected;
+- source selected but decisive span hidden;
+- source selected and semantically complete.
+
+**Intervention shape:** propose a bounded/paginated full-read contract for instruction sources (or an explicit skill-read tool), plus a regression fixture with the decisive instruction placed in the hidden middle. Avoid simply raising the global shell-output constant.
+
+No PR or assignee was found at scan time.
+
 ## B — enter with evidence, not code competition
 
 ### RAGFlow #20148 — why was this chunk dropped?
