@@ -1,11 +1,10 @@
 name: Pages
 
+# First enable GitHub Pages once in:
+# Settings -> Pages -> Build and deployment -> Source -> GitHub Actions.
+# The repository-scoped Actions token can deploy an existing Pages site but
+# cannot create the Pages site for a new repository.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'site/**'
-      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,8 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
