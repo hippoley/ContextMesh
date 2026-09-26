@@ -1,0 +1,127 @@
+name: Reality Probe - RAGFlow D24 Patch
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reality-ragflow-d24-patch.yml'
+      - 'benchmarks/ragflow_d24_apply_patch.py'
+      - 'benchmarks/ragflow_d24_contract_probe.py'
+
+permissions:
+  contents: read
+
+jobs:
+  d24-before-after:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Checkout ContextMesh
+        uses: actions/checkout@v7
+        with:
+          path: contextmesh
+
+      - name: Checkout current RAGFlow main
+        uses: actions/checkout@v7
+        with:
+          repository: infiniflow/ragflow
+          ref: main
+          path: ragflow
+
+      - name: Record upstream head
+        working-directory: ragflow
+        run: git rev-parse HEAD | tee ../ragflow-head.txt
+
+      - name: Confirm D24 is present before patch
+        run: |
+          python contextmesh/benchmarks/ragflow_d24_contract_probe.py ragflow \
+            --expect broken \
+            --output d24-before.json
+
+      - name: Apply minimal D24 budget-separation patch
+        run: python contextmesh/benchmarks/ragflow_d24_apply_patch.py ragflow
+
+      - name: Verify patch shape and formatting
+        working-directory: ragflow
+        run: |
+          git diff --check
+          gofmt -w internal/service/chat_pipeline.go internal/service/chat_pipeline_test.go
+          git diff --check
+
+      - name: Confirm D24 contract is fixed after patch
+        run: |
+          python contextmesh/benchmarks/ragflow_d24_contract_probe.py ragflow \
+            --expect fixed \
+            --output d24-after.json
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: ragflow/go.mod
+          cache-dependency-path: ragflow/go.sum
+
+      - name: Build RAGFlow tokenizer C API required by service tests
+        working-directory: ragflow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcre2-dev
+          python -m pip install 'cmake>=4,<5'
+          mkdir -p internal/binding/cpp/cmake-build-release
+          cd internal/binding/cpp/cmake-build-release
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --target rag_tokenizer_c_api -j2
+
+      - name: Run targeted D24 budget tests
+        working-directory: ragflow
+        run: |
+          go test ./internal/service \
+            -run 'TestContextMeshD24SeparatesContextAndOutputBudgets|TestClampChatConfigMaxTokens' \
+            -count=1 -v
+
+      - name: Export upstream-ready patch
+        working-directory: ragflow
+        run: |
+          git diff -- internal/service/chat_pipeline.go internal/service/chat_pipeline_test.go \
+            > ../ragflow-d24-separate-context-output.patch
+          test -s ../ragflow-d24-separate-context-output.patch
+
+      - name: Build machine-readable comparison
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          before = json.loads(Path("d24-before.json").read_text())
+          after = json.loads(Path("d24-after.json").read_text())
+          head = Path("ragflow-head.txt").read_text().strip()
+
+          result = {
+              "kind": "contextmesh-ragflow-d24-before-after",
+              "upstream": "infiniflow/ragflow",
+              "upstream_head": head,
+              "before": before,
+              "after": after,
+              "patch": "ragflow-d24-separate-context-output.patch",
+              "contract": {
+                  "input_fit_budget_source": "context_length",
+                  "knowledge_budget_source": "context_length",
+                  "generation_cap_source": "max_output/max_tokens",
+                  "completion_limit": "min(requested_output, max_output, context_length - used_prompt_tokens)",
+              },
+          }
+          Path("ragflow-d24-before-after.json").write_text(
+              json.dumps(result, indent=2, sort_keys=True) + "\n"
+          )
+          print(json.dumps(result, indent=2, sort_keys=True))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ragflow-d24-before-after
+          path: |
+            d24-before.json
+            d24-after.json
+            ragflow-d24-before-after.json
+            ragflow-d24-separate-context-output.patch
+            ragflow-head.txt
