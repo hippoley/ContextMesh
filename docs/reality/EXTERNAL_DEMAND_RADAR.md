@@ -1,4 +1,4 @@
-# External Demand Radar — 2026-09-24
+# External Demand Radar — 2026-09-26
 
 This is not a list of repositories to advertise in. It is a list of **external pain artifacts where ContextMesh already has a relevant capability, benchmark, or implementation lesson**.
 
@@ -17,7 +17,7 @@ The rule is simple:
 | Graphiti | ~31.1k | explicit graph-memory correctness and ingestion verification discussions |
 | Haystack | active | retrieval diagnostics RFC maps directly to evidence-lifecycle tracing |
 
-All five were active on GitHub on 2026-09-24.
+Repository-size/activity snapshot above is from 2026-09-24. External-contact and collision state below was refreshed on 2026-09-26.
 
 ## A — enter now
 
@@ -45,24 +45,24 @@ There is currently no linked PR.
 
 **Intervention shape:** wait for maintainer feedback before adding more surface area.
 
-### RAGFlow #20140 — context-window semantics
+### RAGFlow D24 — chat pipeline binds generation output as context budget
 
-https://github.com/infiniflow/ragflow/issues/20140
+Provenance: the D24 note in https://github.com/infiniflow/ragflow/issues/20140. No standalone D24 issue was found at refresh time.
 
-The Go runtime currently gives the same max_tokens field different meanings across paths and can silently fall back to a catalog value for composite model references.
+RAGFlow's own OpenAI catalog defines `gpt-4o` with `context_length=128000` and `max_output=16384`. On current main commit `313ca90f6abd7682fe8523e16fd67b3653a3fa84`, the resolver carries both `ModelTarget.ContextLength` and `ModelTarget.MaxTokens`, but `chat_pipeline` passes `target.MaxTokens` into its internal `max_tokens` config and then uses that value for `messageFitIn(..., modelMaxTokens*0.95)`.
 
-This is exactly the class of bug ContextMesh v0.9 addressed internally: a model route's context limit must be an execution constraint, not loose metadata.
+**Reality status:** confirmed current-main code-path failure. The executable probe emitted:
 
-No PR was found for the issue.
-
-**Reality status:** reproduced against current RAGFlow main. With a tenant `extra.max_tokens=32000`, composite ref `gpt-4o@OpenAI`, and a sole active instance named `primary`, `ResolveModelContentLength` returned the 128000 catalog value instead of the tenant override. A candidate sole-active-instance parity patch made the exact same regression pass.
+```text
+CONFIRMED_D24 catalog_context=128000 catalog_max_output=16384 chat_fit_source=target.MaxTokens effective_fit_budget=16384
+```
 
 Evidence:
-- `benchmarks/results/ragflow-20140-2026-09-24.json`
-- `benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch`
-- Actions run 35965439893
+- `benchmarks/results/ragflow-d24-2026-09-26.json`
+- `docs/reality/RAGFlow-D24-2026-09-26.md`
+- Actions run 36209134470
 
-**Intervention shape:** upstream PR is ready in patch form, but the current GitHub connection has no upstream-fork/write path. Do not re-investigate unless upstream main changes.
+**Intervention shape:** this is now a focused upstream issue/patch candidate, but the fix must keep context-window fitting and generation-output limiting as two separate constraints. Do not "fix" it by globally replacing one with the other.
 
 ### RAGFlow #20141 — Go/Python truncation parity
 
@@ -107,6 +107,24 @@ Evidence:
 - Actions run 35966935382
 
 ## B — enter with evidence, not code competition
+
+### RAGFlow #20140 / PR #20207 — occupied; review, do not compete
+
+https://github.com/infiniflow/ragflow/pull/20207
+
+PR #20207 now owns the direct implementation path for #20140. Its sole-active-instance fix covers the same 32K-vs-128K regression ContextMesh independently reproduced, so opening a competing PR would now be noise.
+
+An independent review of PR head `7ce7c7e7375062eae15f33dd471788b9189a48fd` found one remaining in-scope semantics leak: `modelInfoWithTenantExtra()` still assigns tenant `extra.max_tokens` to both `ModelInfo.MaxOutput` and `ModelInfo.MaxTokens`, and `ModelSolver` still propagates the tenant value into `ModelTarget.MaxTokens`.
+
+**Reality status:** review gap confirmed on the PR head. Upstream comment was attempted but the current GitHub integration returned 403, so the comment is **not posted**.
+
+Evidence:
+- `benchmarks/results/ragflow-pr-20207-review-2026-09-26.json`
+- `docs/reality/RAGFlow-20207-review-2026-09-26.md`
+- `docs/reality/interventions/ragflow-20207-review.md`
+- Actions run 36209224821
+
+**Intervention shape:** post the review invariant when upstream write access exists; do not fork/duplicate #20207.
 
 ### RAGFlow #20148 — why was this chunk dropped?
 
@@ -212,7 +230,8 @@ If an intervention needs the phrase “check out my project” to be useful, it 
 | --- | --- | --- |
 | Graphiti #1880 | **public comment posted** | exact verifier hook boundary + receipt contract |
 | Dify #42889 | **public comment posted** | selected/read source can lose decisive middle span |
-| RAGFlow #20140 | **validated patch ready; upstream write blocked** | 32K tenant override resolved as 128K before patch |
+| RAGFlow D24 | **verified current-main code path** | 128K context model is fitted against 16,384 MaxOutput budget |
+| RAGFlow #20140 / PR #20207 | **existing PR; review evidence ready, write blocked** | remaining service path still leaks context override into generation MaxOutput |
 | RAGFlow #20148 | **draft ready; upstream write blocked** | rank/cutoff/drop-reason diagnostic proposal |
 | Cognee #3706 | **draft ready; upstream write blocked** | Cognee 1.6.0 decisive source rank 17 in two probes |
 | Haystack #11867 | **draft ready; upstream write blocked** | retrieval diagnostics extended through model-visible stage |
