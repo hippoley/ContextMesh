@@ -1,5 +1,5 @@
 {
-  "snapshot_date": "2026-09-24",
+  "snapshot_date": "2026-09-26",
   "purpose": "Reality-first external demand radar for ContextMesh. Prioritize places where a reproducible benchmark, verifier contract, or focused patch can add value without duplicating an active contributor.",
   "repositories": [
     {
@@ -55,15 +55,37 @@
       "url": "https://github.com/infiniflow/ragflow/issues/20140",
       "title": "Go max_tokens context-window semantics diverge across paths",
       "status": "open",
-      "collision": "no-pr-found",
-      "intervention": "upstream-pr-ready-but-write-path-blocked",
-      "why": "Silent context-window mis-resolution changes what evidence reaches the model. It matches ContextMesh route-budget correctness work and is currently unclaimed.",
-      "next_artifact": "reproduce on current main, add parity test for model@provider and unify context-window semantics before proposing a focused Go PR",
-      "reality_status": "validated-current-main-before-after-patch",
+      "collision": "pr-20207-open",
+      "intervention": "review-existing-pr-do-not-duplicate",
+      "why": "PR #20207 now owns the direct fix path and covers the independently reproduced sole-active-instance regression. The useful remaining action is evidence-backed review, not a competing PR.",
+      "next_artifact": "post the verified PR-head review invariant when write access exists; keep D24 separate",
+      "reality_status": "independent-reproduction-plus-confirmed-pr-head-review-gap-write-blocked",
       "evidence": [
         "benchmarks/results/ragflow-20140-2026-09-24.json",
         "benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch",
-        "https://github.com/hippoley/ContextMesh/actions/runs/35965439893"
+        "https://github.com/infiniflow/ragflow/pull/20207",
+        "benchmarks/results/ragflow-pr-20207-review-2026-09-26.json",
+        "docs/reality/RAGFlow-20207-review-2026-09-26.md",
+        "https://github.com/hippoley/ContextMesh/actions/runs/36209224821"
+      ]
+    },
+    {
+      "repo": "infiniflow/ragflow",
+      "issue": null,
+      "provenance_issue": 20140,
+      "label": "D24",
+      "url": "https://github.com/infiniflow/ragflow/issues/20140",
+      "title": "chat_pipeline uses catalog MaxOutput as the context/message-fit budget",
+      "status": "open-unfiled",
+      "collision": "no-standalone-issue-found",
+      "intervention": "focused-upstream-issue-or-patch-candidate",
+      "why": "A correct ContextLength exists in ModelTarget, but chat_pipeline binds ModelTarget.MaxTokens / catalog MaxOutput into messageFitIn. This silently removes otherwise eligible context before judgment.",
+      "next_artifact": "upstream a minimal regression that keeps context-window fitting separate from generation-output limiting",
+      "reality_status": "confirmed-current-main-code-path",
+      "evidence": [
+        "benchmarks/results/ragflow-d24-2026-09-26.json",
+        "docs/reality/RAGFlow-D24-2026-09-26.md",
+        "https://github.com/hippoley/ContextMesh/actions/runs/36209134470"
       ]
     },
     {
@@ -210,5 +232,6 @@
       "merged change",
       "upstream adoption"
     ]
-  }
+  },
+  "repository_snapshot_date": "2026-09-24"
 }
