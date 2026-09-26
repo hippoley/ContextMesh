@@ -1,10 +1,13 @@
 name: Pages
 
-# First enable GitHub Pages once in:
+# One-time prerequisite:
 # Settings -> Pages -> Build and deployment -> Source -> GitHub Actions.
-# The repository-scoped Actions token can deploy an existing Pages site but
-# cannot create the Pages site for a new repository.
+# After that, every site/** change publishes automatically.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
   workflow_dispatch:
 
 permissions:
