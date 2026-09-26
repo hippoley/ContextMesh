@@ -1,5 +1,9 @@
 # ContextMesh
 
+[![CI](https://github.com/hippoley/ContextMesh/actions/workflows/ci.yml/badge.svg)](https://github.com/hippoley/ContextMesh/actions/workflows/ci.yml)
+[![Help wanted](https://img.shields.io/github/issues-search/hippoley/ContextMesh?query=is%3Aopen%20label%3A%22help%20wanted%22&label=help%20wanted)](https://github.com/hippoley/ContextMesh/issues?q=is%3Aopen+label%3A%22help+wanted%22)
+[![Good first issues](https://img.shields.io/github/issues-search/hippoley/ContextMesh?query=is%3Aopen%20label%3A%22good%20first%20issue%22&label=good%20first%20issues)](https://github.com/hippoley/ContextMesh/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
+
 > v0.15: Full-Coverage Context Runtime with a reality-probe harness for testing retrieval-induced evidence blind spots.
 
 **Full-coverage external context runtime for evaluating AI answers against corpora larger than a model context window.**
@@ -34,6 +38,12 @@ The fastest way to contribute is **not** to learn the whole codebase. Bring one 
 - [Bring one real context failure](https://github.com/hippoley/ContextMesh/issues/1) — retrieval miss, truncation, stale/conflicting memory, lost provenance, or another case where the system looked healthy but decisive evidence stopped participating.
 - [Adopt a Reality Probe / backend](https://github.com/hippoley/ContextMesh/issues/2) — own Cognee, Mem0, Dify, RAGFlow, Haystack, or add a new system you already use.
 - [Contributing guide](CONTRIBUTING.md) — small reproductions, regression fixtures, backend adapters, and falsifications are preferred over speculative feature work.
+
+Three small tasks are ready for a first PR:
+
+- [#3 — Cognee CHUNKS vs CHUNKS_MMR on the rank-17 fixture](https://github.com/hippoley/ContextMesh/issues/3)
+- [#4 — Extend Mem0 authority replay](https://github.com/hippoley/ContextMesh/issues/4)
+- [#5 — Standalone Dify hidden-middle regression fixture](https://github.com/hippoley/ContextMesh/issues/5)
 
 If you can **break a ContextMesh claim**, please open that result too. Counterexamples are first-class contributions.
 
