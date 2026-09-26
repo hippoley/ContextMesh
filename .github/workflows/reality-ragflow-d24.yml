@@ -1,0 +1,144 @@
+name: Reality Probe - RAGFlow D24
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reality-ragflow-d24.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  chat-context-window:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout ContextMesh
+        uses: actions/checkout@v7
+        with:
+          path: contextmesh
+
+      - name: Checkout current RAGFlow main
+        uses: actions/checkout@v7
+        with:
+          repository: infiniflow/ragflow
+          ref: main
+          path: ragflow
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: ragflow/go.mod
+          cache-dependency-path: ragflow/go.sum
+
+      - name: Build RAGFlow tokenizer C API required by Go packages
+        working-directory: ragflow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcre2-dev
+          python -m pip install 'cmake>=4,<5'
+          mkdir -p internal/binding/cpp/cmake-build-release
+          cd internal/binding/cpp/cmake-build-release
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --target rag_tokenizer_c_api -j2
+
+      - name: Add external D24 regression probe
+        working-directory: ragflow
+        run: |
+          cat > internal/service/contextmesh_d24_probe_test.go <<'EOF'
+          package service
+
+          import (
+              "testing"
+
+              "ragflow/internal/entity"
+          )
+
+          // D24: chat_pipeline must fit prompt/input against the model context
+          // window, not against the provider's maximum generation output.
+          //
+          // OpenAI gpt-4o is a useful controlled case in RAGFlow's own catalog:
+          // context_length=128000, max_output=16384.
+          func TestContextMeshProbe_ChatPipelineFitBudgetUsesContextLength(t *testing.T) {
+              db := setupChatPipelineToolSupportTestDB(t)
+
+              if err := db.Create(&entity.TenantModelProvider{
+                  ID:           "provider-openai-d24",
+                  TenantID:     "tenant-1",
+                  ProviderName: "OpenAI",
+              }).Error; err != nil {
+                  t.Fatalf("create provider: %v", err)
+              }
+              if err := db.Create(&entity.TenantModelInstance{
+                  ID:           "instance-openai-d24",
+                  ProviderID:   "provider-openai-d24",
+                  InstanceName: "default",
+                  APIKey:       "sk-test",
+                  Status:       "active",
+                  Extra:        "{}",
+              }).Error; err != nil {
+                  t.Fatalf("create instance: %v", err)
+              }
+              if err := db.Create(&entity.TenantModel{
+                  ID:         "model-openai-gpt4o-d24",
+                  ProviderID: "provider-openai-d24",
+                  InstanceID: "instance-openai-d24",
+                  ModelName:  "gpt-4o",
+                  ModelType:  int(entity.ModelTypeChat),
+                  Status:     "active",
+                  Extra:      "{}",
+              }).Error; err != nil {
+                  t.Fatalf("create model: %v", err)
+              }
+
+              svc := NewChatPipelineService()
+              target, err := svc.ModelProviderSvc.modelSolver().ResolveModelConfig(
+                  t.Context(), "tenant-1", entity.ModelTypeChat, "model-openai-gpt4o-d24",
+              )
+              if err != nil {
+                  t.Fatalf("resolve model target: %v", err)
+              }
+              if target.ContextLength != 128000 {
+                  t.Fatalf("catalog context length = %d, want 128000", target.ContextLength)
+              }
+              if target.MaxTokens != 16384 {
+                  t.Fatalf("catalog max output = %d, want 16384", target.MaxTokens)
+              }
+
+              cfg, _, _, _, err := svc.getLLMModelConfig(t.Context(), &entity.Chat{
+                  TenantID: "tenant-1",
+                  LLMID:    "model-openai-gpt4o-d24",
+              })
+              if err != nil {
+                  t.Fatalf("getLLMModelConfig: %v", err)
+              }
+
+              fitBudget, ok := cfg["max_tokens"].(int)
+              if !ok {
+                  t.Fatalf("chat pipeline fit budget missing or non-int: %#v", cfg["max_tokens"])
+              }
+              if fitBudget != target.ContextLength {
+                  t.Fatalf(
+                      "chat pipeline fit budget = %d, want context window %d (catalog max_output is %d)",
+                      fitBudget, target.ContextLength, target.MaxTokens,
+                  )
+              }
+          }
+          EOF
+
+      - name: Reproduce D24 on current RAGFlow main
+        working-directory: ragflow
+        shell: bash
+        run: |
+          set +e
+          go test ./internal/service -run TestContextMeshProbe_ChatPipelineFitBudgetUsesContextLength -count=1 -v 2>&1 | tee /tmp/contextmesh-ragflow-d24.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "Probe unexpectedly passed: D24 may already be fixed upstream."
+            exit 1
+          fi
+
+          grep -q "want context window 128000 (catalog max_output is 16384)" /tmp/contextmesh-ragflow-d24.log
+          echo "Confirmed D24: chat_pipeline uses catalog max_output=16384 as the message-fit budget although the resolved context window is 128000."
