@@ -1,0 +1,165 @@
+diff --git a/internal/service/chat_pipeline.go b/internal/service/chat_pipeline.go
+index 2a3cb9a..3967808 100644
+--- a/internal/service/chat_pipeline.go
++++ b/internal/service/chat_pipeline.go
+@@ -270,12 +270,16 @@ func (s *ChatPipelineService) AsyncChat(
+ 			return
+ 		}
+ 		modelMaxTokens := 8192
++		modelContextLength := 8192
+ 		if llmModelConfig != nil {
+-			// Treat max_tokens=0 as unset (default 8192) — mirrors
+-			// PR #16413 Python fix: model_extra.get("max_tokens") or 8192
++			// max_tokens is the generation/output cap. Context fitting must use
++			// the separately resolved context_length.
+ 			if mt, ok := llmModelConfig["max_tokens"].(int); ok && mt > 0 {
+ 				modelMaxTokens = mt
+ 			}
++			if cl, ok := llmModelConfig["context_length"].(int); ok && cl > 0 {
++				modelContextLength = cl
++			}
+ 		}
+ 		timer.Exit(common.PhaseCheckLLM)
+ 
+@@ -1024,7 +1028,7 @@ func (s *ChatPipelineService) AsyncChat(
+ 		// Sub-steps: empty_response check → formatPrompt → citationPrompt →
+ 		// messageFitIn (95% token budget) → multimodal conversion → adjust max_tokens.
+ 		// If no knowledges and empty_response is configured, yield it and return.
+-		knowledges = s.kbPrompt(kbinfos, modelMaxTokens)
++		knowledges = s.kbPrompt(kbinfos, modelContextLength)
+ 		common.Info("Phase 10: Build LLM Request")
+ 		common.Debug("Knowledge prompt",
+ 			zap.String("question", strings.Join(questions, " ")),
+@@ -1152,9 +1156,10 @@ func (s *ChatPipelineService) AsyncChat(
+ 		}
+ 
+ 		// Fit messages within token budget.
+-		usedTokenCount, llmMessages := s.messageFitIn(llmMessages, int(float64(modelMaxTokens)*0.95))
++		usedTokenCount, llmMessages := s.messageFitIn(llmMessages, int(float64(modelContextLength)*0.95))
+ 		common.Debug("Messages fitted in token budget",
+-			zap.Int("model max_tokens", modelMaxTokens),
++			zap.Int("model context_length", modelContextLength),
++			zap.Int("model max_output", modelMaxTokens),
+ 			zap.Int("used_token_count", usedTokenCount),
+ 			zap.Int("msg_count", len(llmMessages)))
+ 
+@@ -1204,7 +1209,7 @@ func (s *ChatPipelineService) AsyncChat(
+ 		if prompt4citation != "" {
+ 			citationTokens = graph.NumTokensFromString(prompt4citation)
+ 		}
+-		if adjusted, ok, err := clampChatConfigMaxTokens(chatCfg, modelMaxTokens, usedTokenCount+citationTokens); err != nil {
++		if adjusted, ok, err := clampChatConfigBudgets(chatCfg, modelContextLength, modelMaxTokens, usedTokenCount+citationTokens); err != nil {
+ 			out <- AsyncChatResult{
+ 				Answer: fmt.Sprintf("**ERROR**: %s", err.Error()),
+ 				Final:  true,
+@@ -2175,6 +2180,7 @@ func (s *ChatPipelineService) getLLMModelConfig(ctx context.Context, chat *entit
+ 		// default dispatches as image2text (same rule as the explicit-LLM
+ 		// branches below), and carry the tool capability the resolution
+ 		// already computed.
++		cfg["context_length"] = target.ContextLength
+ 		cfg["model_type"] = s.resolveChatModelType(ctx, chat.TenantID, modelTargetRef(target))
+ 		cfg["is_tools"] = target.SupportsTools
+ 		return cfg, modelName, factoryName, baseURL, nil
+@@ -2197,6 +2203,7 @@ func (s *ChatPipelineService) getLLMModelConfig(ctx context.Context, chat *entit
+ 	if err != nil {
+ 		return nil, "", "", "", err
+ 	}
++	cfg["context_length"] = target.ContextLength
+ 	cfg["model_type"] = s.resolveChatModelType(ctx, chat.TenantID, chat.LLMID)
+ 	cfg["is_tools"] = target.SupportsTools
+ 	return cfg, modelName, factoryName, baseURL, nil
+@@ -4959,9 +4966,18 @@ func BuildChatConfig(dialog *entity.Chat, config map[string]interface{}) *modelM
+ 	return cfg
+ }
+ 
+-func clampChatConfigMaxTokens(cfg *modelModule.ChatConfig, modelMaxTokens, usedTokenCount int) (int, bool, error) {
+-	if usedTokenCount >= modelMaxTokens {
+-		return 0, false, fmt.Errorf("prompt uses %d tokens, leaving no completion capacity for model max_tokens %d", usedTokenCount, modelMaxTokens)
++// clampChatConfigBudgets keeps the provider's generation cap separate from the
++// model context window. A completion must fit both constraints: it cannot exceed
++// maxOutput, and prompt+completion cannot exceed contextLength.
++func clampChatConfigBudgets(cfg *modelModule.ChatConfig, contextLength, maxOutput, usedTokenCount int) (int, bool, error) {
++	if contextLength <= 0 {
++		contextLength = maxOutput
++	}
++	if maxOutput <= 0 {
++		maxOutput = contextLength
++	}
++	if usedTokenCount >= contextLength {
++		return 0, false, fmt.Errorf("prompt uses %d tokens, leaving no completion capacity for model context_length %d", usedTokenCount, contextLength)
+ 	}
+ 	if cfg == nil || cfg.MaxTokens == nil {
+ 		return 0, false, nil
+@@ -4971,14 +4987,24 @@ func clampChatConfigMaxTokens(cfg *modelModule.ChatConfig, modelMaxTokens, usedT
+ 		cfg.MaxTokens = nil
+ 		return 0, false, nil
+ 	}
+-	remainingTokens := modelMaxTokens - usedTokenCount
+-	if adjusted > remainingTokens {
+-		adjusted = remainingTokens
++	if adjusted > maxOutput {
++		adjusted = maxOutput
++	}
++	remainingContext := contextLength - usedTokenCount
++	if adjusted > remainingContext {
++		adjusted = remainingContext
+ 	}
+ 	cfg.MaxTokens = &adjusted
+ 	return adjusted, true, nil
+ }
+ 
++// Compatibility wrapper for existing callers/tests that historically used one
++// value for both constraints. New chat-pipeline code should use
++// clampChatConfigBudgets with the separately resolved limits.
++func clampChatConfigMaxTokens(cfg *modelModule.ChatConfig, modelMaxTokens, usedTokenCount int) (int, bool, error) {
++	return clampChatConfigBudgets(cfg, modelMaxTokens, modelMaxTokens, usedTokenCount)
++}
++
+ func chatConfigPositiveInt(value interface{}) (int, bool) {
+ 	v, ok := chatConfigInt(value)
+ 	if !ok || v <= 0 {
+diff --git a/internal/service/chat_pipeline_test.go b/internal/service/chat_pipeline_test.go
+index 338cdaa..91cced6 100644
+--- a/internal/service/chat_pipeline_test.go
++++ b/internal/service/chat_pipeline_test.go
+@@ -1662,6 +1662,40 @@ func TestClampChatConfigMaxTokensRejectsExhaustedCapacity(t *testing.T) {
+ 	}
+ }
+ 
++func TestContextMeshD24SeparatesContextAndOutputBudgets(t *testing.T) {
++	t.Run("generation cap is independent of large context window", func(t *testing.T) {
++		requested := 50000
++		cfg := &modelModule.ChatConfig{MaxTokens: &requested}
++		adjusted, ok, err := clampChatConfigBudgets(cfg, 128000, 16384, 20000)
++		if err != nil {
++			t.Fatalf("clampChatConfigBudgets returned error: %v", err)
++		}
++		if !ok || adjusted != 16384 {
++			t.Fatalf("adjusted=%d ok=%t, want 16384,true", adjusted, ok)
++		}
++	})
++
++	t.Run("remaining context can be tighter than generation cap", func(t *testing.T) {
++		requested := 16000
++		cfg := &modelModule.ChatConfig{MaxTokens: &requested}
++		adjusted, ok, err := clampChatConfigBudgets(cfg, 128000, 16384, 120000)
++		if err != nil {
++			t.Fatalf("clampChatConfigBudgets returned error: %v", err)
++		}
++		if !ok || adjusted != 8000 {
++			t.Fatalf("adjusted=%d ok=%t, want 8000,true", adjusted, ok)
++		}
++	})
++
++	t.Run("context exhaustion fails even when output cap remains", func(t *testing.T) {
++		requested := 1000
++		cfg := &modelModule.ChatConfig{MaxTokens: &requested}
++		if adjusted, ok, err := clampChatConfigBudgets(cfg, 128000, 16384, 128000); err == nil {
++			t.Fatalf("expected context-capacity error, got adjusted=%d ok=%t", adjusted, ok)
++		}
++	})
++}
++
+ // stubHarness installs a fake harnessRetriever returning the given answer and
+ // restores the previous one when the test ends.
+ func stubHarness(t *testing.T, answer string) {
