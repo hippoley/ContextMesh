@@ -174,3 +174,84 @@ def test_monotonic_reduction_preserves_unresolved_authority():
 
     assert result.ok is False
     assert "unresolved authority merged into resolved output: c->m" in result.errors
+
+
+def test_progressive_evaluator_persists_contract_and_transition_receipts(tmp_path):
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.judges import HeuristicJudge
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.store import FileContextStore
+
+    source = tmp_path / "contract.txt"
+    source.write_text(
+        ("ordinary clause. " * 800)
+        + "Except where section 17.4 applies. "
+        + ("ordinary clause. " * 800),
+        encoding="utf-8",
+    )
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        [source],
+        store,
+        "corp_v16_contract",
+        window_chars=1200,
+        overlap_chars=80,
+    )
+    contract = ExecutionContract.full_coverage(manifest.coverage_ids())
+
+    result = ProgressiveEvaluator(store, HeuristicJudge()).evaluate(
+        "corp_v16_contract",
+        "Does any exception apply?",
+        "No exception applies.",
+        contract=contract,
+    )
+
+    assert result.complete is True
+    assert result.execution_contract_mode == "full-coverage"
+    assert result.finalization_blockers == []
+    assert result.transition_receipts == manifest.required_blocks
+    assert result.transition_chain_valid is True
+
+
+def test_resume_continues_transition_hash_chain(tmp_path):
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.judges import HeuristicJudge
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.store import FileContextStore
+
+    source = tmp_path / "resume.txt"
+    source.write_text("alpha beta gamma " * 1800, encoding="utf-8")
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        [source],
+        store,
+        "corp_v16_resume",
+        window_chars=1000,
+        overlap_chars=50,
+    )
+    contract = ExecutionContract.full_coverage(manifest.coverage_ids())
+    evaluator = ProgressiveEvaluator(store, HeuristicJudge())
+
+    partial = evaluator.evaluate(
+        "corp_v16_resume",
+        "alpha?",
+        "answer",
+        job_id="job_v16_resume",
+        max_blocks=1,
+        contract=contract,
+    )
+    assert partial.complete is False
+    assert partial.transition_receipts == 1
+    assert partial.transition_chain_valid is True
+
+    completed = evaluator.evaluate(
+        "corp_v16_resume",
+        "alpha?",
+        "answer",
+        job_id="job_v16_resume",
+        resume=True,
+        contract=contract,
+    )
+    assert completed.complete is True
+    assert completed.transition_receipts == manifest.required_blocks
+    assert completed.transition_chain_valid is True
