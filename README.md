@@ -61,6 +61,23 @@ The important part is that ContextMesh can also **lose an argument**. The Cognee
 
 That is the project culture: **reproduce → measure → falsify or fix → publish the boundary.**
 
+## Interactive Reality Lab
+
+<a href="https://hippoley.github.io/ContextMesh/reality.html">
+  <img src="assets/reality-lab-preview.svg" alt="ContextMesh Interactive Reality Lab — inspect verified evidence failures" width="100%" />
+</a>
+
+<div align="center">
+
+**[Open the interactive Reality Lab ↗](https://hippoley.github.io/ContextMesh/reality.html)** · [View source](site/reality.html) · [Bring a failure](https://github.com/hippoley/ContextMesh/issues/1)
+
+</div>
+
+The Reality Lab is the public, interactive surface for the project: switch between verified systems, filter cases by failure stage, open the underlying trace, and follow how a claim changes after an upstream fix or falsification.
+
+> [!NOTE]
+> The site is already wired for GitHub Pages and auto-deploys on future `site/**` changes once Pages is enabled for this repository with **Source = GitHub Actions**.
+
 ## Choose your starting point
 
 | I want to… | Start here |
