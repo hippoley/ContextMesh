@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,6 +11,15 @@ RESULTS = ROOT / "benchmarks" / "results"
 
 def load(name: str) -> dict:
     return json.loads((RESULTS / name).read_text(encoding="utf-8"))
+
+
+def source_record(name: str) -> dict:
+    path = RESULTS / name
+    payload = path.read_bytes()
+    return {
+        "path": str(path.relative_to(ROOT)),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
 
 
 def build_manifest() -> dict:
@@ -31,6 +41,12 @@ def build_manifest() -> dict:
     return {
         "schema_version": 1,
         "generated_from": "benchmarks/results",
+        "sources": {
+            "cognee": source_record("cognee-mmr-rank17-2026-09-26.json"),
+            "ragflow": source_record("ragflow-d24-before-after-2026-09-26.json"),
+            "dify": source_record("dify-42889-2026-09-24.json"),
+            "mem0": source_record("mem0-2.2.0-temporal-authority-2026-09-24.json"),
+        },
         "verified_through": max(
             cognee["date"],
             ragflow["date"],
