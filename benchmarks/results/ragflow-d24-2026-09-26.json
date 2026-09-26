@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-26",
+  "target": "infiniflow/ragflow",
+  "upstream_commit": "313ca90f6abd7682fe8523e16fd67b3653a3fa84",
+  "upstream_note": "D24 from issue #20140: chat_pipeline uses catalog MaxOutput as the context/message-fit window",
+  "probe_type": "current-main-code-path-proof",
+  "model_fixture": {
+    "provider": "OpenAI",
+    "model": "gpt-4o",
+    "catalog_context_length": 128000,
+    "catalog_max_output": 16384
+  },
+  "observed_path": [
+    "ModelSolver resolves both ModelTarget.ContextLength and ModelTarget.MaxTokens",
+    "getLLMModelConfig passes target.MaxTokens to buildLLMModelConfig",
+    "buildLLMModelConfig stores that value as cfg[max_tokens]",
+    "AsyncChat reads cfg[max_tokens] into modelMaxTokens",
+    "messageFitIn uses 95% of modelMaxTokens as the prompt/input budget"
+  ],
+  "observed_effective_budget": {
+    "source": "catalog max_output",
+    "tokens_before_95_percent_fit": 16384,
+    "tokens_at_95_percent_fit": 15564.8,
+    "expected_source": "catalog context_length",
+    "expected_tokens_before_95_percent_fit": 128000,
+    "expected_tokens_at_95_percent_fit": 121600
+  },
+  "result": "confirmed",
+  "reality_status": "confirmed-current-main-code-path",
+  "action": {
+    "run": "https://github.com/hippoley/ContextMesh/actions/runs/36209134470",
+    "job": "https://github.com/hippoley/ContextMesh/actions/runs/36209134470/job/108311858822",
+    "conclusion": "success",
+    "output": "CONFIRMED_D24 catalog_context=128000 catalog_max_output=16384 chat_fit_source=target.MaxTokens effective_fit_budget=16384"
+  },
+  "limits": [
+    "This probe does not call an external LLM provider.",
+    "It proves the current RAGFlow catalog values and the source-level budget flow into messageFitIn on the pinned current-main commit.",
+    "A future upstream patch should preserve a separate generation max-output cap while switching input fitting to the resolved context window."
+  ]
+}
