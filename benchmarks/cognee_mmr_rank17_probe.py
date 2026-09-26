@@ -118,7 +118,16 @@ async def run_scenario(
     ]
 
     by_id = {doc.id: doc for doc in scenario.documents}
-    top_vectors = await embed_texts([by_id[doc_id].text for doc_id in top_ids])
+    payload_by_id = {
+        doc.id: f"CM_DOC_ID::{doc.id}\\n{doc.text}" for doc in scenario.documents
+    }
+    embedding_inputs = [scenario.question] + [payload_by_id[doc_id] for doc_id in ranked_ids]
+    embedding_rows = await embed_texts(embedding_inputs)
+    query_embedding = embedding_rows[0]
+    candidate_embeddings = {
+        doc_id: vector for doc_id, vector in zip(ranked_ids, embedding_rows[1:])
+    }
+    top_vectors = [candidate_embeddings[doc_id] for doc_id in top_ids]
     redundancy = pairwise_stats(top_vectors)
 
     contradiction_ids = set(scenario.contradiction_ids)
@@ -141,6 +150,12 @@ async def run_scenario(
         "contradiction_available_at_cutoff": bool(set(top_ids) & contradiction_ids)
         or bool(set(top_ids) & set(decisive_ids)),
         "top_k_redundancy": redundancy,
+        "embedding_fixture": {
+            "candidate_order": ranked_ids,
+            "query_embedding": query_embedding,
+            "candidate_embeddings": candidate_embeddings,
+            "embedding_text_shape": "CM_DOC_ID::<id>\\n<source text>",
+        },
     }
 
 
