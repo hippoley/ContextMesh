@@ -158,6 +158,8 @@ class EvaluationState(BaseModel):
     failures: dict[str, str] = Field(default_factory=dict)
     inspection_attempts: dict[str, int] = Field(default_factory=dict)
     usage: UsageMetrics = Field(default_factory=UsageMetrics)
+    execution_contract: dict[str, Any] | None = None
+    transition_receipts: list[dict[str, Any]] = Field(default_factory=list)
 
     def model_context_notes(self) -> list[str]:
         return [*self.reduced_notes, *self.working_notes]
@@ -196,6 +198,10 @@ class EvaluationResult(BaseModel):
     ingest_ready: bool = True
     evidence_atoms: int = 0
     evidence_kind_counts: dict[str, int] = Field(default_factory=dict)
+    execution_contract_mode: str | None = None
+    transition_receipts: int = 0
+    transition_chain_valid: bool = True
+    finalization_blockers: list[str] = Field(default_factory=list)
 
 
 class IngestStatus(str, Enum):
