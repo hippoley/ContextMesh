@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If ContextMesh or one of its Reality Probes materially supports your work, please cite this repository and the specific probe artifact you used."
+title: "ContextMesh: Reality-first full-coverage context verification"
+type: software
+version: 0.15.0
+date-released: 2026-09-26
+license: Apache-2.0
+repository-code: "https://github.com/hippoley/ContextMesh"
+url: "https://github.com/hippoley/ContextMesh"
+authors:
+  - name: "ContextMesh contributors"
+keywords:
+  - context verification
+  - RAG evaluation
+  - LLM evaluation
+  - AI agents
+  - retrieval
+  - provenance
+  - long context
+  - agent memory
+  - observability
+  - evidence lifecycle
+abstract: >-
+  ContextMesh is a reality-first context-verification runtime and public
+  correctness lab for AI systems. It tracks where decisive evidence stops
+  participating across ingestion, storage, retrieval, eligibility, rendering,
+  model visibility, authority, and final judgment. Reality Probes pin external
+  system versions, reproduce narrow failure mechanisms, and publish executable
+  before/after evidence, including results that falsify ContextMesh's own claims.
