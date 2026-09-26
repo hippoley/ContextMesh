@@ -5,8 +5,8 @@ build-backend = "hatchling.build"
 [project]
 name = "contextmesh"
 version = "0.15.0"
-description = "Full-coverage external context runtime for evaluation over corpora larger than model context windows."
-keywords = ["llm", "rag", "context-engineering", "evaluation", "retrieval", "provenance", "agent-memory", "long-context"]
+description = "Reality-first full-coverage context verification for RAG and AI agents: trace where decisive evidence disappears before judgment."
+keywords = ["llm", "rag", "context-engineering", "context-verification", "llm-evaluation", "rag-evaluation", "ai-agents", "retrieval", "provenance", "agent-memory", "long-context", "observability"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
