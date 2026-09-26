@@ -59,12 +59,23 @@ async def run_scenario(
     dataset = f"contextmesh_cognee_mmr_{mode}_{scenario.id}_{uuid.uuid4().hex[:8]}"
     payloads = [f"CM_DOC_ID::{doc.id}\n{doc.text}" for doc in scenario.documents]
 
-    remembered = await cognee.remember(
-        payloads,
-        dataset_name=dataset,
-        self_improvement=False,
-        extractor=extractor,
-    )
+    remember_compat = "extractor-argument"
+    try:
+        remembered = await cognee.remember(
+            payloads,
+            dataset_name=dataset,
+            self_improvement=False,
+            extractor=extractor,
+        )
+    except TypeError as exc:
+        if "Unexpected keyword arguments: extractor" not in str(exc):
+            raise
+        remember_compat = "extractor-argument-unsupported-retried-with-default"
+        remembered = await cognee.remember(
+            payloads,
+            dataset_name=dataset,
+            self_improvement=False,
+        )
     if getattr(remembered, "status", None) == "errored":
         raise RuntimeError(f"Cognee remember failed: {getattr(remembered, 'error', None)}")
 
@@ -121,6 +132,7 @@ async def run_scenario(
         "top_k": top_k,
         "fetch_k": fetch_k,
         "lambda_mult": lambda_mult if mode == "chunks-mmr" else None,
+        "remember_compat": remember_compat,
         "ranked_ids": ranked_ids,
         "top_ids": top_ids,
         "decisive_ids": decisive_ids,
