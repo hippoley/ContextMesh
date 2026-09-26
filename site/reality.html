@@ -195,7 +195,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
     </div>
 
     <aside class="signal-deck" aria-label="Interactive Reality Signals">
-      <div class="deck-top"><span>Reality signal</span><span class="live-dot"><i></i> verified</span></div>
+      <div class="deck-top"><span>Reality signal</span><span class="live-dot"><i></i><span id="verifiedThrough">verified</span></span></div>
       <div class="deck-tabs" id="deckTabs">
         <button class="deck-tab active" data-case="cognee" aria-pressed="true">Cognee</button>
         <button class="deck-tab" data-case="ragflow" aria-pressed="false">RAGFlow</button>
@@ -357,7 +357,7 @@ retrieval succeeds; authority remains unresolved without lifecycle policy.</pre>
 </main>
 
 <script>
-const signals={
+let signals={
   cognee:{label:"decisive rank",before:"17",after:"2",copy:"Cognee PR #3707's exact MMR selector moved the decisive source into top-5 in both controlled fixtures.",trace:[["retrieved #17","hit"],["eligible","loss"],["MMR #2","hit"],["visible","hit"]]},
   ragflow:{label:"effective fit budget",before:"16K",after:"128K",copy:"The patch keeps context fitting on context_length while preserving max_output as the generation ceiling.",trace:[["resolved","hit"],["budget bound","loss"],["split contract","hit"],["Go tests","hit"]]},
   dify:{label:"decisive span",before:"read",after:"hidden",copy:"The instruction source loaded, but the middle span disappeared at the rendering/model-visibility boundary.",trace:[["selected","hit"],["read","hit"],["rendered","loss"],["model-visible","loss"]]},
@@ -381,6 +381,22 @@ document.querySelectorAll(".deck-tab").forEach(b=>b.addEventListener("click",()=
   if(card){card.classList.add("open");const btn=card.querySelector(".inspect");if(btn){btn.textContent="Hide trace";btn.setAttribute("aria-expanded","true");}}
 }));
 renderSignal("cognee");
+
+async function hydrateRealityData(){
+  try{
+    const response=await fetch("./reality-data.json",{cache:"no-store"});
+    if(!response.ok)throw new Error("reality-data HTTP "+response.status);
+    const manifest=await response.json();
+    if(!manifest?.cases)throw new Error("reality-data missing cases");
+    signals={...signals,...manifest.cases};
+    verifiedThrough.textContent="verified · "+manifest.verified_through;
+    const active=location.hash.startsWith("#case-")?location.hash.slice(6):"cognee";
+    if(signals[active])renderSignal(active);
+  }catch(error){
+    console.info("ContextMesh Reality Lab: using embedded evidence fallback.",error);
+  }
+}
+hydrateRealityData();
 
 function applyFilter(name){
   document.querySelectorAll(".filter").forEach(b=>{
