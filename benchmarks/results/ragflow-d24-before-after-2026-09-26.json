@@ -1,0 +1,60 @@
+{
+  "kind": "contextmesh-ragflow-d24-before-after",
+  "date": "2026-09-26",
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/36215686041",
+  "source_job": "https://github.com/hippoley/ContextMesh/actions/runs/36215686041/job/108331079793",
+  "upstream": "infiniflow/ragflow",
+  "upstream_head": "313ca90f6abd7682fe8523e16fd67b3653a3fa84",
+  "before": {
+    "status": "broken",
+    "catalog_context_length": 128000,
+    "catalog_max_output": 16384,
+    "effective_fit_budget_before_95_percent": 16384,
+    "pipeline_exposes_context_length": false,
+    "message_fit_uses_context_length": false,
+    "knowledge_uses_context_length": false,
+    "completion_clamp_separates_budgets": false
+  },
+  "after": {
+    "status": "fixed",
+    "catalog_context_length": 128000,
+    "catalog_max_output": 16384,
+    "effective_fit_budget_before_95_percent": 128000,
+    "pipeline_exposes_context_length": true,
+    "message_fit_uses_context_length": true,
+    "knowledge_uses_context_length": true,
+    "completion_clamp_separates_budgets": true,
+    "old_fit_uses_output_cap": false
+  },
+  "contract": {
+    "input_fit_budget_source": "context_length",
+    "knowledge_budget_source": "context_length",
+    "generation_cap_source": "max_output/max_tokens",
+    "completion_limit": "min(requested_output, max_output, context_length - used_prompt_tokens)"
+  },
+  "validation": {
+    "git_diff_check": "passed",
+    "gofmt": "passed",
+    "go_test_mode": "CGO_ENABLED=0",
+    "go_package": "./internal/service",
+    "tests": [
+      "TestClampChatConfigMaxTokensUsesRemainingBudget",
+      "TestClampChatConfigMaxTokensRejectsNonPositive",
+      "TestClampChatConfigMaxTokensRejectsExhaustedCapacity",
+      "TestContextMeshD24SeparatesContextAndOutputBudgets"
+    ],
+    "go_test_result": "PASS",
+    "package_result": "ok ragflow/internal/service 0.042s"
+  },
+  "artifact": {
+    "id": 10897416372,
+    "digest": "sha256:f75705a140c010b9569a19fd0fdddf2e71efcd94c82a6d8a68588d86762a64a5"
+  },
+  "limits": [
+    "No external LLM provider was called.",
+    "The targeted service-package test used CGO_ENABLED=0 because D24 budget logic does not depend on Office/PDF native parsers.",
+    "An earlier CGO-enabled attempt was blocked before the D24 tests by the unrelated missing office_oxide.h native prerequisite.",
+    "This patch has not been accepted or reviewed by RAGFlow maintainers.",
+    "RAGFlow PR #20207 explicitly addresses the first two #20140 defects and does not cover D24."
+  ]
+}
