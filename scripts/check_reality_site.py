@@ -64,6 +64,8 @@ def main() -> None:
         fail("OpenGraph/Twitter metadata does not reference the raster preview")
     if 'fetch("./reality-data.json"' not in html:
         fail("public Reality Lab is not hydrating from the generated evidence manifest")
+    if 'href="./reality-data.json"' not in html:
+        fail("public Reality Lab does not expose its machine-readable manifest")
 
     ids = re.findall(r'\sid="([^"]+)"', html)
     duplicates = sorted({value for value in ids if ids.count(value) > 1})
@@ -71,6 +73,12 @@ def main() -> None:
         fail(f"duplicate HTML ids: {duplicates}")
 
     expected_cases = {"case-cognee", "case-ragflow", "case-dify", "case-mem0"}
+    if set(manifest.get("sources", {})) != {"cognee", "ragflow", "dify", "mem0"}:
+        fail("Reality manifest is missing source provenance records")
+    for key, source in manifest["sources"].items():
+        if len(source.get("sha256", "")) != 64:
+            fail(f"Reality manifest source {key} has no SHA-256 provenance")
+
     manifest_cases = {f"case-{key}" for key in manifest["cases"]}
     if manifest_cases != expected_cases:
         fail(f"manifest/UI case mismatch: {sorted(manifest_cases)}")
