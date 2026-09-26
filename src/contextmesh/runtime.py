@@ -7,9 +7,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Callable, Protocol
 
+from .diagnostics import EvidenceStage
 from .evidence import evidence_kind_counts, extract_evidence_atoms
 from .models import EvaluationCheckpoint, EvaluationResult, EvaluationState, Evidence, ReductionNode
 from .reader import CorpusReader
+from .semantics import CoverageSnapshot, ExecutionContract, TransitionAction, TransitionLedger, TransitionReceipt
 from .store import FileContextStore
 
 
@@ -297,20 +299,96 @@ class ProgressiveEvaluator:
                 by_id[out.block_id] = out
         return [by_id[x] for x in block_ids]
 
+    @staticmethod
+    def _transition_ledger(state: EvaluationState) -> TransitionLedger:
+        receipts = [TransitionReceipt.model_validate(x) for x in state.transition_receipts]
+        return TransitionLedger(receipts=receipts)
+
+    def _append_transition(
+        self,
+        state: EvaluationState,
+        *,
+        subject_id: str,
+        action: TransitionAction,
+        reason_codes: list[str],
+        input_text: str = "",
+        output_text: str = "",
+        lossy: bool = False,
+        metadata: dict | None = None,
+    ) -> None:
+        ledger = self._transition_ledger(state)
+        receipt = ledger.append(
+            subject_id=subject_id,
+            from_stage=EvidenceStage.MODEL_VISIBLE,
+            to_stage=EvidenceStage.INSPECTED,
+            action=action,
+            reason_codes=reason_codes,
+            input_sha256=hashlib.sha256(input_text.encode("utf-8")).hexdigest() if input_text else None,
+            output_sha256=hashlib.sha256(output_text.encode("utf-8")).hexdigest() if output_text else None,
+            lossy=lossy,
+            metadata=metadata or {},
+        )
+        state.transition_receipts.append(receipt.model_dump(mode="json"))
+
+    @staticmethod
+    def _semantic_coverage(
+        expected: set[str],
+        state: EvaluationState,
+    ) -> CoverageSnapshot:
+        snapshot = CoverageSnapshot()
+        for block_id in expected:
+            snapshot.mark(block_id, EvidenceStage.INGESTED)
+            snapshot.mark(block_id, EvidenceStage.STORED)
+            snapshot.mark(block_id, EvidenceStage.ELIGIBLE)
+        for block_id in state.visited:
+            if block_id in expected:
+                snapshot.mark(block_id, EvidenceStage.MODEL_VISIBLE)
+                snapshot.mark(block_id, EvidenceStage.INSPECTED)
+        snapshot.failed_subjects = set(state.failures) & expected
+        return snapshot
+
     def _merge_outcome(self, state: EvaluationState, reader: CorpusReader, outcome: _InspectionOutcome) -> None:
         state.inspection_attempts[outcome.block_id] = state.inspection_attempts.get(outcome.block_id, 0) + outcome.attempts
+        block = reader.read(outcome.block_id)
         if outcome.error is not None:
             state.failures[outcome.block_id] = outcome.error
+            self._append_transition(
+                state,
+                subject_id=outcome.block_id,
+                action=TransitionAction.FAIL,
+                reason_codes=["inspection_failed"],
+                input_text=block.text or "",
+                lossy=True,
+                metadata={"error": outcome.error, "attempts": outcome.attempts},
+            )
             return
         state.failures.pop(outcome.block_id, None)
         state.visited.add(outcome.block_id)
+        self._append_transition(
+            state,
+            subject_id=outcome.block_id,
+            action=TransitionAction.PRESERVE,
+            reason_codes=["inspection_completed"],
+            input_text=block.text or "",
+            output_text=outcome.note or "",
+            metadata={"relevant": outcome.relevant, "attempts": outcome.attempts},
+        )
         if outcome.note:
             state.working_notes.append(outcome.note)
         if outcome.relevant:
-            block = reader.read(outcome.block_id)
             state.evidence.append(Evidence(block_id=block.id, note=outcome.note or "", source=block.source, modality=block.modality, atoms=extract_evidence_atoms(block, outcome.note or "")))
 
-    def _result(self, corpus_id: str, job_id: str, state: EvaluationState, coverage: CoverageController, *, score, rationale) -> EvaluationResult:
+    def _result(
+        self,
+        corpus_id: str,
+        job_id: str,
+        state: EvaluationState,
+        coverage: CoverageController,
+        *,
+        score,
+        rationale,
+        finalization_blockers: list[str] | None = None,
+    ) -> EvaluationResult:
         expected = coverage.expected
         manifest = self.store.get_manifest(corpus_id)
         full_complete = coverage.complete and manifest.coverage_ready
@@ -335,6 +413,10 @@ class ProgressiveEvaluator:
             ingest_ready=manifest.coverage_ready,
             evidence_atoms=sum(len(item.atoms) for item in state.evidence),
             evidence_kind_counts=evidence_kind_counts(state.evidence),
+            execution_contract_mode=(state.execution_contract or {}).get("mode"),
+            transition_receipts=len(state.transition_receipts),
+            transition_chain_valid=self._transition_ledger(state).verify_chain(),
+            finalization_blockers=finalization_blockers or [],
         )
 
     def preflight(self, corpus_id: str) -> dict:
@@ -370,6 +452,7 @@ class ProgressiveEvaluator:
         job_id: str | None = None,
         resume: bool = False,
         max_blocks: int | None = None,
+        contract: ExecutionContract | None = None,
     ) -> EvaluationResult:
         reader = CorpusReader(self.store, corpus_id)
         ordered = self._ordered_ids(reader, question, order)
@@ -382,8 +465,19 @@ class ProgressiveEvaluator:
                 raise ValueError("resume request does not match checkpoint question/answer")
             state = checkpoint.state
             ordered = checkpoint.ordered_block_ids
+            if contract is not None:
+                current = state.execution_contract
+                requested = contract.model_dump(mode="json")
+                if current is not None and current != requested:
+                    raise ValueError("resume request does not match checkpoint execution contract")
+                state.execution_contract = requested
         else:
-            state = EvaluationState(corpus_id=corpus_id, question=question, answer=answer)
+            state = EvaluationState(
+                corpus_id=corpus_id,
+                question=question,
+                answer=answer,
+                execution_contract=contract.model_dump(mode="json") if contract else None,
+            )
             self._checkpoint(job_id, corpus_id, ordered, 0, state, False, status="queued")
 
         coverage = CoverageController(expected=expected, visited=state.visited)
@@ -452,6 +546,42 @@ class ProgressiveEvaluator:
             return self._result(corpus_id, job_id, state, coverage, score=None, rationale=reason)
 
         coverage.assert_complete()
+
+        active_contract = (
+            ExecutionContract.model_validate(state.execution_contract)
+            if state.execution_contract is not None
+            else None
+        )
+        if active_contract is not None:
+            semantic_coverage = self._semantic_coverage(expected, state)
+            blockers = semantic_coverage.finalization_blockers(active_contract)
+            if blockers:
+                self._sync_usage(state)
+                rationale = (
+                    "Execution contract blocked finalization: "
+                    + "; ".join(blockers)
+                    + ". No final score is valid until the required semantic stages are complete."
+                )
+                self._checkpoint(
+                    job_id,
+                    corpus_id,
+                    ordered,
+                    len(ordered),
+                    state,
+                    False,
+                    status="contract_blocked",
+                )
+                self._emit_progress(job_id, corpus_id, coverage, state, "contract_blocked")
+                return self._result(
+                    corpus_id,
+                    job_id,
+                    state,
+                    coverage,
+                    score=None,
+                    rationale=rationale,
+                    finalization_blockers=blockers,
+                )
+
         manifest = self.store.get_manifest(corpus_id)
         if not manifest.coverage_ready:
             self._sync_usage(state)
