@@ -27,6 +27,16 @@ These are specific mechanism tests, not global product rankings.
 - [Evidence lifecycle contract](docs/EVIDENCE_LIFECYCLE.md)
 - [External demand radar](docs/reality/EXTERNAL_DEMAND_RADAR.md)
 
+### Bring us a failure
+
+The fastest way to contribute is **not** to learn the whole codebase. Bring one real context failure and help us reproduce it.
+
+- [Bring one real context failure](https://github.com/hippoley/ContextMesh/issues/1) — retrieval miss, truncation, stale/conflicting memory, lost provenance, or another case where the system looked healthy but decisive evidence stopped participating.
+- [Adopt a Reality Probe / backend](https://github.com/hippoley/ContextMesh/issues/2) — own Cognee, Mem0, Dify, RAGFlow, Haystack, or add a new system you already use.
+- [Contributing guide](CONTRIBUTING.md) — small reproductions, regression fixtures, backend adapters, and falsifications are preferred over speculative feature work.
+
+If you can **break a ContextMesh claim**, please open that result too. Counterexamples are first-class contributions.
+
 The resulting diagnostic model follows evidence through:
 
 ```text
