@@ -13,6 +13,7 @@ class EvidenceStage(str, Enum):
     ELIGIBLE = "eligible"
     RENDERED = "rendered"
     MODEL_VISIBLE = "model-visible"
+    INSPECTED = "inspected"
     AUTHORITY = "authority"
     JUDGED = "judged"
 
