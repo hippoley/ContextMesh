@@ -24,7 +24,6 @@ jobs:
       - run: pip install -e '.[dev,rich]'
       - run: pytest -q
 
-
   minio-e2e:
     runs-on: ubuntu-latest
     env:
@@ -35,19 +34,32 @@ jobs:
       CONTEXTMESH_S3_ENDPOINT_URL: http://127.0.0.1:9000
       CONTEXTMESH_S3_REGION: us-east-1
       CONTEXTMESH_MINIO_E2E: "1"
+      MINIO_IMAGE: minio/minio:RELEASE.2025-09-07T16-13-09Z
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+      - name: Pull pinned MinIO image
+        run: |
+          for attempt in 1 2 3; do
+            if docker pull "$MINIO_IMAGE"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Failed to pull $MINIO_IMAGE after $attempt attempts" >&2
+              exit 1
+            fi
+            sleep $((attempt * 2))
+          done
       - name: Start MinIO
         run: |
           docker run -d --name contextmesh-minio \
             -p 9000:9000 \
             -e MINIO_ROOT_USER=minioadmin \
             -e MINIO_ROOT_PASSWORD=minioadmin \
-            quay.io/minio/minio:latest server /data
+            "$MINIO_IMAGE" server /data
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:9000/minio/health/ready >/dev/null; then
               exit 0
