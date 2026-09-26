@@ -1,0 +1,52 @@
+{
+  "kind": "contextmesh-cognee-mmr-rank17-comparison",
+  "date": "2026-09-26",
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/36213382612",
+  "baseline": {
+    "source": "released-cognee-1.6.0",
+    "cognee_version": "1.6.0",
+    "execution": "live SearchType.CHUNKS on Cognee 1.6.0"
+  },
+  "candidate": {
+    "source": "exact mmr_select() source extracted from Cognee PR #3707",
+    "execution": "algorithm replay over the exact released-Cognee candidate order and embeddings",
+    "upstream_pr": "https://github.com/topoteretes/cognee/pull/3707",
+    "head_sha": "d1625f2a87e562da2ae95242f00b0a1866c2209b"
+  },
+  "comparisons": [
+    {
+      "scenario": "near-duplicate-crowding",
+      "released_decisive_rank": 17,
+      "mmr_decisive_rank": 2,
+      "released_top5_contains_decisive": false,
+      "mmr_top5_contains_decisive": true,
+      "released_mean_pairwise_cosine": 0.9961457912584265,
+      "mmr_mean_pairwise_cosine": 0.896470122680261,
+      "released_max_pairwise_cosine": 0.9987908313469682,
+      "mmr_max_pairwise_cosine": 0.9984907024612653,
+      "released_contradiction_available": false,
+      "mmr_contradiction_available": true
+    },
+    {
+      "scenario": "rare-exception",
+      "released_decisive_rank": 17,
+      "mmr_decisive_rank": 2,
+      "released_top5_contains_decisive": false,
+      "mmr_top5_contains_decisive": true,
+      "released_mean_pairwise_cosine": 0.99544632613025,
+      "mmr_mean_pairwise_cosine": 0.8635346555458847,
+      "released_max_pairwise_cosine": 0.9979581024270016,
+      "mmr_max_pairwise_cosine": 0.996003458968515,
+      "released_contradiction_available": false,
+      "mmr_contradiction_available": true
+    }
+  ],
+  "integration_observation": "The unrebased PR head cannot be compared end-to-end without an LLM key because its remember() API predates the current keyless/extractor path; the exact pure MMR selector is therefore replayed over the released baseline embeddings instead.",
+  "interpretation_rule": "Treat MMR as improving this fixture only when the decisive source becomes eligible at top-5 and/or redundancy falls; do not generalize beyond these controlled corpora.",
+  "limits": [
+    "Controlled synthetic corpora; not a general Cognee benchmark.",
+    "The released baseline is a live Cognee 1.6.0 CHUNKS run.",
+    "The MMR arm executes the exact mmr_select() implementation from PR #3707 over the baseline candidate order and embeddings; it is not an end-to-end run of the unmerged PR.",
+    "No live answer-generation judge is used."
+  ]
+}
