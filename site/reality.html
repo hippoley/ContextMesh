@@ -3,141 +3,364 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="theme-color" content="#080a0d"/>
+<meta name="description" content="ContextMesh Reality Lab — inspect where decisive evidence disappears across retrieval, eligibility, rendering, model visibility, authority, and judgment."/>
 <title>ContextMesh — Reality Lab</title>
 <style>
-:root{--bg:#090b0e;--panel:#11151a;--panel2:#0d1115;--line:#242a31;--text:#f5f7fa;--muted:#84909d;--soft:#cbd3dc;--accent:#a9ed45;--warn:#f4c764;--danger:#ff7582;--blue:#78aaff}
-*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(1000px 600px at 54% -12%,rgba(169,237,69,.08),transparent 64%),var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-a{color:inherit}.wrap{max-width:1180px;margin:0 auto;padding:34px 24px 88px}.top{display:flex;justify-content:space-between;align-items:center;gap:24px;margin-bottom:72px}.brand{font-weight:800;text-decoration:none}.brand small{color:var(--muted);font-weight:500;margin-left:8px}.nav{display:flex;gap:20px}.nav a{font-size:12px;color:#9ba5b1;text-decoration:none}.nav a:hover,.nav a.active{color:white}.ey{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#6d7885;font-weight:700}.hero{max-width:930px}.hero h1{font-size:64px;line-height:.98;letter-spacing:-.06em;margin:12px 0 20px}.hero p{font-size:16px;line-height:1.7;color:#909ba8;max-width:820px}.claim{color:#d8e0e8}.claim strong{color:var(--accent)}.proofbar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:34px 0 56px}.metric{border:1px solid var(--line);border-radius:14px;padding:16px;background:#0d1115}.metric span{display:block;font-size:9px;color:#68737f;text-transform:uppercase;letter-spacing:.1em}.metric strong{display:block;font-size:24px;margin-top:7px;letter-spacing:-.04em}.metric small{display:block;color:#6f7a87;font-size:10px;margin-top:5px;line-height:1.45}.section{margin-top:64px}.section-head{display:flex;justify-content:space-between;gap:24px;align-items:end;margin-bottom:18px}.section h2{font-size:28px;letter-spacing:-.04em;margin:5px 0 0}.section-head p{margin:0;max-width:520px;color:#7d8895;font-size:12px;line-height:1.6}.cases{display:grid;gap:13px}.case{border:1px solid var(--line);border-radius:18px;background:linear-gradient(180deg,#11151a,#0d1115);padding:22px}.case-top{display:grid;grid-template-columns:165px 1fr auto;gap:20px;align-items:start}.project{font-size:11px;color:#7a8592}.project strong{display:block;color:#e4e9ee;font-size:15px;margin-bottom:5px}.case h3{font-size:18px;margin:0 0 7px;letter-spacing:-.025em}.case p{font-size:12px;line-height:1.6;color:#8994a1;margin:0}.status{display:inline-flex;border:1px solid #34422c;border-radius:99px;color:var(--accent);padding:5px 8px;font-size:9px;white-space:nowrap}.status.patch{color:#f5ce78;border-color:#4b4029}.numbers{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:18px}.number{border:1px solid #20262d;border-radius:11px;background:#0a0d11;padding:11px}.number span{display:block;color:#68737f;font-size:8px;text-transform:uppercase;letter-spacing:.08em}.number strong{display:block;font-size:15px;margin-top:5px}.number strong.bad{color:var(--danger)}.number strong.good{color:var(--accent)}.trace{display:flex;align-items:center;gap:7px;overflow:auto;margin-top:18px;padding:12px;border:1px solid #20262d;border-radius:12px;background:#090c0f}.stage{flex:0 0 auto;border:1px solid #2a313a;border-radius:9px;padding:8px 10px;font-size:9px;color:#c3cbd5}.stage.ok{border-color:#35452c;color:#cce9a4}.stage.loss{border-color:#542d32;color:#ff9aa4;background:#170e11}.arrow{color:#4f5965}.links{display:flex;gap:13px;flex-wrap:wrap;margin-top:16px}.links a{font-size:10px;color:#a7b1bd;text-decoration:none;border-bottom:1px solid #3a424b;padding-bottom:2px}.links a:hover{color:white}.lifecycle{display:grid;grid-template-columns:repeat(8,1fr);gap:7px;margin-top:20px}.life{border:1px solid var(--line);border-radius:12px;padding:13px 9px;background:#0d1115;text-align:center;min-height:86px}.life b{display:grid;place-items:center;width:24px;height:24px;margin:0 auto 8px;border-radius:50%;background:#171d14;color:var(--accent);font-size:9px}.life strong{font-size:10px}.life small{display:block;color:#626d79;font-size:8px;margin-top:5px}.rule{border-left:2px solid var(--accent);padding:4px 0 4px 17px;margin:24px 0;color:#bcc5cf;font-size:14px;line-height:1.7}.interventions{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.intervention{border:1px solid var(--line);border-radius:14px;padding:17px;background:#0d1115}.intervention header{display:flex;justify-content:space-between;gap:10px}.intervention h3{font-size:14px;margin:0}.intervention p{font-size:11px;color:#7f8a97;line-height:1.55}.badge{font-size:8px;border:1px solid #35422d;color:var(--accent);border-radius:99px;padding:4px 7px;height:max-content}.badge.blocked{color:#f2c96d;border-color:#4c4129}.limits{border:1px solid var(--line);border-radius:14px;padding:18px;background:#0b0f13;color:#7d8895;font-size:11px;line-height:1.65}.limits strong{color:#c8d0d9}.footer{margin-top:70px;padding-top:22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;color:#626d79;font-size:10px}
-@media(max-width:900px){.hero h1{font-size:48px}.proofbar{grid-template-columns:1fr 1fr}.case-top{grid-template-columns:1fr}.numbers{grid-template-columns:1fr 1fr}.lifecycle{grid-template-columns:repeat(4,1fr)}.interventions{grid-template-columns:1fr}}
-@media(max-width:600px){.wrap{padding:24px 14px 60px}.top{display:block;margin-bottom:45px}.nav{margin-top:18px;gap:13px;flex-wrap:wrap}.hero h1{font-size:38px}.proofbar,.numbers{grid-template-columns:1fr}.lifecycle{grid-template-columns:1fr 1fr}.section-head{display:block}.section-head p{margin-top:9px}}
+:root{
+  --bg:#080a0d;--bg2:#0c0f13;--panel:#0f1318;--panel2:#12171d;
+  --line:#232a32;--line2:#303944;--text:#f4f7fa;--soft:#c6ced8;--muted:#7e8996;
+  --dim:#55606d;--accent:#b8f24a;--cyan:#61d8ee;--amber:#efc96a;--red:#ff7a87;
+  --max:1240px;--radius:18px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:
+  radial-gradient(900px 520px at 82% -8%,rgba(97,216,238,.055),transparent 65%),
+  radial-gradient(800px 460px at 12% 8%,rgba(184,242,74,.045),transparent 70%),
+  var(--bg);
+  color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  letter-spacing:-.012em
+}
+a{color:inherit}
+button{font:inherit}
+.wrap{width:min(var(--max),calc(100% - 40px));margin:0 auto}
+.nav{position:sticky;top:0;z-index:30;border-bottom:1px solid rgba(35,42,50,.75);background:rgba(8,10,13,.8);backdrop-filter:blur(18px)}
+.nav-inner{height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none;font-weight:760;letter-spacing:-.03em}
+.mark{width:31px;height:31px;border:1px solid #35402c;border-radius:9px;display:grid;place-items:center;background:#10150e;color:var(--accent);font:700 10px ui-monospace,SFMono-Regular,Menlo,monospace}
+.brand small{color:#68727f;font-size:11px;font-weight:550;letter-spacing:.01em;margin-left:2px}
+.navlinks{display:flex;align-items:center;gap:22px}
+.navlinks a{font-size:11px;color:#87919d;text-decoration:none}
+.navlinks a:hover,.navlinks a.active{color:#fff}
+.ghost{border:1px solid var(--line2);border-radius:10px;padding:8px 11px!important;color:#cbd3dc!important;background:#101419}
+.hero{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(360px,.75fr);gap:72px;align-items:end;padding:92px 0 62px}
+.kicker{display:flex;align-items:center;gap:9px;color:#7d8894;text-transform:uppercase;letter-spacing:.16em;font-size:9px;font-weight:760}
+.kicker::before{content:"";width:18px;height:1px;background:var(--accent)}
+.hero h1{font-size:clamp(54px,7vw,88px);line-height:.94;letter-spacing:-.065em;margin:18px 0 24px;max-width:820px}
+.hero h1 em{font-style:normal;color:#a7b0ba}
+.hero-copy{max-width:760px;color:#8e99a6;font-size:16px;line-height:1.72}
+.hero-copy strong{color:#dfe5eb;font-weight:620}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:30px}
+.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;border-radius:11px;padding:11px 14px;font-size:11px;font-weight:720;border:1px solid var(--line2);background:#101419;color:#d7dee6}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#11170a}
+.btn:hover{transform:translateY(-1px)}
+.signal-deck{border:1px solid var(--line);background:linear-gradient(180deg,#10151a,#0b0f13);border-radius:22px;padding:18px;box-shadow:0 36px 100px rgba(0,0,0,.22)}
+.deck-top{display:flex;justify-content:space-between;align-items:center;color:#68737f;font-size:9px;text-transform:uppercase;letter-spacing:.12em}
+.live-dot{display:inline-flex;align-items:center;gap:6px;color:#87928f}
+.live-dot i{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(184,242,74,.08)}
+.deck-tabs{display:flex;gap:6px;margin:18px 0 16px;flex-wrap:wrap}
+.deck-tab{border:1px solid #242c34;background:#0b0f13;color:#697480;border-radius:999px;padding:6px 9px;font-size:9px;cursor:pointer}
+.deck-tab:hover,.deck-tab.active{border-color:#465244;color:#d7e5c2;background:#121912}
+.deck-main{border-top:1px solid #222930;padding-top:18px}
+.deck-label{color:#697480;font-size:9px;text-transform:uppercase;letter-spacing:.1em}
+.delta{display:flex;align-items:baseline;gap:12px;margin:9px 0 4px}
+.delta strong{font-size:34px;letter-spacing:-.055em}
+.delta .arrow{color:#48525d;font-size:18px}
+.delta .after{color:var(--accent)}
+.deck-main p{color:#75818d;font-size:11px;line-height:1.55;margin:8px 0 16px}
+.mini-trace{display:flex;align-items:center;gap:5px;overflow:auto;padding-bottom:3px}
+.trace-step{flex:0 0 auto;border:1px solid #28313a;border-radius:7px;padding:6px 8px;font-size:8px;color:#8e99a6}
+.trace-step.hit{border-color:#36452f;color:#cce9a4}
+.trace-step.loss{border-color:#583138;color:#ffabb3}
+.trace-arrow{color:#3f4852;font-size:9px}
+.index{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:86px}
+.index-item{padding:23px 24px 24px 0}
+.index-item+.index-item{border-left:1px solid var(--line);padding-left:24px}
+.index-item span{display:block;color:#68737f;font-size:9px;text-transform:uppercase;letter-spacing:.12em}
+.index-item strong{display:block;margin-top:7px;font-size:22px;letter-spacing:-.04em}
+.index-item small{display:block;margin-top:5px;color:#626e7b;font-size:9px;line-height:1.45}
+.section{padding:0 0 90px}
+.section-head{display:grid;grid-template-columns:1fr minmax(300px,520px);gap:50px;align-items:end;margin-bottom:28px}
+.section-head h2{font-size:34px;letter-spacing:-.045em;margin:8px 0 0}
+.section-head p{color:#7d8895;font-size:12px;line-height:1.65;margin:0}
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px}
+.filter{border:1px solid var(--line);background:#0b0f13;color:#6f7a86;border-radius:999px;padding:7px 10px;font-size:9px;cursor:pointer}
+.filter:hover,.filter.active{border-color:#465143;color:#dbe8c7;background:#111711}
+.cases{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.case{border:1px solid var(--line);border-radius:var(--radius);background:linear-gradient(180deg,#101419,#0b0f13);padding:22px;transition:.2s;position:relative;overflow:hidden}
+.case::after{content:"";position:absolute;inset:auto -50px -80px auto;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(184,242,74,.05),transparent 70%);pointer-events:none}
+.case:hover{border-color:#303944;transform:translateY(-2px)}
+.case.hidden{display:none}
+.case-top{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+.case-project{font-size:10px;color:#717d89}
+.case-project strong{display:block;color:#e3e8ed;font-size:14px;margin-bottom:4px}
+.pill{border:1px solid #33412d;border-radius:999px;padding:5px 8px;color:#bfe78a;font-size:8px;white-space:nowrap}
+.pill.amber{border-color:#4d4128;color:#e9ca7a}
+.case h3{font-size:20px;line-height:1.25;letter-spacing:-.035em;margin:18px 0 9px;max-width:580px}
+.case p{color:#818c98;font-size:11px;line-height:1.62;margin:0}
+.case-delta{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;margin-top:18px;padding-top:16px;border-top:1px solid #20262d}
+.state{border:1px solid #20272e;border-radius:11px;padding:11px;background:#090d10}
+.state span{display:block;color:#606b77;font-size:8px;text-transform:uppercase;letter-spacing:.09em}
+.state strong{display:block;margin-top:5px;font-size:15px}
+.state.before strong{color:#ff9ba5}.state.after strong{color:#cceaa3}
+.case-delta>i{font-style:normal;color:#49535e}
+.case-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:14px}
+.inspect{border:0;background:none;color:#aab4bf;font-size:9px;padding:0;cursor:pointer;text-decoration:underline;text-decoration-color:#3e4751;text-underline-offset:3px}
+.inspect:hover{color:white}
+.case-link{color:#74808c;font-size:9px;text-decoration:none}
+.case-link:hover{color:#dbe2e9}
+.case-detail{display:none;margin-top:15px;border-top:1px solid #20262d;padding-top:15px}
+.case.open .case-detail{display:block}
+.case-detail pre{margin:0;padding:12px;border:1px solid #222a32;border-radius:10px;background:#080b0e;color:#9ca8b4;white-space:pre-wrap;font:9px/1.65 ui-monospace,SFMono-Regular,Menlo,monospace}
+.lifecycle-wrap{display:grid;grid-template-columns:290px 1fr;gap:24px;align-items:start}
+.lifecycle-copy{position:sticky;top:96px}
+.lifecycle-copy h3{font-size:24px;letter-spacing:-.04em;margin:8px 0 12px}
+.lifecycle-copy p{color:#7b8794;font-size:11px;line-height:1.65}
+.lifecycle{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.life{border:1px solid var(--line);border-radius:14px;padding:17px;background:#0c1014;text-align:left;cursor:pointer;transition:.16s}
+.life:hover,.life.active{border-color:#465143;background:#111711}
+.life b{display:grid;place-items:center;width:25px;height:25px;border-radius:8px;background:#151b13;color:var(--accent);font:700 9px ui-monospace,SFMono-Regular,Menlo,monospace;margin-bottom:12px}
+.life strong{display:block;font-size:11px}
+.life small{display:block;color:#626d79;font-size:8px;line-height:1.45;margin-top:6px}
+.timeline{position:relative;margin-top:6px}
+.timeline::before{content:"";position:absolute;left:92px;top:8px;bottom:8px;width:1px;background:#232a31}
+.event{display:grid;grid-template-columns:72px 18px 1fr;gap:18px;align-items:start;padding:12px 0}
+.event time{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;color:#68737f;padding-top:6px;text-align:right}
+.event-dot{width:9px;height:9px;border-radius:50%;background:#202830;border:2px solid #7f8a96;margin-top:5px;z-index:1}
+.event.featured .event-dot{background:var(--accent);border-color:var(--accent);box-shadow:0 0 0 5px rgba(184,242,74,.06)}
+.event-body{padding-bottom:10px}
+.event-body h3{font-size:13px;margin:0 0 5px}
+.event-body p{font-size:10px;line-height:1.55;color:#74808c;margin:0;max-width:850px}
+.event-body a{display:inline-block;margin-top:7px;font-size:9px;color:#a9b3be;text-decoration:none;border-bottom:1px solid #39424b}
+.cta{margin:0 0 80px;border:1px solid var(--line);border-radius:24px;padding:38px;background:
+  linear-gradient(135deg,rgba(184,242,74,.045),transparent 42%),
+  linear-gradient(180deg,#11151a,#0b0f13);
+  display:grid;grid-template-columns:1fr auto;gap:40px;align-items:center
+}
+.cta h2{font-size:34px;letter-spacing:-.045em;margin:0 0 10px}
+.cta p{margin:0;color:#7f8a97;font-size:11px;line-height:1.6;max-width:720px}
+.cta-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.footer{border-top:1px solid var(--line);padding:24px 0 42px;display:flex;justify-content:space-between;gap:20px;color:#5f6a76;font-size:9px}
+@media(max-width:980px){
+  .hero{grid-template-columns:1fr;gap:40px;padding-top:64px}.signal-deck{max-width:620px}
+  .cases{grid-template-columns:1fr}.section-head{grid-template-columns:1fr;gap:12px}
+  .lifecycle-wrap{grid-template-columns:1fr}.lifecycle-copy{position:static}.index{grid-template-columns:1fr 1fr}
+  .index-item:nth-child(3){border-left:0}.cta{grid-template-columns:1fr}.cta-actions{justify-content:flex-start}
+}
+@media(max-width:640px){
+  .wrap{width:min(100% - 26px,var(--max))}.navlinks a:not(.ghost){display:none}
+  .hero{padding:48px 0 42px}.hero h1{font-size:48px}.hero-copy{font-size:14px}
+  .index{grid-template-columns:1fr}.index-item+.index-item{border-left:0;border-top:1px solid var(--line);padding-left:0}
+  .lifecycle{grid-template-columns:1fr 1fr}.case-delta{grid-template-columns:1fr}.case-delta>i{transform:rotate(90deg);text-align:center}
+  .timeline::before{left:66px}.event{grid-template-columns:50px 14px 1fr;gap:10px}.cta{padding:26px}.cta h2{font-size:28px}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="./">ContextMesh <small>v0.15</small></a>
-    <nav class="nav">
+<nav class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="./"><span class="mark">CM</span>ContextMesh <small>Reality Lab</small></a>
+    <div class="navlinks">
       <a href="./">Workspace</a>
       <a href="./admin.html">Admin</a>
-      <a class="active" href="./reality.html">Reality Lab</a>
+      <a class="active" href="./reality.html">Reality</a>
       <a href="./api.html">API</a>
-      <a href="https://github.com/hippoley/ContextMesh">GitHub</a>
-    </nav>
-  </header>
+      <a class="ghost" href="https://github.com/hippoley/ContextMesh">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
 
+<main class="wrap">
   <section class="hero">
-    <div class="ey">Reality Lab · external failure evidence</div>
-    <h1>Where did the evidence disappear?</h1>
-    <p class="claim">ContextMesh is not trying to rank every source better. It tests a narrower claim: <strong>ranking, truncation and routing must not silently decide what evidence is allowed to exist at judgment time.</strong></p>
-    <p>Every case below was reproduced against a real open-source project or current dependency path. Each card separates the measured result from the interpretation limits.</p>
+    <div>
+      <div class="kicker">Reality-first context verification</div>
+      <h1>Evidence can exist<br/><em>and still disappear.</em></h1>
+      <p class="hero-copy">ContextMesh traces the exact boundary where decisive evidence stops participating: retrieval, eligibility, rendering, model visibility, authority, or judgment. <strong>The lab publishes failures that survive contact with real upstream systems — including results that weaken our own claims.</strong></p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#cases">Inspect the evidence ↓</a>
+        <a class="btn" href="https://github.com/hippoley/ContextMesh/issues/1">Bring a failure ↗</a>
+      </div>
+    </div>
+
+    <aside class="signal-deck" aria-label="Interactive Reality Signals">
+      <div class="deck-top"><span>Reality signal</span><span class="live-dot"><i></i> verified</span></div>
+      <div class="deck-tabs" id="deckTabs">
+        <button class="deck-tab active" data-case="cognee">Cognee</button>
+        <button class="deck-tab" data-case="ragflow">RAGFlow</button>
+        <button class="deck-tab" data-case="dify">Dify</button>
+        <button class="deck-tab" data-case="mem0">Mem0</button>
+      </div>
+      <div class="deck-main">
+        <div class="deck-label" id="deckLabel">decisive rank</div>
+        <div class="delta"><strong id="deckBefore">17</strong><span class="arrow">→</span><strong class="after" id="deckAfter">2</strong></div>
+        <p id="deckCopy">Cognee PR #3707's exact MMR selector moved the decisive source into top-5 in both controlled fixtures.</p>
+        <div class="mini-trace" id="deckTrace"></div>
+      </div>
+    </aside>
   </section>
 
-  <section class="proofbar">
-    <div class="metric"><span>Current Python CI</span><strong>104 passed</strong><small>Python 3.11 and 3.12 · 5 skipped</small></div>
-    <div class="metric"><span>Object storage E2E</span><strong>2 passed</strong><small>Real temporary MinIO multipart flow</small></div>
-    <div class="metric"><span>External current-main probes</span><strong>4 classes</strong><small>eligibility · visibility · route semantics · authority</small></div>
-    <div class="metric"><span>Public interventions</span><strong>2 sent</strong><small>Graphiti RFC + Dify current-main evidence</small></div>
+  <section class="index" aria-label="Reality Lab summary">
+    <div class="index-item"><span>Verified mechanisms</span><strong>4 systems</strong><small>Cognee · RAGFlow · Dify · Mem0</small></div>
+    <div class="index-item"><span>Before / after deltas</span><strong>2 executable</strong><small>Cognee MMR · RAGFlow D24</small></div>
+    <div class="index-item"><span>Evidence lifecycle</span><strong>8 stages</strong><small>from ingest to judgment</small></div>
+    <div class="index-item"><span>Method</span><strong>falsifiable</strong><small>counterexamples are first-class results</small></div>
   </section>
 
-  <section class="section">
-    <div class="section-head"><div><div class="ey">Verified cases</div><h2>Reality deltas, not architecture claims.</h2></div><p>The useful question is not whether a system returned plausible context. It is whether the decisive source survived every stage needed to reach the judge.</p></div>
+  <section class="section" id="cases">
+    <div class="section-head">
+      <div><div class="kicker">Verified cases</div><h2>Mechanisms, not leaderboards.</h2></div>
+      <p>Filter by the stage where evidence failed. Every case keeps the measured result, the correction or patch, and the interpretation boundary attached to the same artifact.</p>
+    </div>
+    <div class="filters" id="filters">
+      <button class="filter active" data-filter="all">All</button>
+      <button class="filter" data-filter="eligible">Eligibility</button>
+      <button class="filter" data-filter="model-visible">Model visibility</button>
+      <button class="filter" data-filter="authority">Authority</button>
+      <button class="filter" data-filter="budget">Budget semantics</button>
+    </div>
+
     <div class="cases">
-      <article class="case">
-        <div class="case-top">
-          <div class="project"><strong>Cognee 1.6.0</strong>SearchType.CHUNKS</div>
-          <div><h3>Decisive evidence existed at rank 17 — top-5 made it ineligible.</h3><p>Two controlled corpora each contained 16 high-overlap/near-duplicate distractors and one decisive exception. A deeper fetch located the decisive source at rank 17 in both cases.</p></div>
-          <span class="status">live external run</span>
-        </div>
-        <div class="numbers">
-          <div class="number"><span>decisive rank</span><strong>17</strong></div>
-          <div class="number"><span>Cognee top-5 recall</span><strong class="bad">0 / 2</strong></div>
-          <div class="number"><span>ContextMesh recall</span><strong class="good">2 / 2</strong></div>
-          <div class="number"><span>claimed advantage</span><strong>eligibility</strong></div>
-        </div>
-        <div class="trace"><span class="stage ok">ingested</span><span class="arrow">→</span><span class="stage ok">retrieved · #17</span><span class="arrow">→</span><span class="stage loss">eligible · no at top-5</span><span class="arrow">→</span><span class="stage loss">model-visible · no</span></div>
-        <div class="links"><a href="https://github.com/hippoley/ContextMesh/actions/runs/35948269281">workflow run ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-1.6.0-rank-depth-2026-09-24.md">method + limits ↗</a></div>
+      <article class="case" data-stage="eligible" data-case="cognee">
+        <div class="case-top"><div class="case-project"><strong>Cognee</strong>1.6.0 CHUNKS + PR #3707 MMR</div><span class="pill">falsification result</span></div>
+        <h3>Rank 17 was a real blind spot. MMR moved the decisive source to rank 2.</h3>
+        <p>The baseline reproduced the original crowding failure. Replaying the exact unmerged MMR selector over the same candidate order and embeddings recovered the decisive source in both controlled fixtures.</p>
+        <div class="case-delta"><div class="state before"><span>released CHUNKS</span><strong>rank 17 · outside top-5</strong></div><i>→</i><div class="state after"><span>PR #3707 MMR</span><strong>rank 2 · inside top-5</strong></div></div>
+        <div class="case-actions"><button class="inspect">Inspect trace</button><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md">evidence ↗</a></div>
+        <div class="case-detail"><pre>released CHUNKS
+  near-duplicate crowding  decisive_rank=17  contradiction_visible=false
+  rare exception          decisive_rank=17  contradiction_visible=false
+
+exact PR #3707 mmr_select()
+  near-duplicate crowding  decisive_rank=2   contradiction_visible=true
+  rare exception          decisive_rank=2   contradiction_visible=true
+
+Interpretation:
+MMR fixes these controlled crowding cases.
+Full coverage remains a different contract: rank does not define final eligibility.</pre></div>
       </article>
 
-      <article class="case">
-        <div class="case-top">
-          <div class="project"><strong>RAGFlow main</strong>issue #20140</div>
-          <div><h3>The same model reference resolved to the wrong context budget on one code path.</h3><p>With a sole active tenant instance named <code>primary</code>, the tenant override was 32K. Context-length resolution looked for literal <code>default</code>, missed the row and fell through to the 128K catalog value. The candidate parity patch made the same regression pass.</p></div>
-          <span class="status patch">before/after patch</span>
-        </div>
-        <div class="numbers">
-          <div class="number"><span>tenant override</span><strong class="good">32,000</strong></div>
-          <div class="number"><span>before patch</span><strong class="bad">128,000</strong></div>
-          <div class="number"><span>after patch</span><strong class="good">32,000</strong></div>
-          <div class="number"><span>failure class</span><strong>route semantics</strong></div>
-        </div>
-        <div class="trace"><span class="stage ok">model ref</span><span class="arrow">→</span><span class="stage loss">instance resolution drift</span><span class="arrow">→</span><span class="stage loss">wrong context budget</span><span class="arrow">→</span><span class="stage ok">candidate patch verified</span></div>
-        <div class="links"><a href="https://github.com/hippoley/ContextMesh/actions/runs/35965439893">workflow run ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/benchmarks/results/ragflow-20140-2026-09-24.json">machine-readable result ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/benchmarks/upstream-patches/ragflow-20140-sole-active-instance.patch">candidate patch ↗</a></div>
+      <article class="case" data-stage="budget" data-case="ragflow">
+        <div class="case-top"><div class="case-project"><strong>RAGFlow</strong>current main · D24</div><span class="pill amber">validated patch</span></div>
+        <h3>The model had a 128K context window, but chat fitting behaved like 16K.</h3>
+        <p>The resolver already carried separate context and output limits. The execution path collapsed them back together. A minimal split-budget patch now passes the same before/after contract probe and targeted RAGFlow service tests.</p>
+        <div class="case-delta"><div class="state before"><span>before</span><strong>fit budget 16,384</strong></div><i>→</i><div class="state after"><span>after</span><strong>fit budget 128,000</strong></div></div>
+        <div class="case-actions"><button class="inspect">Inspect trace</button><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/RAGFlow-D24-before-after-2026-09-26.md">evidence ↗</a></div>
+        <div class="case-detail"><pre>catalog
+  context_length = 128000
+  max_output     = 16384
+
+before
+  knowledge budget <- max_output
+  message fit      <- max_output
+
+after
+  knowledge budget <- context_length
+  message fit      <- context_length
+  generation cap   <- max_output
+
+CGO_ENABLED=0 go test ./internal/service ...  PASS</pre></div>
       </article>
 
-      <article class="case">
-        <div class="case-top">
-          <div class="project"><strong>Dify main</strong>issue #42889</div>
-          <div><h3>The source was selected and read — but its decisive middle span never reached the model.</h3><p>A synthetic 11,343-byte <code>SKILL.md</code> placed a required import guard in the middle. Ordinary shell rendering preserved only first 4 KiB + last 4 KiB. The eager-pull path, by contrast, has a 1 MiB complete-output budget.</p></div>
-          <span class="status">current-main reproduced</span>
-        </div>
-        <div class="numbers">
-          <div class="number"><span>source size</span><strong>11,343 B</strong></div>
-          <div class="number"><span>shell budget</span><strong>8,192 B</strong></div>
-          <div class="number"><span>decisive span</span><strong class="bad">hidden</strong></div>
-          <div class="number"><span>eager-pull budget</span><strong class="good">1 MiB</strong></div>
-        </div>
-        <div class="trace"><span class="stage ok">selected</span><span class="arrow">→</span><span class="stage ok">read</span><span class="arrow">→</span><span class="stage loss">rendered · partial</span><span class="arrow">→</span><span class="stage loss">model-visible · decisive span absent</span></div>
-        <div class="links"><a href="https://github.com/hippoley/ContextMesh/actions/runs/35966935382">workflow run ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Dify-42889-2026-09-24.md">method + limits ↗</a><a href="https://github.com/langgenius/dify/issues/42889">upstream issue ↗</a></div>
+      <article class="case" data-stage="model-visible" data-case="dify">
+        <div class="case-top"><div class="case-project"><strong>Dify</strong>current-main renderer boundary</div><span class="pill">reproduced</span></div>
+        <h3>The source was read successfully. The decisive middle instruction still never reached the model.</h3>
+        <p>An 11,343-byte synthetic instruction source placed a must-follow marker in the middle. The ordinary shell observation exposed roughly 8 KiB of head + tail, making the decisive span model-invisible.</p>
+        <div class="case-delta"><div class="state before"><span>source state</span><strong>selected + read</strong></div><i>→</i><div class="state after"><span>model state</span><strong>middle span absent</strong></div></div>
+        <div class="case-actions"><button class="inspect">Inspect trace</button><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Dify-42889-2026-09-24.md">evidence ↗</a></div>
+        <div class="case-detail"><pre>source_bytes = 11,343
+ordinary shell observation ≈ first 4 KiB + last 4 KiB
+decisive marker = middle span
+
+selected = true
+read = true
+rendered_complete = false
+model_visible_decisive_span = false
+
+Failure stage:
+rendered -> model-visible</pre></div>
       </article>
 
-      <article class="case">
-        <div class="case-top">
-          <div class="project"><strong>Mem0 2.2.0</strong>local Qdrant · FastEmbed</div>
-          <div><h3>Both conflicting memories were visible — but similarity could not decide which one was authoritative.</h3><p>With LLM inference disabled, Mem0 preserved a verified active port=5432 memory and a newer contested transient port=6543 memory. Default semantic search returned both with nearly identical scores. An explicit lifecycle filter removed the contested fact.</p></div>
-          <span class="status">live external run</span>
-        </div>
-        <div class="numbers">
-          <div class="number"><span>active score</span><strong>0.4253</strong></div>
-          <div class="number"><span>contested score</span><strong>0.4180</strong></div>
-          <div class="number"><span>default search</span><strong>both visible</strong></div>
-          <div class="number"><span>authority filter</span><strong class="good">active only</strong></div>
-        </div>
-        <div class="trace"><span class="stage ok">stored · both</span><span class="arrow">→</span><span class="stage ok">retrieved · both</span><span class="arrow">→</span><span class="stage loss">authority · unresolved by similarity</span><span class="arrow">→</span><span class="stage ok">lifecycle filter · resolved</span></div>
-        <div class="links"><a href="https://github.com/hippoley/ContextMesh/actions/runs/35969812150">workflow run ↗</a><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md">method + limits ↗</a><a href="https://github.com/mem0ai/mem0/issues/5352">upstream discussion ↗</a></div>
+      <article class="case" data-stage="authority" data-case="mem0">
+        <div class="case-top"><div class="case-project"><strong>Mem0</strong>2.2.0 · local Qdrant + FastEmbed</div><span class="pill">live replay</span></div>
+        <h3>Both conflicting memories were retrievable. Similarity could not decide which one was authoritative.</h3>
+        <p>The active verified fact and newer contested fact had close semantic scores. Explicit lifecycle filtering, not ranking alone, made authority policy visible.</p>
+        <div class="case-delta"><div class="state before"><span>semantic search</span><strong>5432 + 6543 visible</strong></div><i>→</i><div class="state after"><span>authority filter</span><strong>active 5432 only</strong></div></div>
+        <div class="case-actions"><button class="inspect">Inspect trace</button><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md">evidence ↗</a></div>
+        <div class="case-detail"><pre>active + verified
+  database port = 5432
+  semantic score = 0.425263
+
+contested + unverified
+  database port = 6543
+  semantic score = 0.418039
+
+default retrieval: both candidates
+status=active: verified candidate only
+
+Failure boundary:
+retrieval succeeds; authority remains unresolved without lifecycle policy.</pre></div>
       </article>
     </div>
   </section>
 
-  <section class="section">
-    <div class="section-head"><div><div class="ey">Evidence lifecycle</div><h2>Coverage is a path, not a single percentage.</h2></div><p>ContextMesh now records where a source stopped being usable, including byte-range visibility when a transport truncates content.</p></div>
-    <div class="lifecycle">
-      <div class="life"><b>1</b><strong>Ingested</strong><small>source entered runtime</small></div>
-      <div class="life"><b>2</b><strong>Stored</strong><small>addressable payload exists</small></div>
-      <div class="life"><b>3</b><strong>Retrieved</strong><small>rank / candidate state</small></div>
-      <div class="life"><b>4</b><strong>Eligible</strong><small>allowed downstream</small></div>
-      <div class="life"><b>5</b><strong>Rendered</strong><small>byte ranges transported</small></div>
-      <div class="life"><b>6</b><strong>Model-visible</strong><small>decisive semantics survive</small></div>
-      <div class="life"><b>7</b><strong>Authority</strong><small>active · contested · superseded</small></div>
-      <div class="life"><b>8</b><strong>Judged</strong><small>verdict over eligible evidence</small></div>
-    </div>
-    <div class="rule">A source can be “retrieved” and still be lost at eligibility. It can be “selected” and still be lost at rendering. It can remain fully visible yet still be contested or superseded. The diagnostic should name the first stage where evidence stopped being trustworthy.</div>
-  </section>
-
-  <section class="section">
-    <div class="section-head"><div><div class="ey">Reality contact</div><h2>Intervene with evidence, not promotion.</h2></div><p>External threads are treated as product tests. We enter only when we can contribute a current-main reproduction, measurement, patch, or reviewable contract.</p></div>
-    <div class="interventions">
-      <div class="intervention"><header><h3>Graphiti #1880</h3><span class="badge">posted</span></header><p>Mapped the exact pre-persistence hook boundary and proposed a typed verification receipt separating source faithfulness, store conflict and persistence policy.</p><a href="https://github.com/getzep/graphiti/issues/1880">open RFC ↗</a></div>
-      <div class="intervention"><header><h3>Dify #42889</h3><span class="badge">posted</span></header><p>Shared the current-main 11,343B → 8KiB middle-span reproduction and argued for an instruction-specific complete/paginated read contract rather than a global shell-budget increase.</p><a href="https://github.com/langgenius/dify/issues/42889">open issue ↗</a></div>
-      <div class="intervention"><header><h3>RAGFlow #20140 / #20148</h3><span class="badge blocked">write blocked</span></header><p>Current-main bug + candidate patch are verified locally in Actions. The connected GitHub integration cannot currently write to the upstream repository.</p></div>
-      <div class="intervention"><header><h3>Haystack #11867 / Cognee #3706</h3><span class="badge blocked">write blocked</span></header><p>Evidence-backed intervention drafts are ready; upstream comment attempts returned 403 through the current GitHub integration.</p></div>
+  <section class="section" id="lifecycle">
+    <div class="lifecycle-wrap">
+      <div class="lifecycle-copy">
+        <div class="kicker">Evidence lifecycle</div>
+        <h3>“Context missing” is not one failure.</h3>
+        <p>Click a stage to filter the verified cases. ContextMesh names the first point where decisive evidence stopped being trustworthy or usable.</p>
+      </div>
+      <div class="lifecycle">
+        <button class="life" data-life="all"><b>1</b><strong>Ingested</strong><small>source entered runtime</small></button>
+        <button class="life" data-life="all"><b>2</b><strong>Stored</strong><small>addressable payload exists</small></button>
+        <button class="life" data-life="all"><b>3</b><strong>Retrieved</strong><small>candidate surfaced</small></button>
+        <button class="life" data-life="eligible"><b>4</b><strong>Eligible</strong><small>rank/cutoff can remove it</small></button>
+        <button class="life" data-life="model-visible"><b>5</b><strong>Rendered</strong><small>transport preserves span</small></button>
+        <button class="life" data-life="model-visible"><b>6</b><strong>Model-visible</strong><small>decisive semantics survive</small></button>
+        <button class="life" data-life="authority"><b>7</b><strong>Authority</strong><small>active / contested / stale</small></button>
+        <button class="life" data-life="all"><b>8</b><strong>Judged</strong><small>verdict over usable evidence</small></button>
+      </div>
     </div>
   </section>
 
-  <section class="section">
-    <div class="limits"><strong>Interpretation boundary.</strong> These are controlled reproductions of specific failure mechanisms, not global rankings of Cognee, RAGFlow or Dify. Cognee was tested on CHUNKS, not every retrieval mode. Dify was tested at the current renderer/config-layer code boundary, not every Agent V2 trajectory. RAGFlow's candidate patch passed the targeted regression, not its entire upstream suite. The Mem0 run used infer=False and one controlled conflict pair; it demonstrates an authority-policy boundary, not a Mem0 defect. ContextMesh keeps those limits attached to the evidence rather than turning them into marketing claims.</div>
+  <section class="section" id="timeline">
+    <div class="section-head">
+      <div><div class="kicker">Reality Delta log</div><h2>Change the claim when reality changes.</h2></div>
+      <p>The lab is intentionally chronological. A later upstream fix can invalidate an earlier failure claim; that invalidation is part of the evidence.</p>
+    </div>
+    <div class="timeline">
+      <div class="event"><time>Sep 24</time><div class="event-dot"></div><div class="event-body"><h3>Cognee rank-depth failure reproduced</h3><p>Two controlled CHUNKS corpora placed decisive evidence at rank 17, outside visible top-5.</p><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-1.6.0-rank-depth-2026-09-24.md">open result ↗</a></div></div>
+      <div class="event featured"><time>Sep 26</time><div class="event-dot"></div><div class="event-body"><h3>Cognee MMR weakened our original claim</h3><p>The exact selector from PR #3707 moved both decisive sources from rank 17 to rank 2. The lab records that as a positive upstream result, not as a loss to hide.</p><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md">open before/after ↗</a></div></div>
+      <div class="event featured"><time>Sep 26</time><div class="event-dot"></div><div class="event-body"><h3>RAGFlow D24 moved from proof to validated patch</h3><p>Current main reproduced the budget contract failure. The minimal split-budget patch passed targeted internal/service Go tests.</p><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/RAGFlow-D24-before-after-2026-09-26.md">open patch evidence ↗</a></div></div>
+      <div class="event"><time>Sep 26</time><div class="event-dot"></div><div class="event-body"><h3>External contracts tested in Graphiti and Dify</h3><p>Current upstream discussions now cover ingestion verification, traversal frontier survival, memory authority, retrieval diagnostics, hidden-middle visibility, and replay-safe capability state.</p><a href="https://github.com/hippoley/ContextMesh/issues/2">open contributor board ↗</a></div></div>
+    </div>
   </section>
 
-  <footer class="footer"><span>ContextMesh Reality Lab · 2026-09-24 snapshot</span><span>Ranking is scheduling. Visibility is evidence.</span></footer>
-</div>
+  <section class="cta">
+    <div><h2>Bring the failure that still looks like success.</h2><p>A source ranked too low. A tool read that truncated the middle. A stale memory that outranked verified state. A budget field wired to the wrong constraint. Bring one reproducible case; the Reality Lab will try to locate the exact stage where evidence stopped participating.</p></div>
+    <div class="cta-actions"><a class="btn primary" href="https://github.com/hippoley/ContextMesh/issues/1">Bring a failure ↗</a><a class="btn" href="https://github.com/hippoley/ContextMesh/issues/2">Adopt a probe ↗</a></div>
+  </section>
+
+  <footer class="footer"><span>ContextMesh Reality Lab · 2026-09-26</span><span>Ranking is scheduling. Evidence survives by contract.</span></footer>
+</main>
+
+<script>
+const signals={
+  cognee:{label:"decisive rank",before:"17",after:"2",copy:"Cognee PR #3707's exact MMR selector moved the decisive source into top-5 in both controlled fixtures.",trace:[["retrieved #17","hit"],["eligible","loss"],["MMR #2","hit"],["visible","hit"]]},
+  ragflow:{label:"effective fit budget",before:"16K",after:"128K",copy:"The patch keeps context fitting on context_length while preserving max_output as the generation ceiling.",trace:[["resolved","hit"],["budget bound","loss"],["split contract","hit"],["Go tests","hit"]]},
+  dify:{label:"decisive span",before:"read",after:"hidden",copy:"The instruction source loaded, but the middle span disappeared at the rendering/model-visibility boundary.",trace:[["selected","hit"],["read","hit"],["rendered","loss"],["model-visible","loss"]]},
+  mem0:{label:"authority",before:"2 facts",after:"1 active",copy:"Semantic retrieval exposed both histories; lifecycle state, not similarity alone, resolved which fact stayed authoritative.",trace:[["stored","hit"],["retrieved","hit"],["authority","loss"],["filtered","hit"]]}
+};
+function renderSignal(key){
+  const d=signals[key];
+  document.querySelectorAll(".deck-tab").forEach(b=>b.classList.toggle("active",b.dataset.case===key));
+  deckLabel.textContent=d.label;deckBefore.textContent=d.before;deckAfter.textContent=d.after;deckCopy.textContent=d.copy;
+  deckTrace.innerHTML=d.trace.map((x,i)=>`${i?'<span class="trace-arrow">→</span>':''}<span class="trace-step ${x[1]}">${x[0]}</span>`).join("");
+}
+document.querySelectorAll(".deck-tab").forEach(b=>b.addEventListener("click",()=>renderSignal(b.dataset.case)));
+renderSignal("cognee");
+
+function applyFilter(name){
+  document.querySelectorAll(".filter").forEach(b=>b.classList.toggle("active",b.dataset.filter===name));
+  document.querySelectorAll(".life").forEach(b=>b.classList.toggle("active",b.dataset.life===name));
+  document.querySelectorAll(".case").forEach(c=>c.classList.toggle("hidden",name!=="all"&&c.dataset.stage!==name));
+}
+document.querySelectorAll(".filter").forEach(b=>b.addEventListener("click",()=>applyFilter(b.dataset.filter)));
+document.querySelectorAll(".life").forEach(b=>b.addEventListener("click",()=>{applyFilter(b.dataset.life);document.querySelector("#cases").scrollIntoView({behavior:"smooth",block:"start"});}));
+document.querySelectorAll(".inspect").forEach(b=>b.addEventListener("click",()=>{
+  const card=b.closest(".case");card.classList.toggle("open");b.textContent=card.classList.contains("open")?"Hide trace":"Inspect trace";
+}));
+</script>
 </body>
 </html>
