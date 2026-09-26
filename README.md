@@ -6,7 +6,7 @@
 
 # ContextMesh
 
-### Full-coverage context verification for AI systems
+### Reality-first, full-coverage context verification for RAG and AI agents
 
 **Find where decisive evidence disappears — across retrieval, eligibility, rendering, model visibility, memory authority, and final judgment.**
 
@@ -382,6 +382,7 @@ No engineering layer can make a model attend to more raw tokens in one forward p
 - [Evidence lifecycle](docs/EVIDENCE_LIFECYCLE.md)
 - [Reality Probe methodology](docs/V015_REALITY_PROBE.md)
 - [External Demand Radar](docs/reality/EXTERNAL_DEMAND_RADAR.md)
+- [How to cite ContextMesh](CITATION.cff)
 - [Archived v0.15 long-form README](docs/archive/README-v0.15-longform.md)
 
 ## License
