@@ -4,6 +4,8 @@ import re
 import struct
 from pathlib import Path
 
+from build_reality_manifest import build_manifest
+
 ROOT = Path(__file__).resolve().parents[1]
 HTML_PATH = ROOT / "site" / "reality.html"
 PREVIEW_PATH = ROOT / "assets" / "contextmesh-social-preview.png"
@@ -29,6 +31,7 @@ def main() -> None:
         fail("assets/contextmesh-social-preview.png is missing")
 
     html = HTML_PATH.read_text(encoding="utf-8")
+    manifest = build_manifest()
 
     forbidden = {
         "./admin.html": "backend Admin link",
@@ -59,6 +62,8 @@ def main() -> None:
         fail("og:url is not the public Pages root")
     if "assets/contextmesh-social-preview.png" not in html:
         fail("OpenGraph/Twitter metadata does not reference the raster preview")
+    if 'fetch("./reality-data.json"' not in html:
+        fail("public Reality Lab is not hydrating from the generated evidence manifest")
 
     ids = re.findall(r'\sid="([^"]+)"', html)
     duplicates = sorted({value for value in ids if ids.count(value) > 1})
@@ -66,6 +71,9 @@ def main() -> None:
         fail(f"duplicate HTML ids: {duplicates}")
 
     expected_cases = {"case-cognee", "case-ragflow", "case-dify", "case-mem0"}
+    manifest_cases = {f"case-{key}" for key in manifest["cases"]}
+    if manifest_cases != expected_cases:
+        fail(f"manifest/UI case mismatch: {sorted(manifest_cases)}")
     case_ids = {value for value in ids if value.startswith("case-")}
     if case_ids != expected_cases:
         fail(f"unexpected Reality case ids: {sorted(case_ids)}")
@@ -88,7 +96,8 @@ def main() -> None:
     print(
         "PUBLIC_SITE_CHECK_OK "
         f"cases={len(expected_cases)} preview={width}x{height} "
-        "runtime_links=0 metadata_singletons=ok"
+        f"verified_through={manifest['verified_through']} "
+        "runtime_links=0 metadata_singletons=ok evidence_manifest=ok"
     )
 
 
