@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">ContextMesh — full-coverage context verification</title>
+  <desc id="desc">A visual showing evidence moving from retrieval through eligibility, model visibility, authority, and judgment.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080b12"/>
+      <stop offset="0.52" stop-color="#101522"/>
+      <stop offset="1" stop-color="#07111a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="0.5" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="520" rx="28" fill="url(#bg)"/>
+  <g opacity="0.11" stroke="#9ca3af">
+    <path d="M0 86H1200M0 172H1200M0 258H1200M0 344H1200M0 430H1200"/>
+    <path d="M120 0V520M240 0V520M360 0V520M480 0V520M600 0V520M720 0V520M840 0V520M960 0V520M1080 0V520"/>
+  </g>
+  <circle cx="990" cy="74" r="130" fill="#22d3ee" opacity="0.06"/>
+  <circle cx="180" cy="430" r="170" fill="#8b5cf6" opacity="0.07"/>
+
+  <g transform="translate(72 68)">
+    <text x="0" y="0" fill="#94a3b8" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="15" font-weight="700" letter-spacing="3">REALITY-FIRST CONTEXT VERIFICATION</text>
+    <text x="0" y="74" fill="#f8fafc" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="62" font-weight="780">ContextMesh</text>
+    <rect x="0" y="96" width="470" height="5" rx="2.5" fill="url(#accent)" filter="url(#glow)"/>
+    <text x="0" y="145" fill="#cbd5e1" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="25" font-weight="520">Find where decisive evidence disappears.</text>
+    <text x="0" y="180" fill="#94a3b8" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="18">Ranking can schedule evidence. It should not decide whether evidence exists.</text>
+  </g>
+
+  <g transform="translate(72 330)" font-family="Inter, ui-sans-serif, system-ui, sans-serif">
+    <g>
+      <rect width="148" height="72" rx="16" fill="#111827" stroke="#334155"/>
+      <text x="74" y="30" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="700">RETRIEVED</text>
+      <text x="74" y="52" text-anchor="middle" fill="#f8fafc" font-size="15" font-weight="650">rank ≠ truth</text>
+    </g>
+    <path d="M158 36H190" stroke="url(#accent)" stroke-width="3"/>
+    <path d="M184 30L192 36L184 42" fill="none" stroke="#22d3ee" stroke-width="3"/>
+
+    <g transform="translate(202)">
+      <rect width="148" height="72" rx="16" fill="#111827" stroke="#334155"/>
+      <text x="74" y="30" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="700">ELIGIBLE</text>
+      <text x="74" y="52" text-anchor="middle" fill="#f8fafc" font-size="15" font-weight="650">coverage gate</text>
+    </g>
+    <path d="M360 36H392" stroke="url(#accent)" stroke-width="3"/>
+    <path d="M386 30L394 36L386 42" fill="none" stroke="#22d3ee" stroke-width="3"/>
+
+    <g transform="translate(404)">
+      <rect width="176" height="72" rx="16" fill="#111827" stroke="#334155"/>
+      <text x="88" y="30" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="700">MODEL-VISIBLE</text>
+      <text x="88" y="52" text-anchor="middle" fill="#f8fafc" font-size="15" font-weight="650">rendered intact</text>
+    </g>
+    <path d="M590 36H622" stroke="url(#accent)" stroke-width="3"/>
+    <path d="M616 30L624 36L616 42" fill="none" stroke="#22d3ee" stroke-width="3"/>
+
+    <g transform="translate(636)">
+      <rect width="148" height="72" rx="16" fill="#111827" stroke="#334155"/>
+      <text x="74" y="30" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="700">AUTHORITY</text>
+      <text x="74" y="52" text-anchor="middle" fill="#f8fafc" font-size="15" font-weight="650">active / contested</text>
+    </g>
+    <path d="M794 36H826" stroke="url(#accent)" stroke-width="3"/>
+    <path d="M820 30L828 36L820 42" fill="none" stroke="#22d3ee" stroke-width="3"/>
+
+    <g transform="translate(840)">
+      <rect width="188" height="72" rx="16" fill="#0f1c1a" stroke="#34d399"/>
+      <text x="94" y="30" text-anchor="middle" fill="#6ee7b7" font-size="12" font-weight="700">JUDGED</text>
+      <text x="94" y="52" text-anchor="middle" fill="#f8fafc" font-size="15" font-weight="700">only after coverage</text>
+    </g>
+  </g>
+
+  <g transform="translate(882 94)" font-family="Inter, ui-sans-serif, system-ui, sans-serif">
+    <rect width="236" height="150" rx="22" fill="#0b1220" stroke="#263244"/>
+    <text x="24" y="34" fill="#94a3b8" font-size="12" font-weight="700" letter-spacing="1.2">REALITY SIGNALS</text>
+    <text x="24" y="70" fill="#f8fafc" font-size="20" font-weight="750">rank 17 → rank 2</text>
+    <text x="24" y="92" fill="#64748b" font-size="13">Cognee MMR fixture</text>
+    <text x="24" y="122" fill="#f8fafc" font-size="20" font-weight="750">128K ≠ 16K</text>
+    <text x="24" y="144" fill="#64748b" font-size="13">RAGFlow budget boundary</text>
+  </g>
+
+  <text x="72" y="476" fill="#64748b" font-family="Inter, ui-sans-serif, system-ui, sans-serif" font-size="14">
+    ranking = scheduling, not filtering
+  </text>
+</svg>
