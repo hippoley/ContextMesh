@@ -34,42 +34,39 @@ jobs:
       CONTEXTMESH_S3_ENDPOINT_URL: http://127.0.0.1:9000
       CONTEXTMESH_S3_REGION: us-east-1
       CONTEXTMESH_MINIO_E2E: "1"
-      MINIO_IMAGE: minio/minio:RELEASE.2025-09-07T16-13-09Z
+      MINIO_RELEASE: RELEASE.2025-09-07T16-13-09Z
+      MINIO_SHA256: 7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
-      - name: Pull pinned MinIO image
+      - name: Install pinned MinIO binary
         run: |
-          for attempt in 1 2 3; do
-            if docker pull "$MINIO_IMAGE"; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              echo "Failed to pull $MINIO_IMAGE after $attempt attempts" >&2
-              exit 1
-            fi
-            sleep $((attempt * 2))
-          done
+          MINIO_URL="https://github.com/minio/minio/releases/download/$MINIO_RELEASE/minio.linux-amd64.$MINIO_RELEASE"
+          curl --fail --location --retry 3 --retry-all-errors "$MINIO_URL" -o /tmp/minio
+          echo "$MINIO_SHA256  /tmp/minio" | sha256sum --check -
+          chmod +x /tmp/minio
+          /tmp/minio --version
       - name: Start MinIO
         run: |
-          docker run -d --name contextmesh-minio \
-            -p 9000:9000 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            "$MINIO_IMAGE" server /data
+          mkdir -p /tmp/contextmesh-minio-data
+          MINIO_ROOT_USER=minioadmin \
+          MINIO_ROOT_PASSWORD=minioadmin \
+            /tmp/minio server /tmp/contextmesh-minio-data --address :9000 \
+            >/tmp/contextmesh-minio.log 2>&1 &
+          echo $! >/tmp/contextmesh-minio.pid
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:9000/minio/health/ready >/dev/null; then
               exit 0
             fi
             sleep 1
           done
-          docker logs contextmesh-minio
+          cat /tmp/contextmesh-minio.log
           exit 1
       - run: python -m pip install --upgrade pip
       - run: pip install -e '.[dev,rich,s3]'
       - run: pytest -q tests/test_v14_minio_e2e.py
       - if: always()
-        run: docker logs contextmesh-minio || true
+        run: cat /tmp/contextmesh-minio.log || true
