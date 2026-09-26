@@ -38,6 +38,8 @@ body{margin:0;background:
 }
 a{color:inherit}
 button{font:inherit}
+.skip-link{position:fixed;left:14px;top:10px;z-index:100;transform:translateY(-160%);background:var(--accent);color:#10140b;padding:9px 12px;border-radius:9px;font-size:10px;font-weight:800;text-decoration:none}
+.skip-link:focus{transform:none}
 a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
 .wrap{width:min(var(--max),calc(100% - 40px));margin:0 auto}
@@ -166,6 +168,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to evidence</a>
 <nav class="nav">
   <div class="wrap nav-inner">
     <a class="brand" href="./"><span class="mark">CM</span>ContextMesh <small>Reality Lab</small></a>
@@ -179,7 +182,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   </div>
 </nav>
 
-<main class="wrap">
+<main class="wrap" id="main">
   <section class="hero">
     <div>
       <div class="kicker">Reality-first context verification</div>
@@ -194,12 +197,12 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
     <aside class="signal-deck" aria-label="Interactive Reality Signals">
       <div class="deck-top"><span>Reality signal</span><span class="live-dot"><i></i> verified</span></div>
       <div class="deck-tabs" id="deckTabs">
-        <button class="deck-tab active" data-case="cognee">Cognee</button>
-        <button class="deck-tab" data-case="ragflow">RAGFlow</button>
-        <button class="deck-tab" data-case="dify">Dify</button>
-        <button class="deck-tab" data-case="mem0">Mem0</button>
+        <button class="deck-tab active" data-case="cognee" aria-pressed="true">Cognee</button>
+        <button class="deck-tab" data-case="ragflow" aria-pressed="false">RAGFlow</button>
+        <button class="deck-tab" data-case="dify" aria-pressed="false">Dify</button>
+        <button class="deck-tab" data-case="mem0" aria-pressed="false">Mem0</button>
       </div>
-      <div class="deck-main">
+      <div class="deck-main" aria-live="polite">
         <div class="deck-label" id="deckLabel">decisive rank</div>
         <div class="delta"><strong id="deckBefore">17</strong><span class="arrow">→</span><strong class="after" id="deckAfter">2</strong></div>
         <p id="deckCopy">Cognee PR #3707's exact MMR selector moved the decisive source into top-5 in both controlled fixtures.</p>
@@ -221,11 +224,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
       <p>Filter by the stage where evidence failed. Every case keeps the measured result, the correction or patch, and the interpretation boundary attached to the same artifact.</p>
     </div>
     <div class="filters" id="filters">
-      <button class="filter active" data-filter="all">All</button>
-      <button class="filter" data-filter="eligible">Eligibility</button>
-      <button class="filter" data-filter="model-visible">Model visibility</button>
-      <button class="filter" data-filter="authority">Authority</button>
-      <button class="filter" data-filter="budget">Budget semantics</button>
+      <button class="filter active" data-filter="all" aria-pressed="true">All</button>
+      <button class="filter" data-filter="eligible" aria-pressed="false">Eligibility</button>
+      <button class="filter" data-filter="model-visible" aria-pressed="false">Model visibility</button>
+      <button class="filter" data-filter="authority" aria-pressed="false">Authority</button>
+      <button class="filter" data-filter="budget" aria-pressed="false">Budget semantics</button>
     </div>
 
     <div class="cases">
@@ -234,7 +237,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
         <h3>Rank 17 was a real blind spot. MMR moved the decisive source to rank 2.</h3>
         <p>The baseline reproduced the original crowding failure. Replaying the exact unmerged MMR selector over the same candidate order and embeddings recovered the decisive source in both controlled fixtures.</p>
         <div class="case-delta"><div class="state before"><span>released CHUNKS</span><strong>rank 17 · outside top-5</strong></div><i>→</i><div class="state after"><span>PR #3707 MMR</span><strong>rank 2 · inside top-5</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/36213382612">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md">evidence ↗</a></div></div>
+        <div class="case-actions"><div><button class="inspect" aria-expanded="false">Inspect trace</button><button class="share-case" aria-label="Share this Reality case">Share</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/36213382612">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>released CHUNKS
   near-duplicate crowding  decisive_rank=17  contradiction_visible=false
   rare exception          decisive_rank=17  contradiction_visible=false
@@ -253,7 +256,7 @@ Full coverage remains a different contract: rank does not define final eligibili
         <h3>The model had a 128K context window, but chat fitting behaved like 16K.</h3>
         <p>The resolver already carried separate context and output limits. The execution path collapsed them back together. A minimal split-budget patch now passes the same before/after contract probe and targeted RAGFlow service tests.</p>
         <div class="case-delta"><div class="state before"><span>before</span><strong>fit budget 16,384</strong></div><i>→</i><div class="state after"><span>after</span><strong>fit budget 128,000</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/36215686041">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/RAGFlow-D24-before-after-2026-09-26.md">evidence ↗</a></div></div>
+        <div class="case-actions"><div><button class="inspect" aria-expanded="false">Inspect trace</button><button class="share-case" aria-label="Share this Reality case">Share</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/36215686041">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/RAGFlow-D24-before-after-2026-09-26.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>catalog
   context_length = 128000
   max_output     = 16384
@@ -275,7 +278,7 @@ CGO_ENABLED=0 go test ./internal/service ...  PASS</pre></div>
         <h3>The source was read successfully. The decisive middle instruction still never reached the model.</h3>
         <p>An 11,343-byte synthetic instruction source placed a must-follow marker in the middle. The ordinary shell observation exposed roughly 8 KiB of head + tail, making the decisive span model-invisible.</p>
         <div class="case-delta"><div class="state before"><span>source state</span><strong>selected + read</strong></div><i>→</i><div class="state after"><span>model state</span><strong>middle span absent</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/35966935382">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Dify-42889-2026-09-24.md">evidence ↗</a></div></div>
+        <div class="case-actions"><div><button class="inspect" aria-expanded="false">Inspect trace</button><button class="share-case" aria-label="Share this Reality case">Share</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/35966935382">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Dify-42889-2026-09-24.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>source_bytes = 11,343
 ordinary shell observation ≈ first 4 KiB + last 4 KiB
 decisive marker = middle span
@@ -294,7 +297,7 @@ rendered -> model-visible</pre></div>
         <h3>Both conflicting memories were retrievable. Similarity could not decide which one was authoritative.</h3>
         <p>The active verified fact and newer contested fact had close semantic scores. Explicit lifecycle filtering, not ranking alone, made authority policy visible.</p>
         <div class="case-delta"><div class="state before"><span>semantic search</span><strong>5432 + 6543 visible</strong></div><i>→</i><div class="state after"><span>authority filter</span><strong>active 5432 only</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/35969812150">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md">evidence ↗</a></div></div>
+        <div class="case-actions"><div><button class="inspect" aria-expanded="false">Inspect trace</button><button class="share-case" aria-label="Share this Reality case">Share</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/35969812150">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>active + verified
   database port = 5432
   semantic score = 0.425263
@@ -320,14 +323,14 @@ retrieval succeeds; authority remains unresolved without lifecycle policy.</pre>
         <p>Click a stage to filter the verified cases. ContextMesh names the first point where decisive evidence stopped being trustworthy or usable.</p>
       </div>
       <div class="lifecycle">
-        <button class="life" data-life="all"><b>1</b><strong>Ingested</strong><small>source entered runtime</small></button>
-        <button class="life" data-life="all"><b>2</b><strong>Stored</strong><small>addressable payload exists</small></button>
-        <button class="life" data-life="all"><b>3</b><strong>Retrieved</strong><small>candidate surfaced</small></button>
-        <button class="life" data-life="eligible"><b>4</b><strong>Eligible</strong><small>rank/cutoff can remove it</small></button>
-        <button class="life" data-life="model-visible"><b>5</b><strong>Rendered</strong><small>transport preserves span</small></button>
-        <button class="life" data-life="model-visible"><b>6</b><strong>Model-visible</strong><small>decisive semantics survive</small></button>
-        <button class="life" data-life="authority"><b>7</b><strong>Authority</strong><small>active / contested / stale</small></button>
-        <button class="life" data-life="all"><b>8</b><strong>Judged</strong><small>verdict over usable evidence</small></button>
+        <button class="life" data-life="all" aria-pressed="false"><b>1</b><strong>Ingested</strong><small>source entered runtime</small></button>
+        <button class="life" data-life="all" aria-pressed="false"><b>2</b><strong>Stored</strong><small>addressable payload exists</small></button>
+        <button class="life" data-life="all" aria-pressed="false"><b>3</b><strong>Retrieved</strong><small>candidate surfaced</small></button>
+        <button class="life" data-life="eligible" aria-pressed="false"><b>4</b><strong>Eligible</strong><small>rank/cutoff can remove it</small></button>
+        <button class="life" data-life="model-visible" aria-pressed="false"><b>5</b><strong>Rendered</strong><small>transport preserves span</small></button>
+        <button class="life" data-life="model-visible" aria-pressed="false"><b>6</b><strong>Model-visible</strong><small>decisive semantics survive</small></button>
+        <button class="life" data-life="authority" aria-pressed="false"><b>7</b><strong>Authority</strong><small>active / contested / stale</small></button>
+        <button class="life" data-life="all" aria-pressed="false"><b>8</b><strong>Judged</strong><small>verdict over usable evidence</small></button>
       </div>
     </div>
   </section>
@@ -362,7 +365,11 @@ const signals={
 };
 function renderSignal(key){
   const d=signals[key];
-  document.querySelectorAll(".deck-tab").forEach(b=>b.classList.toggle("active",b.dataset.case===key));
+  document.querySelectorAll(".deck-tab").forEach(b=>{
+    const active=b.dataset.case===key;
+    b.classList.toggle("active",active);
+    b.setAttribute("aria-pressed",String(active));
+  });
   deckLabel.textContent=d.label;deckBefore.textContent=d.before;deckAfter.textContent=d.after;deckCopy.textContent=d.copy;
   deckTrace.innerHTML=d.trace.map((x,i)=>`${i?'<span class="trace-arrow">→</span>':''}<span class="trace-step ${x[1]}">${x[0]}</span>`).join("");
 }
@@ -371,36 +378,53 @@ document.querySelectorAll(".deck-tab").forEach(b=>b.addEventListener("click",()=
   renderSignal(key);
   history.replaceState(null,"","#case-"+key);
   const card=document.querySelector("#case-"+key);
-  if(card){card.classList.add("open");card.querySelector(".inspect").textContent="Hide trace";}
+  if(card){card.classList.add("open");const btn=card.querySelector(".inspect");if(btn){btn.textContent="Hide trace";btn.setAttribute("aria-expanded","true");}}
 }));
 renderSignal("cognee");
 
 function applyFilter(name){
-  document.querySelectorAll(".filter").forEach(b=>b.classList.toggle("active",b.dataset.filter===name));
-  document.querySelectorAll(".life").forEach(b=>b.classList.toggle("active",b.dataset.life===name));
+  document.querySelectorAll(".filter").forEach(b=>{
+    const active=b.dataset.filter===name;
+    b.classList.toggle("active",active);
+    b.setAttribute("aria-pressed",String(active));
+  });
+  document.querySelectorAll(".life").forEach(b=>{
+    const active=b.dataset.life===name;
+    b.classList.toggle("active",active);
+    b.setAttribute("aria-pressed",String(active));
+  });
   document.querySelectorAll(".case").forEach(c=>c.classList.toggle("hidden",name!=="all"&&c.dataset.stage!==name));
 }
 document.querySelectorAll(".filter").forEach(b=>b.addEventListener("click",()=>applyFilter(b.dataset.filter)));
 document.querySelectorAll(".life").forEach(b=>b.addEventListener("click",()=>{applyFilter(b.dataset.life);document.querySelector("#cases").scrollIntoView({behavior:"smooth",block:"start"});}));
 document.querySelectorAll(".inspect").forEach(b=>b.addEventListener("click",()=>{
-  const card=b.closest(".case");card.classList.toggle("open");b.textContent=card.classList.contains("open")?"Hide trace":"Inspect trace";
+  const card=b.closest(".case");
+  card.classList.toggle("open");
+  const open=card.classList.contains("open");
+  b.textContent=open?"Hide trace":"Inspect trace";
+  b.setAttribute("aria-expanded",String(open));
 }));
 document.querySelectorAll(".share-case").forEach(b=>b.addEventListener("click",async()=>{
   const card=b.closest(".case");
   const url=location.origin+location.pathname+"#"+card.id;
+  const title=card.querySelector("h3")?.textContent?.trim()||"ContextMesh Reality case";
   try{
+    if(navigator.share){
+      await navigator.share({title,text:"ContextMesh Reality Lab",url});
+      return;
+    }
     await navigator.clipboard.writeText(url);
     const old=b.textContent;b.textContent="Copied";
     setTimeout(()=>b.textContent=old,1200);
   }catch{
-    location.hash=card.id;
+    history.replaceState(null,"","#"+card.id);
   }
 }));
 if(location.hash.startsWith("#case-")){
   const card=document.querySelector(location.hash);
   if(card){
     card.classList.add("open");
-    const btn=card.querySelector(".inspect");if(btn)btn.textContent="Hide trace";
+    const btn=card.querySelector(".inspect");if(btn){btn.textContent="Hide trace";btn.setAttribute("aria-expanded","true");}
     const key=card.dataset.case;if(signals[key])renderSignal(key);
   }
 }
