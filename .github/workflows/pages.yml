@@ -3,12 +3,14 @@ name: Pages
 # One-time prerequisite:
 # Settings -> Pages -> Build and deployment -> Source -> GitHub Actions.
 # Until then this workflow exits cleanly with a notice.
-# After enablement, every site/** change publishes automatically.
+# After enablement, every public-site change publishes automatically.
 on:
   push:
     branches: [main]
     paths:
-      - 'site/**'
+      - 'site/reality.html'
+      - 'assets/contextmesh-social-preview.png'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -42,8 +44,23 @@ jobs:
             echo "GitHub Pages is enabled."
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice title=GitHub Pages not enabled::Open Settings -> Pages and set Source to GitHub Actions once. Future site changes will then deploy automatically."
+            echo "::notice title=GitHub Pages not enabled::Open Settings -> Pages and set Source to GitHub Actions once. Future public-site changes will then deploy automatically."
           fi
+
+      - name: Build public Pages artifact
+        if: steps.pages.outputs.enabled == 'true'
+        run: |
+          rm -rf .pages
+          mkdir -p .pages/assets
+
+          # The public Pages root is the Reality Lab, not the backend-dependent
+          # runtime workspace served from site/index.html.
+          cp site/reality.html .pages/index.html
+          cp site/reality.html .pages/reality.html
+          cp assets/contextmesh-social-preview.png .pages/assets/contextmesh-social-preview.png
+
+          # Avoid Jekyll processing and make the public artifact explicit.
+          touch .pages/.nojekyll
 
       - uses: actions/configure-pages@v5
         if: steps.pages.outputs.enabled == 'true'
@@ -51,7 +68,7 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         if: steps.pages.outputs.enabled == 'true'
         with:
-          path: site
+          path: .pages
 
       - id: deployment
         uses: actions/deploy-pages@v4
