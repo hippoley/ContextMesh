@@ -1,0 +1,139 @@
+name: Reality Probe - RAGFlow PR 20207
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/reality-ragflow-20207-review.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  max-token-semantics-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout ContextMesh
+        uses: actions/checkout@v7
+        with:
+          path: contextmesh
+
+      - name: Checkout RAGFlow PR 20207 head
+        uses: actions/checkout@v7
+        with:
+          repository: Bruce-Yii/ragflow
+          ref: fix/20140-max-tokens-semantics
+          path: ragflow
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: ragflow/go.mod
+          cache-dependency-path: ragflow/go.sum
+
+      - name: Build RAGFlow tokenizer C API required by Go packages
+        working-directory: ragflow
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpcre2-dev
+          python -m pip install 'cmake>=4,<5'
+          mkdir -p internal/binding/cpp/cmake-build-release
+          cd internal/binding/cpp/cmake-build-release
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --target rag_tokenizer_c_api -j2
+
+      - name: Add independent PR-head regression
+        working-directory: ragflow
+        run: |
+          cat > internal/service/contextmesh_20207_review_test.go <<'EOF'
+          package service
+
+          import (
+              "testing"
+
+              "ragflow/internal/entity"
+          )
+
+          // PR #20207 says tenant_model.extra["max_tokens"] has one meaning:
+          // the context-window override. If so, it must not also replace the
+          // provider catalog's generation max_output in ModelTarget/ModelInfo.
+          func TestContextMeshReview20207_ContextOverrideDoesNotBecomeMaxOutput(t *testing.T) {
+              db := setupChatPipelineToolSupportTestDB(t)
+
+              if err := db.Create(&entity.TenantModelProvider{
+                  ID:           "provider-openai-20207",
+                  TenantID:     "tenant-1",
+                  ProviderName: "OpenAI",
+              }).Error; err != nil {
+                  t.Fatalf("create provider: %v", err)
+              }
+              if err := db.Create(&entity.TenantModelInstance{
+                  ID:           "instance-openai-20207",
+                  ProviderID:   "provider-openai-20207",
+                  InstanceName: "default",
+                  APIKey:       "sk-test",
+                  Status:       "active",
+                  Extra:        "{}",
+              }).Error; err != nil {
+                  t.Fatalf("create instance: %v", err)
+              }
+              if err := db.Create(&entity.TenantModel{
+                  ID:         "model-openai-gpt4o-20207",
+                  ProviderID: "provider-openai-20207",
+                  InstanceID: "instance-openai-20207",
+                  ModelName:  "gpt-4o",
+                  ModelType:  int(entity.ModelTypeChat),
+                  Status:     "active",
+                  Extra:      `{"max_tokens":32000}`,
+              }).Error; err != nil {
+                  t.Fatalf("create model: %v", err)
+              }
+
+              svc := NewModelProviderService()
+              target, err := svc.modelSolver().ResolveModelConfig(
+                  t.Context(), "tenant-1", entity.ModelTypeChat, "model-openai-gpt4o-20207",
+              )
+              if err != nil {
+                  t.Fatalf("ResolveModelConfig: %v", err)
+              }
+
+              // gpt-4o in RAGFlow's provider catalog:
+              // context_length=128000, max_output=16384.
+              // Tenant max_tokens=32000 should override only the former.
+              if target.ContextLength != 32000 {
+                  t.Fatalf("context length = %d, want tenant override 32000", target.ContextLength)
+              }
+              if target.MaxTokens != 16384 {
+                  t.Fatalf(
+                      "generation max = %d, want catalog max_output 16384; tenant max_tokens must be context-only",
+                      target.MaxTokens,
+                  )
+              }
+              if target.ModelInfo == nil || target.ModelInfo.MaxOutput == nil {
+                  t.Fatal("resolved model info has no max_output")
+              }
+              if *target.ModelInfo.MaxOutput != 16384 {
+                  t.Fatalf(
+                      "ModelInfo.MaxOutput = %d, want catalog 16384; tenant max_tokens must not overwrite max_output",
+                      *target.ModelInfo.MaxOutput,
+                  )
+              }
+          }
+          EOF
+
+      - name: Test PR-head semantic claim
+        working-directory: ragflow
+        shell: bash
+        run: |
+          set +e
+          go test ./internal/service -run TestContextMeshReview20207_ContextOverrideDoesNotBecomeMaxOutput -count=1 -v 2>&1 | tee /tmp/contextmesh-ragflow-20207.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "PR head already preserves catalog max_output; no review finding."
+            exit 0
+          fi
+
+          grep -Eq "generation max = 32000|ModelInfo.MaxOutput = 32000" /tmp/contextmesh-ragflow-20207.log
+          echo "Confirmed on PR #20207 head: tenant extra.max_tokens still leaks into generation MaxOutput in the service ModelSolver path."
