@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/reality-cognee-mmr.yml'
       - 'benchmarks/cognee_mmr_rank17_probe.py'
+      - 'benchmarks/cognee_pr3707_mmr_replay.py'
 
 permissions:
   contents: read
@@ -29,7 +30,7 @@ jobs:
           pip install -e '.[dev]'
       - name: Install released Cognee 1.6.0
         run: pip install 'cognee[gliner]==1.6.0'
-      - name: Run released CHUNKS baseline
+      - name: Run released CHUNKS baseline and export embedding fixture
         run: |
           python benchmarks/cognee_mmr_rank17_probe.py \
             --mode chunks \
@@ -44,37 +45,26 @@ jobs:
           path: released.json
 
   pr3707-mmr:
+    needs: released-chunks
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    env:
-      TOKENIZERS_PARALLELISM: "false"
-      PYTHONUNBUFFERED: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/download-artifact@v4
         with:
-          python-version: '3.12'
-          cache: pip
-      - name: Install ContextMesh
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e '.[dev]'
-      - name: Checkout Cognee PR 3707 head
+          name: cognee-released-chunks
+          path: results/released
+      - name: Checkout exact Cognee PR 3707 source
         uses: actions/checkout@v7
         with:
           repository: CrypticCortex/cognee
           ref: d1625f2a87e562da2ae95242f00b0a1866c2209b
           path: .upstream/cognee-pr3707
-      - name: Install Cognee PR 3707 candidate
-        run: pip install -e '.upstream/cognee-pr3707[gliner]'
-      - name: Run experimental CHUNKS_MMR
+      - name: Replay exact PR 3707 mmr_select on released Cognee embeddings
         run: |
-          python benchmarks/cognee_mmr_rank17_probe.py \
-            --mode chunks-mmr \
-            --source cognee-pr-3707-d1625f2 \
+          python benchmarks/cognee_pr3707_mmr_replay.py \
+            --baseline results/released/released.json \
+            --pr-source .upstream/cognee-pr3707/cognee/modules/retrieval/mmr_retriever.py \
             --top-k 5 \
-            --fetch-k 50 \
-            --crowding 16 \
             --lambda-mult 0.5 \
             --output mmr.json
       - uses: actions/upload-artifact@v4
@@ -120,6 +110,8 @@ jobs:
                   "mmr_top5_contains_decisive": candidate["top_k_contains_decisive"],
                   "released_mean_pairwise_cosine": base["top_k_redundancy"]["mean_cosine"],
                   "mmr_mean_pairwise_cosine": candidate["top_k_redundancy"]["mean_cosine"],
+                  "released_max_pairwise_cosine": base["top_k_redundancy"]["max_cosine"],
+                  "mmr_max_pairwise_cosine": candidate["top_k_redundancy"]["max_cosine"],
                   "released_contradiction_available": base["contradiction_available_at_cutoff"],
                   "mmr_contradiction_available": candidate["contradiction_available_at_cutoff"],
               })
@@ -129,14 +121,20 @@ jobs:
               "baseline": {
                   "source": released["source"],
                   "cognee_version": released["cognee_version"],
+                  "execution": "live SearchType.CHUNKS on Cognee 1.6.0",
               },
               "candidate": {
-                  "source": mmr["source"],
-                  "cognee_version": mmr["cognee_version"],
+                  "source": "exact mmr_select() source extracted from Cognee PR #3707",
+                  "execution": "algorithm replay over the exact released-Cognee candidate order and embeddings",
                   "upstream_pr": "https://github.com/topoteretes/cognee/pull/3707",
                   "head_sha": "d1625f2a87e562da2ae95242f00b0a1866c2209b",
               },
               "comparisons": comparisons,
+              "integration_observation": (
+                  "The unrebased PR head cannot be compared end-to-end without an LLM key because its "
+                  "remember() API predates the current keyless/extractor path; the exact pure MMR selector "
+                  "is therefore replayed over the released baseline embeddings instead."
+              ),
               "interpretation_rule": (
                   "Treat MMR as improving this fixture only when the decisive source becomes "
                   "eligible at top-5 and/or redundancy falls; do not generalize beyond these controlled corpora."
