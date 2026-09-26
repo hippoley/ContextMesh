@@ -54,7 +54,7 @@ The project is **not another RAG framework**. It is a context-verification runti
 
 <div align="center">
 
-**Interactive Reality Lab — Pages-ready** · [View source](site/reality.html) · [Bring a failure](https://github.com/hippoley/ContextMesh/issues/1)
+**Interactive Reality Lab — Pages-ready** · [Reality Probe Index](docs/reality/README.md) · [View source](site/reality.html) · [Bring a failure](https://github.com/hippoley/ContextMesh/issues/1)
 
 </div>
 
@@ -380,6 +380,7 @@ No engineering layer can make a model attend to more raw tokens in one forward p
 
 - [Full-coverage semantics](docs/FULL_COVERAGE.md)
 - [Evidence lifecycle](docs/EVIDENCE_LIFECYCLE.md)
+- [Reality Probe Index](docs/reality/README.md)
 - [Reality Probe methodology](docs/V015_REALITY_PROBE.md)
 - [External Demand Radar](docs/reality/EXTERNAL_DEMAND_RADAR.md)
 - [How to cite ContextMesh](CITATION.cff)
