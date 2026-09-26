@@ -10,6 +10,7 @@ on:
     paths:
       - 'site/reality.html'
       - 'assets/contextmesh-social-preview.png'
+      - 'scripts/check_reality_site.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -27,6 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate public Reality Lab
+        run: python scripts/check_reality_site.py
 
       - name: Check whether GitHub Pages is enabled
         id: pages
