@@ -353,7 +353,7 @@ retrieval succeeds; authority remains unresolved without lifecycle policy.</pre>
     <div class="cta-actions"><a class="btn primary" href="https://github.com/hippoley/ContextMesh/issues/1">Bring a failure ↗</a><a class="btn" href="https://github.com/hippoley/ContextMesh/issues/2">Adopt a probe ↗</a></div>
   </section>
 
-  <footer class="footer"><span>ContextMesh Reality Lab · 2026-09-26</span><span>Ranking is scheduling. Evidence survives by contract.</span></footer>
+  <footer class="footer"><span>ContextMesh Reality Lab · <span id="footerVerified">2026-09-26</span> · <a href="./reality-data.json">machine-readable manifest ↗</a></span><span>Ranking is scheduling. Evidence survives by contract.</span></footer>
 </main>
 
 <script>
@@ -390,6 +390,7 @@ async function hydrateRealityData(){
     if(!manifest?.cases)throw new Error("reality-data missing cases");
     signals={...signals,...manifest.cases};
     verifiedThrough.textContent="verified · "+manifest.verified_through;
+    footerVerified.textContent=manifest.verified_through;
     const active=location.hash.startsWith("#case-")?location.hash.slice(6):"cognee";
     if(signals[active])renderSignal(active);
   }catch(error){
