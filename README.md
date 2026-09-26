@@ -10,7 +10,7 @@
 
 **Find where decisive evidence disappears — across retrieval, eligibility, rendering, model visibility, memory authority, and final judgment.**
 
-[Reality Lab](#reality-not-claims) · [60-second start](#60-second-start) · [How it works](#how-it-works) · [Bring a failure](https://github.com/hippoley/ContextMesh/issues/1) · [Contributor board](https://github.com/hippoley/ContextMesh/issues/2)
+[Interactive Lab](#interactive-reality-lab) · [Evidence](#reality-not-claims) · [60-second start](#60-second-start) · [Bring a failure](https://github.com/hippoley/ContextMesh/issues/1) · [Contributor board](https://github.com/hippoley/ContextMesh/issues/2)
 
 <br />
 
@@ -46,21 +46,6 @@ The project is **not another RAG framework**. It is a context-verification runti
 
 > **Did every required piece of evidence actually participate in the decision — and if not, where did it disappear?**
 
-## Reality, not claims
-
-ContextMesh keeps reproducible evidence against current external systems. These are **mechanism tests, not product rankings**.
-
-| System | Measured Reality Delta | What it taught us | Evidence |
-| --- | --- | --- | --- |
-| **Cognee 1.6.0** | decisive source was **rank 17** in two controlled `CHUNKS` fixtures; visible top-5 omitted it. Replaying Cognee PR #3707's exact MMR selector moved it to **rank 2** in both fixtures | MMR directly fixes these crowding cases. Full coverage and better ranking are complementary, not competing claims | [baseline](docs/reality/Cognee-1.6.0-rank-depth-2026-09-24.md) · [MMR before/after](docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md) |
-| **RAGFlow current main** | catalog says `context_length=128000`, `max_output=16384`, but chat fitting used the output ceiling as the context budget | a correct constraint can exist in state and still be lost at the execution boundary. A minimal split-budget patch now passes targeted RAGFlow service tests | [before/after](docs/reality/RAGFlow-D24-before-after-2026-09-26.md) · [patch](benchmarks/upstream-patches/ragflow-d24-separate-context-output.patch) |
-| **Dify current main** | an 11,343-byte synthetic `SKILL.md` was successfully read, but ordinary shell rendering exposed only head + tail and hid the decisive middle instruction | “source read” is not the same as “semantics model-visible” | [reproduction](docs/reality/Dify-42889-2026-09-24.md) |
-| **Mem0 2.2.0** | verified active `5432` and newer contested `6543` were both semantically retrievable with close scores | similarity does not encode epistemic authority; lifecycle policy must remain explicit | [authority replay](docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md) |
-
-The important part is that ContextMesh can also **lose an argument**. The Cognee MMR follow-up did exactly that: instead of preserving the original “rank-17 blind spot” as a marketing claim, the Reality Probe showed that the proposed upstream MMR algorithm moved both decisive sources into top-5.
-
-That is the project culture: **reproduce → measure → falsify or fix → publish the boundary.**
-
 ## Interactive Reality Lab
 
 <a href="site/reality.html">
@@ -76,7 +61,23 @@ That is the project culture: **reproduce → measure → falsify or fix → publ
 The Reality Lab is the public, interactive surface for the project: switch between verified systems, filter cases by failure stage, open the underlying trace, and follow how a claim changes after an upstream fix or falsification.
 
 > [!NOTE]
-> The live URL will be `https://hippoley.github.io/ContextMesh/reality.html`. The site is already wired for GitHub Pages and auto-deploys on future `site/**` changes once Pages is enabled for this repository with **Source = GitHub Actions**.
+> The live URL will be `https://hippoley.github.io/ContextMesh/`. The site is already wired for GitHub Pages and auto-deploys on future `site/**` changes once Pages is enabled for this repository with **Source = GitHub Actions**.
+
+
+## Reality, not claims
+
+ContextMesh keeps reproducible evidence against current external systems. These are **mechanism tests, not product rankings**.
+
+| System | Measured Reality Delta | What it taught us | Evidence |
+| --- | --- | --- | --- |
+| **Cognee 1.6.0** | decisive source was **rank 17** in two controlled `CHUNKS` fixtures; visible top-5 omitted it. Replaying Cognee PR #3707's exact MMR selector moved it to **rank 2** in both fixtures | MMR directly fixes these crowding cases. Full coverage and better ranking are complementary, not competing claims | [baseline](docs/reality/Cognee-1.6.0-rank-depth-2026-09-24.md) · [MMR before/after](docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md) |
+| **RAGFlow current main** | catalog says `context_length=128000`, `max_output=16384`, but chat fitting used the output ceiling as the context budget | a correct constraint can exist in state and still be lost at the execution boundary. A minimal split-budget patch now passes targeted RAGFlow service tests | [before/after](docs/reality/RAGFlow-D24-before-after-2026-09-26.md) · [patch](benchmarks/upstream-patches/ragflow-d24-separate-context-output.patch) |
+| **Dify current main** | an 11,343-byte synthetic `SKILL.md` was successfully read, but ordinary shell rendering exposed only head + tail and hid the decisive middle instruction | “source read” is not the same as “semantics model-visible” | [reproduction](docs/reality/Dify-42889-2026-09-24.md) |
+| **Mem0 2.2.0** | verified active `5432` and newer contested `6543` were both semantically retrievable with close scores | similarity does not encode epistemic authority; lifecycle policy must remain explicit | [authority replay](docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md) |
+
+The important part is that ContextMesh can also **lose an argument**. The Cognee MMR follow-up did exactly that: instead of preserving the original “rank-17 blind spot” as a marketing claim, the Reality Probe showed that the proposed upstream MMR algorithm moved both decisive sources into top-5.
+
+That is the project culture: **reproduce → measure → falsify or fix → publish the boundary.**
 
 ## Choose your starting point
 
