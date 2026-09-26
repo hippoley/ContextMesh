@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Reality Lab and external verification
+
+- Rebuilt the public Reality Lab as an interactive evidence surface with system switching, failure-stage filtering, expandable traces, per-case deep links, native sharing, and a Reality Delta timeline.
+- Separated the public static Reality Lab from the backend-dependent Runtime Workspace; GitHub Pages now stages the Reality Lab as the public root when Pages is enabled.
+- Added a machine-readable `reality-data.json` build derived from committed benchmark result artifacts, including SHA-256 provenance for each published source result.
+- Added a 1280×640 raster social preview plus OpenGraph/Twitter metadata for stable link sharing.
+- Added a Reality Probe evidence index covering reproduced failures, validated patches, falsification results, and authority/boundary results.
+
+### New Reality Deltas
+
+- Re-ran the Cognee rank-depth fixture against released Cognee 1.6.0 and replayed the exact `mmr_select()` implementation from PR #3707; both decisive sources moved from rank 17 to rank 2, entering top-5 and weakening the original crowding claim.
+- Reproduced RAGFlow D24 on current main, then validated a minimal context/output budget-separation patch with the same before/after contract probe and targeted `internal/service` Go tests.
+- Preserved the Dify hidden-middle model-visibility reproduction and Mem0 temporal-authority replay as machine-readable Reality Lab inputs.
+- Expanded active upstream collaboration around Graphiti ingestion verification, graph-traversal frontier survival, searched-scope receipts, memory authority, and Dify execution-context/retrieval diagnostics.
+
+### Repository quality and contributor experience
+
+- Added `CITATION.cff` so Reality Probe artifacts can be cited as software/research outputs.
+- Added a Reality Delta pull-request template and strengthened the Reality failure issue template with pinned environment, observed/expected behavior, falsification criteria, and probe ownership.
+- Added Issue chooser links to the Reality Probe Index and Contributor Board.
+- Expanded `SECURITY.md` with explicit local/runtime, remote model data-egress, credential, untrusted-file, object-storage, and disclosure boundaries.
+- Added a zero-dependency repository-integrity CI job covering public-site structure, evidence-manifest generation, artifact provenance, internal links, social-preview dimensions, and separation of public vs backend-only navigation.
+- Updated `RUN_WEB.md` from the obsolete v0.7 instructions to the current v0.15 runtime, worker, S3/MinIO, Reality Probe, Pages, and security boundaries.
+
 ## v0.15.0
 
 - Added an issue-derived Reality Probe suite for retrieval-induced evidence blind spots.
