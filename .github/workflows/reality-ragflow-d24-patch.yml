@@ -61,19 +61,10 @@ jobs:
           go-version-file: ragflow/go.mod
           cache-dependency-path: ragflow/go.sum
 
-      - name: Build RAGFlow tokenizer C API required by service tests
+      - name: Run targeted D24 budget tests without unrelated native parser dependencies
         working-directory: ragflow
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpcre2-dev
-          python -m pip install 'cmake>=4,<5'
-          mkdir -p internal/binding/cpp/cmake-build-release
-          cd internal/binding/cpp/cmake-build-release
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          cmake --build . --target rag_tokenizer_c_api -j2
-
-      - name: Run targeted D24 budget tests
-        working-directory: ragflow
+        env:
+          CGO_ENABLED: "0"
         run: |
           go test ./internal/service \
             -run 'TestContextMeshD24SeparatesContextAndOutputBudgets|TestClampChatConfigMaxTokens' \
