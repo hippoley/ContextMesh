@@ -9,6 +9,19 @@ permissions:
   contents: read
 
 jobs:
+  repository-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify public evidence and links
+        run: |
+          python scripts/build_reality_manifest.py --output /tmp/reality-data.json
+          python scripts/check_reality_site.py
+          python scripts/check_internal_links.py
+
   test:
     runs-on: ubuntu-latest
     strategy:
