@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Reality Probe Index
+    url: https://github.com/hippoley/ContextMesh/blob/main/docs/reality/README.md
+    about: Browse verified reproductions, falsification results, and validated patches before opening a new case.
+  - name: Contributor Board
+    url: https://github.com/hippoley/ContextMesh/issues/2
+    about: Claim an existing Reality Probe, backend, or upstream collaboration lane.
