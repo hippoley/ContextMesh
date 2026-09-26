@@ -6,9 +6,6 @@
 <meta name="theme-color" content="#080a0d"/>
 <meta name="contextmesh-build" content="2026-09-26-r3"/>
 <meta name="description" content="ContextMesh Reality Lab — inspect where decisive evidence disappears across retrieval, eligibility, rendering, model visibility, authority, and judgment."/>
-<meta property="og:title" content="ContextMesh — Reality Lab"/>
-<meta property="og:description" content="Evidence can exist and still disappear. Inspect verified failures across retrieval, eligibility, rendering, model visibility, authority, and judgment."/>
-<meta property="og:type" content="website"/>
 <link rel="canonical" href="https://hippoley.github.io/ContextMesh/"/>
 <meta property="og:title" content="ContextMesh — Reality Lab"/>
 <meta property="og:description" content="Evidence can exist and still disappear. Inspect verified failures across retrieval, eligibility, rendering, model visibility, authority, and judgment."/>
@@ -41,6 +38,8 @@ body{margin:0;background:
 }
 a{color:inherit}
 button{font:inherit}
+a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
 .wrap{width:min(var(--max),calc(100% - 40px));margin:0 auto}
 .nav{position:sticky;top:0;z-index:30;border-bottom:1px solid rgba(35,42,50,.75);background:rgba(8,10,13,.8);backdrop-filter:blur(18px)}
 .nav-inner{height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px}
@@ -117,7 +116,7 @@ button{font:inherit}
 .share-case{margin-left:12px;color:#707b87}
 .inspect:hover,.share-case:hover{color:white}
 .case:target{border-color:#53633f;box-shadow:0 0 0 1px rgba(184,242,74,.08),0 26px 80px rgba(0,0,0,.18)}
-.case-link{color:#74808c;font-size:9px;text-decoration:none}
+.case-links{display:flex;gap:10px;align-items:center}.case-link{color:#74808c;font-size:9px;text-decoration:none}
 .case-link:hover{color:#dbe2e9}
 .case-detail{display:none;margin-top:15px;border-top:1px solid #20262d;padding-top:15px}
 .case.open .case-detail{display:block}
@@ -235,7 +234,7 @@ button{font:inherit}
         <h3>Rank 17 was a real blind spot. MMR moved the decisive source to rank 2.</h3>
         <p>The baseline reproduced the original crowding failure. Replaying the exact unmerged MMR selector over the same candidate order and embeddings recovered the decisive source in both controlled fixtures.</p>
         <div class="case-delta"><div class="state before"><span>released CHUNKS</span><strong>rank 17 · outside top-5</strong></div><i>→</i><div class="state after"><span>PR #3707 MMR</span><strong>rank 2 · inside top-5</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md">evidence ↗</a></div>
+        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/36213382612">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>released CHUNKS
   near-duplicate crowding  decisive_rank=17  contradiction_visible=false
   rare exception          decisive_rank=17  contradiction_visible=false
@@ -254,7 +253,7 @@ Full coverage remains a different contract: rank does not define final eligibili
         <h3>The model had a 128K context window, but chat fitting behaved like 16K.</h3>
         <p>The resolver already carried separate context and output limits. The execution path collapsed them back together. A minimal split-budget patch now passes the same before/after contract probe and targeted RAGFlow service tests.</p>
         <div class="case-delta"><div class="state before"><span>before</span><strong>fit budget 16,384</strong></div><i>→</i><div class="state after"><span>after</span><strong>fit budget 128,000</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/RAGFlow-D24-before-after-2026-09-26.md">evidence ↗</a></div>
+        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/36215686041">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/RAGFlow-D24-before-after-2026-09-26.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>catalog
   context_length = 128000
   max_output     = 16384
@@ -276,7 +275,7 @@ CGO_ENABLED=0 go test ./internal/service ...  PASS</pre></div>
         <h3>The source was read successfully. The decisive middle instruction still never reached the model.</h3>
         <p>An 11,343-byte synthetic instruction source placed a must-follow marker in the middle. The ordinary shell observation exposed roughly 8 KiB of head + tail, making the decisive span model-invisible.</p>
         <div class="case-delta"><div class="state before"><span>source state</span><strong>selected + read</strong></div><i>→</i><div class="state after"><span>model state</span><strong>middle span absent</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Dify-42889-2026-09-24.md">evidence ↗</a></div>
+        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/35966935382">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Dify-42889-2026-09-24.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>source_bytes = 11,343
 ordinary shell observation ≈ first 4 KiB + last 4 KiB
 decisive marker = middle span
@@ -295,7 +294,7 @@ rendered -> model-visible</pre></div>
         <h3>Both conflicting memories were retrievable. Similarity could not decide which one was authoritative.</h3>
         <p>The active verified fact and newer contested fact had close semantic scores. Explicit lifecycle filtering, not ranking alone, made authority policy visible.</p>
         <div class="case-delta"><div class="state before"><span>semantic search</span><strong>5432 + 6543 visible</strong></div><i>→</i><div class="state after"><span>authority filter</span><strong>active 5432 only</strong></div></div>
-        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md">evidence ↗</a></div>
+        <div class="case-actions"><div><button class="inspect">Inspect trace</button><button class="share-case">Copy link</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/35969812150">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Mem0-2.2.0-temporal-authority-2026-09-24.md">evidence ↗</a></div></div>
         <div class="case-detail"><pre>active + verified
   database port = 5432
   semantic score = 0.425263
