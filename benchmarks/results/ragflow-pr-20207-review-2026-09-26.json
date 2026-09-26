@@ -1,0 +1,26 @@
+{
+  "date": "2026-09-26",
+  "target": "infiniflow/ragflow",
+  "pull_request": 20207,
+  "pull_request_head": "7ce7c7e7375062eae15f33dd471788b9189a48fd",
+  "probe_type": "pr-head-executable-source-review",
+  "claim_under_review": "tenant_model.extra.max_tokens is a context-window override, not a generation-output limit",
+  "observed_remaining_paths": [
+    "modelInfoWithTenantExtra assigns extra.MaxTokens to model.MaxOutput",
+    "modelInfoWithTenantExtra assigns extra.MaxTokens to model.MaxTokens",
+    "ModelSolver.ResolveModelConfig applies maxTokensFromTenantModelExtra before returning ModelTarget.MaxTokens"
+  ],
+  "result": "confirmed-review-gap",
+  "action": {
+    "run": "https://github.com/hippoley/ContextMesh/actions/runs/36209224821",
+    "job": "https://github.com/hippoley/ContextMesh/actions/runs/36209224821/job/108312116051",
+    "conclusion": "success",
+    "output": "CONFIRMED_20207_REVIEW_GAP tenant_extra.max_tokens=context_override remaining_service_effect=ModelInfo.MaxOutput+ModelTarget.MaxTokens"
+  },
+  "upstream_contact": {
+    "attempted": true,
+    "result": "blocked",
+    "error": "403 Resource not accessible by integration"
+  },
+  "scope_note": "This finding is distinct from D24. D24 remains a separate chat_pipeline context-fit bug; this finding concerns the remaining #20140 max_tokens semantic leak in PR #20207 itself."
+}
