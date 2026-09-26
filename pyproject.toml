@@ -6,6 +6,17 @@ build-backend = "hatchling.build"
 name = "contextmesh"
 version = "0.15.0"
 description = "Full-coverage external context runtime for evaluation over corpora larger than model context windows."
+keywords = ["llm", "rag", "context-engineering", "evaluation", "retrieval", "provenance", "agent-memory", "long-context"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
@@ -32,3 +43,10 @@ contextmesh = "contextmesh.cli:main"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+
+[project.urls]
+Homepage = "https://github.com/hippoley/ContextMesh"
+Repository = "https://github.com/hippoley/ContextMesh"
+Issues = "https://github.com/hippoley/ContextMesh/issues"
+Documentation = "https://github.com/hippoley/ContextMesh#readme"
