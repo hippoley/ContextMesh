@@ -11,6 +11,8 @@ on:
       - 'site/reality.html'
       - 'assets/contextmesh-social-preview.png'
       - 'scripts/check_reality_site.py'
+      - 'scripts/build_reality_manifest.py'
+      - 'benchmarks/results/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -30,7 +32,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Validate public Reality Lab
-        run: python scripts/check_reality_site.py
+        run: |
+          python scripts/build_reality_manifest.py --output /tmp/reality-data.json
+          python scripts/check_reality_site.py
 
       - name: Check whether GitHub Pages is enabled
         id: pages
@@ -62,6 +66,7 @@ jobs:
           cp site/reality.html .pages/index.html
           cp site/reality.html .pages/reality.html
           cp assets/contextmesh-social-preview.png .pages/assets/contextmesh-social-preview.png
+          python scripts/build_reality_manifest.py --output .pages/reality-data.json
 
           # Avoid Jekyll processing and make the public artifact explicit.
           touch .pages/.nojekyll
