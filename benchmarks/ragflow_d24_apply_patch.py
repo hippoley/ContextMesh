@@ -160,7 +160,7 @@ def patch_tests(path: Path) -> None:
     anchor = "\n// stubHarness installs a fake harnessRetriever returning the given answer and\n"
     if text.count(anchor) != 1:
         raise RuntimeError(f"test anchor: expected one match, found {text.count(anchor)}")
-    test = r'''
+    test = '''
 func TestContextMeshD24SeparatesContextAndOutputBudgets(t *testing.T) {
 \tt.Run("generation cap is independent of large context window", func(t *testing.T) {
 \t\trequested := 50000
