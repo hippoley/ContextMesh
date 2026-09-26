@@ -2,7 +2,8 @@ name: Pages
 
 # One-time prerequisite:
 # Settings -> Pages -> Build and deployment -> Source -> GitHub Actions.
-# After that, every site/** change publishes automatically.
+# Until then this workflow exits cleanly with a notice.
+# After enablement, every site/** change publishes automatically.
 on:
   push:
     branches: [main]
@@ -21,17 +22,41 @@ concurrency:
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check whether GitHub Pages is enabled
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code="$(curl -sS -o /tmp/pages.json -w '%{http_code}' \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages")"
+
+          if [ "$code" = "200" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is enabled."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=GitHub Pages not enabled::Open Settings -> Pages and set Source to GitHub Actions once. Future site changes will then deploy automatically."
+          fi
+
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
+        if: steps.pages.outputs.enabled == 'true'
+
       - uses: actions/upload-pages-artifact@v3
+        if: steps.pages.outputs.enabled == 'true'
         with:
           path: site
+
       - id: deployment
         uses: actions/deploy-pages@v4
+        if: steps.pages.outputs.enabled == 'true'
+
+      - name: Publish URL
+        if: steps.pages.outputs.enabled == 'true'
+        run: echo "Published to https://hippoley.github.io/ContextMesh/"
