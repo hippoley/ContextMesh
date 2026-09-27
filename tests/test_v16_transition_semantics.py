@@ -773,3 +773,23 @@ def test_decision_shard_api_exposes_manifest_and_bounded_shard(tmp_path, monkeyp
     assert first["char_count"] <= 1400
     assert first["unit_ids"]
     assert "DECISION_SHARD 1/" in first["text"]
+
+
+def test_large_provenance_set_uses_stable_reference_inside_shard():
+    unit = SemanticEvidenceUnit(
+        id="many-sources",
+        kind=EvidenceKind.REQUIREMENT,
+        text="Payment must be made within 30 days.",
+        source_ids={f"block-{i:04d}" for i in range(120)},
+    )
+    bundle = build_decision_bundle([unit])
+    shard_set = shard_decision_bundle(bundle, max_chars=1400)
+
+    assert shard_set.complete is True
+    assert shard_set.shard_count == 1
+    shard = shard_set.shards[0]
+    assert shard.unit_ids == ["many-sources"]
+    assert "source_count=120" in shard.text
+    assert "provenance_sha256=" in shard.text
+    assert "block-0119" not in shard.text
+    assert bundle.requirements[0].source_ids == {f"block-{i:04d}" for i in range(120)}
