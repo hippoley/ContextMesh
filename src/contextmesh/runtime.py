@@ -327,14 +327,20 @@ class ProgressiveEvaluator:
         output_text: str = "",
         lossy: bool = False,
         metadata: dict | None = None,
+        from_stage: EvidenceStage = EvidenceStage.MODEL_VISIBLE,
+        to_stage: EvidenceStage = EvidenceStage.INSPECTED,
+        policy_id: str | None = None,
+        policy_version: str | None = None,
     ) -> None:
         ledger = self._transition_ledger(state)
         receipt = ledger.append(
             subject_id=subject_id,
-            from_stage=EvidenceStage.MODEL_VISIBLE,
-            to_stage=EvidenceStage.INSPECTED,
+            from_stage=from_stage,
+            to_stage=to_stage,
             action=action,
             reason_codes=reason_codes,
+            policy_id=policy_id,
+            policy_version=policy_version,
             input_sha256=hashlib.sha256(input_text.encode("utf-8")).hexdigest() if input_text else None,
             output_sha256=hashlib.sha256(output_text.encode("utf-8")).hexdigest() if output_text else None,
             lossy=lossy,
@@ -379,6 +385,26 @@ class ProgressiveEvaluator:
         # normalization should not inflate the audit trail.
         if receipt.merged_from:
             state.reduction_receipts.append(receipt.model_dump(mode="json"))
+            reduced_by_id = {unit.id: unit for unit in reduced}
+            for output_id, input_ids in receipt.merged_from.items():
+                output_unit = reduced_by_id[output_id]
+                self._append_transition(
+                    state,
+                    subject_id=output_id,
+                    action=TransitionAction.MERGE,
+                    reason_codes=["canonical_duplicate_merge"],
+                    input_text="\n".join(sorted(input_ids)),
+                    output_text=output_unit.text,
+                    metadata={
+                        "input_evidence_ids": sorted(input_ids),
+                        "source_ids": sorted(output_unit.source_ids),
+                        "kind": output_unit.kind.value,
+                    },
+                    from_stage=EvidenceStage.INSPECTED,
+                    to_stage=EvidenceStage.REDUCED,
+                    policy_id="typed-canonical-reducer",
+                    policy_version="0.16",
+                )
 
         state.semantic_units = [unit.model_dump(mode="json") for unit in reduced]
         state.decision_bundle = build_decision_bundle(reduced).model_dump(mode="json")
