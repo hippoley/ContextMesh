@@ -30,7 +30,7 @@ from .models import AssetIngestState, EvaluationCheckpoint, EvaluationState, Ing
 from .observability import collect_runtime_telemetry
 from .reader import CorpusReader
 from .runtime import ProgressiveEvaluator
-from .semantics import DecisionBundle, ExecutionContract, ExecutionMode, TransitionLedger, TransitionReceipt
+from .semantics import DecisionBundle, ExecutionContract, ExecutionMode, TransitionLedger, TransitionReceipt, shard_decision_bundle
 from .store import FileContextStore
 from .uploads import S3MultipartAdapter, UploadSessionStore
 from .audit import audit_corpus
@@ -1052,6 +1052,7 @@ def job_detail(corpus_id: str, job_id: str):
                 "evidence": f"/api/jobs/{corpus_id}/{job_id}/evidence",
                 "transitions": f"/api/jobs/{corpus_id}/{job_id}/transitions",
                 "decision_bundle": f"/api/jobs/{corpus_id}/{job_id}/decision-bundle",
+                "decision_shards": f"/api/jobs/{corpus_id}/{job_id}/decision-bundle/shards",
             },
         }
     except FileNotFoundError as e:
@@ -1161,6 +1162,81 @@ def job_decision_bundle(
         }
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus/job not found") from e
+
+
+@app.get("/api/jobs/{corpus_id}/{job_id}/decision-bundle/shards")
+def job_decision_bundle_shards(
+    corpus_id: str,
+    job_id: str,
+    max_chars: int = Query(48_000, ge=1024, le=500_000),
+):
+    try:
+        cp = STORE.get_checkpoint(corpus_id, job_id)
+        if cp.state.decision_bundle is None:
+            return {
+                "job_id": job_id,
+                "corpus_id": corpus_id,
+                "max_chars": max_chars,
+                "total_units": 0,
+                "shard_count": 0,
+                "complete": True,
+                "shards": [],
+            }
+        bundle = DecisionBundle.model_validate(cp.state.decision_bundle)
+        shard_set = shard_decision_bundle(bundle, max_chars=max_chars)
+        return {
+            "job_id": job_id,
+            "corpus_id": corpus_id,
+            "max_chars": shard_set.max_chars,
+            "total_units": shard_set.total_units,
+            "shard_count": shard_set.shard_count,
+            "complete": shard_set.complete,
+            "shards": [
+                {
+                    "index": shard.index,
+                    "total_shards": shard.total_shards,
+                    "char_count": shard.char_count,
+                    "unit_count": len(shard.unit_ids),
+                    "category_counts": shard.category_counts,
+                    "href": (
+                        f"/api/jobs/{corpus_id}/{job_id}/decision-bundle/shards/"
+                        f"{shard.index}?max_chars={max_chars}"
+                    ),
+                }
+                for shard in shard_set.shards
+            ],
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="corpus/job not found") from e
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@app.get("/api/jobs/{corpus_id}/{job_id}/decision-bundle/shards/{shard_index}")
+def job_decision_bundle_shard(
+    corpus_id: str,
+    job_id: str,
+    shard_index: int,
+    max_chars: int = Query(48_000, ge=1024, le=500_000),
+):
+    try:
+        cp = STORE.get_checkpoint(corpus_id, job_id)
+        if cp.state.decision_bundle is None:
+            raise HTTPException(status_code=404, detail="DecisionBundle not available")
+        bundle = DecisionBundle.model_validate(cp.state.decision_bundle)
+        shard_set = shard_decision_bundle(bundle, max_chars=max_chars)
+        if shard_index < 1 or shard_index > shard_set.shard_count:
+            raise HTTPException(status_code=404, detail="decision shard not found")
+        shard = shard_set.shards[shard_index - 1]
+        return {
+            "job_id": job_id,
+            "corpus_id": corpus_id,
+            **shard.model_dump(mode="json"),
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="corpus/job not found") from e
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
 
 @app.get("/corpora/{corpus_id}/blocks/{block_id}")
