@@ -427,6 +427,9 @@ def test_runtime_blocks_final_score_when_decision_bundle_cannot_fit(tmp_path):
         def inspect(self, question, answer, block, notes):
             return block.text, True
 
+        def reduce_notes(self, question, answer, notes, level):
+            return f"L{level}: legacy explanation compressed deterministically"
+
     source = tmp_path / "many-exceptions.txt"
     source.write_text(
         "\n".join(
