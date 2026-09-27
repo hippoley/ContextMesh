@@ -374,6 +374,7 @@ def test_runtime_builds_decision_bundle_and_reduction_receipt(tmp_path):
         manifest.corpus_id,
         "When is payment due?",
         "Payment is due within 30 days.",
+        job_id="job_v16_bundle",
         contract=ExecutionContract.full_coverage(manifest.coverage_ids()),
     )
 
@@ -383,3 +384,14 @@ def test_runtime_builds_decision_bundle_and_reduction_receipt(tmp_path):
     assert result.decision_bundle["requirements"]
     assert result.semantic_units < result.evidence_atoms
     assert result.reduction_receipts >= 1
+
+    checkpoint = store.get_checkpoint(manifest.corpus_id, "job_v16_bundle")
+    merge_receipts = [
+        receipt
+        for receipt in checkpoint.state.transition_receipts
+        if receipt["action"] == "merge"
+    ]
+    assert merge_receipts
+    assert all(receipt["from_stage"] == "inspected" for receipt in merge_receipts)
+    assert all(receipt["to_stage"] == "reduced" for receipt in merge_receipts)
+    assert all(receipt["policy_id"] == "typed-canonical-reducer" for receipt in merge_receipts)
