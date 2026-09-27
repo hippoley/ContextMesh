@@ -72,8 +72,15 @@ def main() -> None:
     if duplicates:
         fail(f"duplicate HTML ids: {duplicates}")
 
-    expected_cases = {"case-cognee", "case-ragflow", "case-dify", "case-mem0"}
-    if set(manifest.get("sources", {})) != {"cognee", "ragflow", "dify", "mem0"}:
+    expected_cases = {
+        "case-contextmesh",
+        "case-cognee",
+        "case-ragflow",
+        "case-dify",
+        "case-mem0",
+    }
+    expected_sources = {"contextmesh", "cognee", "ragflow", "dify", "mem0"}
+    if set(manifest.get("sources", {})) != expected_sources:
         fail("Reality manifest is missing source provenance records")
     for key, source in manifest["sources"].items():
         if len(source.get("sha256", "")) != 64:
@@ -96,6 +103,12 @@ def main() -> None:
     for section in ("cases", "lifecycle", "timeline"):
         if f'id="{section}"' not in html:
             fail(f"public navigation target #{section} is missing")
+
+    if html.count('class="life"') != 10:
+        fail("public Reality Lab must expose the 10-stage semantic lifecycle")
+    for stage in ("Inspected", "Reduced"):
+        if f"<strong>{stage}</strong>" not in html:
+            fail(f"semantic lifecycle is missing {stage}")
 
     width, height = png_dimensions(PREVIEW_PATH)
     if (width, height) != (1280, 640):
