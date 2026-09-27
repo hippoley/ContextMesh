@@ -6,9 +6,9 @@
 
 # ContextMesh
 
-### Reality-first, full-coverage context verification for RAG and AI agents
+### Semantic execution for evidence over corpora larger than a model context window
 
-**Find where decisive evidence disappears — across retrieval, eligibility, rendering, model visibility, memory authority, and final judgment.**
+**Execute large evidence corpora without letting ranking, truncation, authority drift, or reduction silently remove what can change the final judgment.**
 
 [Interactive Lab](#interactive-reality-lab) · [Evidence](#reality-not-claims) · [60-second start](#60-second-start) · [Bring a failure](https://github.com/hippoley/ContextMesh/issues/1) · [Contributor board](https://github.com/hippoley/ContextMesh/issues/2)
 
@@ -38,13 +38,41 @@ ingested
   -> eligible
   -> rendered
   -> model-visible
+  -> inspected
   -> authority
+  -> reduced
   -> judged
 ```
 
-The project is **not another RAG framework**. It is a context-verification runtime and Reality Lab for asking a harder question:
+The project is **not another RAG framework and not a larger context window**. It is a semantic execution runtime and Reality Lab for asking a harder question:
 
-> **Did every required piece of evidence actually participate in the decision — and if not, where did it disappear?**
+> **Did every required piece of evidence remain eligible, visible, inspected, authoritative, and reduction-safe before the final decision — and if not, at which transition did its meaning change?**
+
+## Over-context execution contract
+
+**12 files · ~1.10M estimated corpus tokens · 16K simulated model window · 100% required-block inspection.**
+
+A dedicated executable contract now verifies the distinction between **large corpus** and **large prompt**:
+
+```text
+~1,100,234 estimated corpus tokens
+             ↓
+384 bounded ContextBlocks
+             ↓
+384 / 384 inspected
+             ↓
+typed SemanticEvidenceUnits
+             ↓
+DecisionBundle
+             ↓
+decisive exception survives
+```
+
+The measured synthetic run reached a corpus/window ratio of **68.765×** while the largest model-facing request was 12,652 characters against a 64,000-character budget.
+
+This does **not** claim native 1.1M-token attention or real-model semantic recall. It verifies execution shape: bounded requests, full required-block coverage, resumable transition receipts, and preservation of a decisive exception into the final decision state.
+
+[Read the result](docs/reality/Over-Context-1.1M-2026-09-27.md) · [Reproduce the benchmark](benchmarks/over_context_execution.py) · [CI run](https://github.com/hippoley/ContextMesh/actions/runs/36299795477)
 
 ## Interactive Reality Lab
 
@@ -159,12 +187,13 @@ flowchart LR
     B --> C["Coverage Manifest"]
     C --> D["Priority Scheduler"]
     D --> E["ALL required blocks"]
-    E --> F["Typed Evidence + Provenance"]
-    F --> G["Bounded Hierarchical Reduction"]
-    G --> H["Model Route / Judge"]
-    H --> I{"Coverage complete?"}
-    I -- "No" --> J["No valid final score"]
-    I -- "Yes" --> K["Final score + evidence trace"]
+    E --> F["SemanticEvidenceUnit + Provenance"]
+    F --> G["Typed Monotonic Reduction"]
+    G --> H["DecisionBundle"]
+    H --> I["Model Route / Judge"]
+    I --> J{"Execution contract satisfied?"}
+    J -- "No" --> K["No valid final score"]
+    J -- "Yes" --> L["Final score + transition receipts"]
 ```
 
 For corpora larger than the model window, ContextMesh does **not** pretend a model can attend to everything at once.
@@ -173,8 +202,9 @@ For corpora larger than the model window, ContextMesh does **not** pretend a mod
 5M raw tokens
   -> addressable blocks
   -> every required block inspected
-  -> source-linked evidence
-  -> bounded reduction
+  -> source-linked SemanticEvidenceUnits
+  -> reduction that can compress redundancy but not critical disagreement
+  -> DecisionBundle
   -> final judge
 ```
 
@@ -192,7 +222,9 @@ A healthy retrieval response is not enough. ContextMesh tracks the stages separa
 | `eligible` | rank/cutoff silently removes it |
 | `rendered` | truncation or formatting drops the decisive span |
 | `model-visible` | tool/shell/transport path hides content |
+| `inspected` | content reached the model path but was never semantically inspected |
 | `authority` | stale, contested, refuted, or superseded evidence treated as current truth |
+| `reduced` | compression removes an exception, contradiction, unresolved state, or provenance |
 | `judged` | reasoning fails even though evidence survived |
 
 This prevents eight different failure modes from collapsing into one vague “the context was missing.”
@@ -260,8 +292,10 @@ The current runtime includes:
 | Execution | resumable checkpoints + deterministic parallel traversal |
 | Jobs | durable SQLite/WAL queue with leases, retries, cancellation, worker heartbeats |
 | Uploads | resumable local multipart + S3/MinIO multipart |
-| Evidence | raw ledger + typed atoms + provenance |
-| Reduction | bounded hierarchical reduction |
+| Evidence | stable-ID typed atoms + SemanticEvidenceUnits + provenance |
+| Semantics | ExecutionContract + multi-stage coverage + hash-chained TransitionReceipts |
+| Reduction | conservative typed reduction + monotonic guard; legacy text reduction retained as explanation channel |
+| Final state | category-preserving DecisionBundle for exceptions, contradictions, requirements, facts, claims, and unresolved authority |
 | Model routing | local/cloud OpenAI-compatible routes and provider-aware route metadata |
 | Observability | SSE, failures, token/cost/latency, LMCache/vLLM telemetry |
 | Validation | Reality Probes + score-preservation benchmark + fidelity audit |
@@ -355,7 +389,10 @@ failed block != visited block
 raw evidence != reduced model state
 parallel completion order != reduction order
 retrieved != model-visible
+model-visible != inspected
 semantic similarity != authority
+compression may remove redundancy, not epistemic diversity
+critical evidence reduction requires an explicit receipt
 KV cache != context-window extension
 ```
 
