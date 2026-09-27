@@ -11,6 +11,7 @@ from contextmesh.semantics import (
     build_decision_bundle,
     reduce_semantic_units,
     render_decision_bundle_checked,
+    shard_decision_bundle,
     validate_monotonic_reduction,
 )
 
@@ -674,3 +675,101 @@ def test_workspace_recognizes_semantic_blocked_terminal_states():
     assert "decision_bundle_blocked" in js
     assert "execution_mode:'full-coverage'" in js
     assert "evidence_total" in js
+
+
+def test_lossless_decision_sharding_preserves_every_evidence_id_exactly_once():
+    units = []
+    for i in range(30):
+        kind = [
+            EvidenceKind.EXCEPTION,
+            EvidenceKind.CONTRADICTION,
+            EvidenceKind.REQUIREMENT,
+            EvidenceKind.CLAIM,
+        ][i % 4]
+        units.append(
+            SemanticEvidenceUnit(
+                id=f"unit-{i}",
+                kind=kind,
+                text=(f"unique evidence {i} " + "material detail " * 10).strip(),
+                source_ids={f"doc-{i}"},
+                authority_state=(
+                    AuthorityState.CONTESTED if i % 7 == 0 else AuthorityState.ACTIVE
+                ),
+            )
+        )
+
+    bundle = build_decision_bundle(units)
+    shard_set = shard_decision_bundle(bundle, max_chars=1800)
+
+    assert shard_set.complete is True
+    assert shard_set.shard_count > 1
+    assert all(shard.char_count <= 1800 for shard in shard_set.shards)
+
+    ids = [unit_id for shard in shard_set.shards for unit_id in shard.unit_ids]
+    assert len(ids) == len(set(ids)) == bundle.total_units
+    assert set(ids) == bundle.evidence_ids
+
+    # Contested evidence remains one evidence unit, not a duplicate copy caused by
+    # the unresolved-authority view.
+    assert sum(1 for unit_id in ids if unit_id == "unit-0") == 1
+
+
+def test_decision_shard_api_exposes_manifest_and_bounded_shard(tmp_path, monkeypatch):
+    import contextmesh.api as api_module
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.store import FileContextStore
+
+    class ManyEvidenceJudge:
+        def inspect(self, question, answer, block, notes):
+            return (
+                f"Unless exception for {block.id} applies, "
+                + ("the requirement remains uniquely controlling. " * 5),
+                True,
+            )
+
+        def reduce_notes(self, question, answer, notes, level):
+            return f"L{level}: {len(notes)} findings"
+
+        def finalize(self, state):
+            return 80.0, "ok"
+
+    source = tmp_path / "shards.txt"
+    source.write_text(
+        "\n".join(
+            f"Clause {i}: requirement {i} applies unless exception {i}."
+            for i in range(70)
+        ),
+        encoding="utf-8",
+    )
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        [source], store, "corp_v16_shards", window_chars=80, overlap_chars=0
+    )
+    monkeypatch.setattr(api_module, "STORE", store)
+
+    ProgressiveEvaluator(
+        store, ManyEvidenceJudge(), reduction_batch_size=8
+    ).evaluate(
+        manifest.corpus_id,
+        "Which exceptions matter?",
+        "None.",
+        job_id="job_v16_shards",
+        contract=ExecutionContract.full_coverage(manifest.coverage_ids()),
+    )
+
+    shard_manifest = api_module.job_decision_bundle_shards(
+        manifest.corpus_id, "job_v16_shards", max_chars=1400
+    )
+    assert shard_manifest["complete"] is True
+    assert shard_manifest["shard_count"] > 1
+    assert sum(x["unit_count"] for x in shard_manifest["shards"]) == shard_manifest["total_units"]
+    assert all(x["char_count"] <= 1400 for x in shard_manifest["shards"])
+
+    first = api_module.job_decision_bundle_shard(
+        manifest.corpus_id, "job_v16_shards", shard_index=1, max_chars=1400
+    )
+    assert first["index"] == 1
+    assert first["char_count"] <= 1400
+    assert first["unit_ids"]
+    assert "DECISION_SHARD 1/" in first["text"]
