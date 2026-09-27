@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections import Counter
 from typing import Iterable
@@ -27,6 +29,20 @@ def _sentences(text: str) -> list[str]:
 def _clip(text: str, limit: int = 320) -> str:
     text = " ".join((text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
+
+
+def _stable_atom_id(block_id: str, atom: EvidenceAtom) -> str:
+    payload = {
+        "block_id": block_id,
+        "kind": atom.kind.value,
+        "text": " ".join(atom.text.split()).strip().lower(),
+        "normalized_value": (atom.normalized_value or "").strip().lower(),
+        "unit": (atom.unit or "").strip().lower(),
+        "date": atom.date or "",
+        "polarity": atom.polarity,
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return "ev_" + hashlib.sha256(raw).hexdigest()[:20]
 
 
 def _dedupe(atoms: Iterable[EvidenceAtom]) -> list[EvidenceAtom]:
@@ -107,7 +123,11 @@ def extract_evidence_atoms(block: ContextBlock, note: str = "", *, max_atoms: in
     if claim_source:
         atoms.append(EvidenceAtom(kind=EvidenceKind.CLAIM, text=_clip(claim_source), confidence=0.8))
 
-    return _dedupe(atoms)[:max_atoms]
+    deduped = _dedupe(atoms)[:max_atoms]
+    return [
+        atom.model_copy(update={"id": atom.id or _stable_atom_id(block.id, atom)})
+        for atom in deduped
+    ]
 
 
 def evidence_kind_counts(evidence: Iterable[Evidence]) -> dict[str, int]:
