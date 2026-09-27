@@ -520,8 +520,25 @@ def build_decision_bundle(units: Iterable[SemanticEvidenceUnit]) -> DecisionBund
     return bundle
 
 
-def render_decision_bundle(bundle: DecisionBundle, *, max_chars: int = 48_000) -> str:
-    """Render a bounded decision-facing view without erasing critical categories."""
+class DecisionBundleRender(BaseModel):
+    text: str
+    complete: bool
+    required_chars: int
+    max_chars: int
+    omitted_ids: list[str] = Field(default_factory=list)
+
+
+def render_decision_bundle_checked(
+    bundle: DecisionBundle,
+    *,
+    max_chars: int = 48_000,
+) -> DecisionBundleRender:
+    """Render the decision state while making overflow explicit.
+
+    A final judge must never mistake a truncated DecisionBundle for a complete one.
+    Until a safe typed reducer can shrink the bundle, overflow is a finalization
+    blocker rather than a silent lossy transform.
+    """
 
     sections = [
         ("EXCEPTIONS", bundle.exceptions),
@@ -531,34 +548,66 @@ def render_decision_bundle(bundle: DecisionBundle, *, max_chars: int = 48_000) -
         ("CLAIMS", bundle.claims),
         ("FACTS", bundle.facts),
     ]
-    lines = [
+    all_lines = [
         (
             f"DECISION_BUNDLE total={bundle.total_units} "
             f"sources={len(bundle.source_ids)} kinds={bundle.kind_counts}"
         )
     ]
-
-    def append_line(line: str) -> bool:
-        current = sum(len(x) + 1 for x in lines)
-        if current + len(line) + 1 > max_chars:
-            return False
-        lines.append(line)
-        return True
+    line_ids: list[str | None] = [None]
 
     for label, items in sections:
         if not items:
             continue
-        if not append_line(f"\n[{label}] count={len(items)}"):
-            break
+        all_lines.append(f"\n[{label}] count={len(items)}")
+        line_ids.append(None)
         for unit in items:
             source_text = ",".join(sorted(unit.source_ids))
-            line = (
+            all_lines.append(
                 f"- id={unit.id} kind={unit.kind.value} authority={unit.authority_state.value} "
                 f"sources={source_text} :: {unit.text}"
             )
-            if not append_line(line):
-                # Critical categories are rendered first. If the bounded view fills,
-                # lower-priority claims/facts are the first material omitted.
-                return "\n".join(lines)
+            line_ids.append(unit.id)
 
-    return "\n".join(lines)
+    required_chars = sum(len(line) + 1 for line in all_lines)
+    if required_chars <= max_chars:
+        return DecisionBundleRender(
+            text="\n".join(all_lines),
+            complete=True,
+            required_chars=required_chars,
+            max_chars=max_chars,
+        )
+
+    rendered: list[str] = []
+    omitted_ids: list[str] = []
+    used = 0
+    overflowed = False
+    for line, unit_id in zip(all_lines, line_ids):
+        cost = len(line) + 1
+        if not overflowed and used + cost <= max_chars:
+            rendered.append(line)
+            used += cost
+            continue
+        overflowed = True
+        if unit_id is not None:
+            omitted_ids.append(unit_id)
+
+    # Once overflow begins, later units are intentionally not substituted into the
+    # final decision state. The preview is diagnostic only; callers must check
+    # complete before using it for judgment.
+    return DecisionBundleRender(
+        text="\n".join(rendered),
+        complete=False,
+        required_chars=required_chars,
+        max_chars=max_chars,
+        omitted_ids=omitted_ids,
+    )
+
+
+def render_decision_bundle(bundle: DecisionBundle, *, max_chars: int = 48_000) -> str:
+    """Compatibility helper for non-judgment display paths.
+
+    Callers that make a final decision must use render_decision_bundle_checked and
+    require complete=true.
+    """
+    return render_decision_bundle_checked(bundle, max_chars=max_chars).text
