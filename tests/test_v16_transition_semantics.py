@@ -470,3 +470,70 @@ def test_runtime_blocks_final_score_when_decision_bundle_cannot_fit(tmp_path):
     assert result.finalization_blockers == ["decision-bundle-overflow"]
     assert "refusing lossy finalization" in result.rationale.lower()
     assert result.decision_bundle is not None
+
+
+def test_api_materializes_full_coverage_contract_and_exposes_semantic_state(tmp_path, monkeypatch):
+    import contextmesh.api as api_module
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.judges import HeuristicJudge
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.semantics import ExecutionMode
+    from contextmesh.store import FileContextStore
+
+    source = tmp_path / "api-contract.txt"
+    source.write_text(
+        "Unless emergency maintenance applies, availability must remain above 99.95%.",
+        encoding="utf-8",
+    )
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths([source], store, "corp_v16_api", window_chars=200, overlap_chars=0)
+    monkeypatch.setattr(api_module, "STORE", store)
+
+    req = api_module.EvaluateRequest(
+        corpus_id=manifest.corpus_id,
+        question="Is downtime always allowed?",
+        answer="Yes.",
+        execution_mode=ExecutionMode.FULL_COVERAGE,
+    )
+    contract = api_module._contract_for_request(req)
+    assert contract.mode == ExecutionMode.FULL_COVERAGE
+    assert contract.required_source_ids == set(manifest.coverage_ids())
+
+    result = ProgressiveEvaluator(store, HeuristicJudge()).evaluate(
+        manifest.corpus_id,
+        req.question,
+        req.answer,
+        job_id="job_v16_api",
+        contract=contract,
+    )
+    assert result.complete is True
+
+    detail = api_module.job_detail(manifest.corpus_id, "job_v16_api")
+    assert detail["execution_contract"]["mode"] == "full-coverage"
+    assert detail["transition_receipts"] == manifest.required_blocks
+    assert detail["transition_chain_valid"] is True
+    assert detail["semantic_units"] >= 0
+    assert detail["decision_bundle"] is not None
+
+
+def test_api_rejects_retrieval_mode_on_full_coverage_job_endpoint(tmp_path, monkeypatch):
+    import pytest
+    import contextmesh.api as api_module
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.semantics import ExecutionMode
+    from contextmesh.store import FileContextStore
+
+    source = tmp_path / "retrieval.txt"
+    source.write_text("retrieval source", encoding="utf-8")
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths([source], store, "corp_v16_retrieval", window_chars=200, overlap_chars=0)
+    monkeypatch.setattr(api_module, "STORE", store)
+
+    req = api_module.EvaluateRequest(
+        corpus_id=manifest.corpus_id,
+        question="find retrieval source",
+        answer="",
+        execution_mode=ExecutionMode.RETRIEVAL,
+    )
+    with pytest.raises(ValueError, match="served by /api/corpora"):
+        api_module._contract_for_request(req)
