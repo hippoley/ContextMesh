@@ -685,6 +685,39 @@ class ProgressiveEvaluator:
         self._flush_working_notes(state)
         self._compact_reduced_notes(state)
         self._reduce_typed_state(state)
+
+        preflight_finalize = getattr(self.judge, "preflight_finalize", None)
+        if callable(preflight_finalize):
+            reason = preflight_finalize(state)
+            if reason:
+                self._sync_usage(state)
+                blockers = ["decision-bundle-overflow"]
+                self._checkpoint(
+                    job_id,
+                    corpus_id,
+                    ordered,
+                    len(ordered),
+                    state,
+                    False,
+                    status="decision_bundle_blocked",
+                )
+                self._emit_progress(
+                    job_id,
+                    corpus_id,
+                    coverage,
+                    state,
+                    "decision_bundle_blocked",
+                )
+                return self._result(
+                    corpus_id,
+                    job_id,
+                    state,
+                    coverage,
+                    score=None,
+                    rationale=str(reason),
+                    finalization_blockers=blockers,
+                )
+
         score, rationale = self.judge.finalize(state)
         self._sync_usage(state)
         self._checkpoint(job_id, corpus_id, ordered, len(ordered), state, True, final_score=score, final_rationale=rationale, status="complete")
