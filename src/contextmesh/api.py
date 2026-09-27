@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import __version__
 from .benchmark import ScorePreservationBenchmark
 from .events import EventBus
 from .evidence import evidence_kind_counts
@@ -29,6 +30,7 @@ from .models import AssetIngestState, EvaluationCheckpoint, EvaluationState, Ing
 from .observability import collect_runtime_telemetry
 from .reader import CorpusReader
 from .runtime import ProgressiveEvaluator
+from .semantics import ExecutionContract, ExecutionMode, TransitionLedger, TransitionReceipt
 from .store import FileContextStore
 from .uploads import S3MultipartAdapter, UploadSessionStore
 from .audit import audit_corpus
@@ -73,7 +75,7 @@ async def _lifespan(_app: FastAPI):
         if _WORKER_THREAD and _WORKER_THREAD.is_alive():
             _WORKER_THREAD.join(timeout=2.0)
 
-app = FastAPI(title="ContextMesh", version="0.13.0", lifespan=_lifespan)
+app = FastAPI(title="ContextMesh", version=__version__, lifespan=_lifespan)
 app.mount("/static", StaticFiles(directory=str(WEB_ROOT)), name="static")
 
 
@@ -93,6 +95,7 @@ class EvaluateRequest(BaseModel):
     reduction_batch_size: int = 32
     max_workers: int = 1
     retry_attempts: int = 1
+    execution_mode: ExecutionMode = ExecutionMode.FULL_COVERAGE
 
 
 class BenchmarkRequest(EvaluateRequest):
@@ -614,6 +617,21 @@ def _effective_workers(req: EvaluateRequest) -> int:
         return max(1, min(int(req.max_workers), int(route.max_parallel_requests)))
     return max(1, int(req.max_workers))
 
+def _contract_for_request(req: EvaluateRequest) -> ExecutionContract:
+    manifest = STORE.get_manifest(req.corpus_id)
+    if req.execution_mode == ExecutionMode.FULL_COVERAGE:
+        return ExecutionContract.full_coverage(manifest.coverage_ids())
+    if req.execution_mode == ExecutionMode.RETRIEVAL:
+        raise ValueError(
+            "execution_mode=retrieval is served by /api/corpora/{corpus_id}/search; "
+            "the evaluation-jobs endpoint currently executes full-coverage contracts"
+        )
+    raise ValueError(
+        f"execution_mode={req.execution_mode.value} is defined by the semantic runtime "
+        "but is not yet executable through /api/evaluation-jobs"
+    )
+
+
 def _judge_for_request(req: EvaluateRequest):
     if req.route_id:
         route = _route_for_request(req)
@@ -633,6 +651,7 @@ def _evaluation_progress(data: dict) -> None:
 def _run_evaluation_job(req: EvaluateRequest, job_id: str) -> None:
     try:
         judge = _judge_for_request(req)
+        contract = _contract_for_request(req)
         ProgressiveEvaluator(
             STORE,
             judge,
@@ -650,6 +669,7 @@ def _run_evaluation_job(req: EvaluateRequest, job_id: str) -> None:
             job_id=job_id,
             resume=req.resume,
             max_blocks=None,
+            contract=contract,
         )
     except Exception as exc:
         try:
@@ -667,6 +687,7 @@ def create_evaluation_job(req: EvaluateRequest):
     try:
         STORE.get_manifest(req.corpus_id)
         _judge_for_request(req)  # validate route synchronously
+        _contract_for_request(req)  # validate execution semantics synchronously
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus not found") from e
     except ValueError as e:
@@ -681,7 +702,14 @@ def create_evaluation_job(req: EvaluateRequest):
     )
     EVENTS.publish("evaluation", {"job_id": job_id, "corpus_id": req.corpus_id, "queue_id": queued.id, "status": "queued", "coverage": 0.0})
     _ensure_embedded_worker()
-    return {"accepted": True, "job_id": job_id, "queue_id": queued.id, "corpus_id": req.corpus_id, "events": "/api/events"}
+    return {
+        "accepted": True,
+        "job_id": job_id,
+        "queue_id": queued.id,
+        "corpus_id": req.corpus_id,
+        "execution_mode": req.execution_mode.value,
+        "events": "/api/events",
+    }
 
 
 @app.post("/api/evaluation-jobs/{corpus_id}/{job_id}/cancel")
@@ -710,9 +738,17 @@ def resume_evaluation_job(corpus_id: str, job_id: str, route_id: str | None = No
     if cp.complete:
         return {"accepted": False, "job_id": job_id, "status": "complete"}
     inferred_route = route_id or cp.state.usage.route_id
+    saved_mode = (cp.state.execution_contract or {}).get("mode", ExecutionMode.FULL_COVERAGE.value)
     req = EvaluateRequest(
-        corpus_id=corpus_id, question=cp.state.question, answer=cp.state.answer,
-        route_id=inferred_route, job_id=job_id, resume=True, max_workers=4, retry_attempts=2,
+        corpus_id=corpus_id,
+        question=cp.state.question,
+        answer=cp.state.answer,
+        route_id=inferred_route,
+        job_id=job_id,
+        resume=True,
+        max_workers=4,
+        retry_attempts=2,
+        execution_mode=ExecutionMode(saved_mode),
     )
     try:
         _judge_for_request(req)
@@ -935,6 +971,17 @@ def job_detail(corpus_id: str, job_id: str):
             "semantic_coverage": manifest.semantic_coverage,
             "ingest_ready": manifest.coverage_ready,
             "unresolved_units": manifest.unresolved_units,
+            "execution_contract": cp.state.execution_contract,
+            "transition_receipts": len(cp.state.transition_receipts),
+            "transition_chain_valid": TransitionLedger(
+                receipts=[
+                    TransitionReceipt.model_validate(x)
+                    for x in cp.state.transition_receipts
+                ]
+            ).verify_chain(),
+            "semantic_units": len(cp.state.semantic_units),
+            "reduction_receipts": len(cp.state.reduction_receipts),
+            "decision_bundle": cp.state.decision_bundle,
         }
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus/job not found") from e
