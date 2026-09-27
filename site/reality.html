@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <meta name="theme-color" content="#080a0d"/>
 <meta name="contextmesh-build" content="2026-09-26-r3"/>
-<meta name="description" content="ContextMesh Reality Lab — inspect where decisive evidence disappears across retrieval, eligibility, rendering, model visibility, authority, and judgment."/>
+<meta name="description" content="ContextMesh Reality Lab — inspect semantic transitions across retrieval, eligibility, model visibility, inspection, authority, reduction, and judgment."/>
 <link rel="canonical" href="https://hippoley.github.io/ContextMesh/"/>
 <meta property="og:title" content="ContextMesh — Reality Lab"/>
-<meta property="og:description" content="Evidence can exist and still disappear. Inspect verified failures across retrieval, eligibility, rendering, model visibility, authority, and judgment."/>
+<meta property="og:description" content="Evidence can exist and still disappear. Inspect verified semantic transitions from retrieval and visibility through inspection, authority, reduction, and judgment."/>
 <meta property="og:type" content="website"/>
 <meta property="og:url" content="https://hippoley.github.io/ContextMesh/"/>
 <meta property="og:image" content="https://hippoley.github.io/ContextMesh/assets/contextmesh-social-preview.png"/>
@@ -17,7 +17,7 @@
 <meta property="og:image:alt" content="ContextMesh — find where decisive evidence disappears"/>
 <meta name="twitter:card" content="summary_large_image"/>
 <meta name="twitter:title" content="ContextMesh — Reality Lab"/>
-<meta name="twitter:description" content="A public correctness lab for retrieval, visibility, authority, and long-context failures."/>
+<meta name="twitter:description" content="A public correctness lab for semantic execution across large evidence corpora."/>
 <meta name="twitter:image" content="https://hippoley.github.io/ContextMesh/assets/contextmesh-social-preview.png"/>
 <title>ContextMesh — Reality Lab</title>
 <style>
@@ -185,9 +185,9 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
 <main class="wrap" id="main">
   <section class="hero">
     <div>
-      <div class="kicker">Reality-first context verification</div>
+      <div class="kicker">Reality-first semantic execution</div>
       <h1>Evidence can exist<br/><em>and still disappear.</em></h1>
-      <p class="hero-copy">ContextMesh traces the exact boundary where decisive evidence stops participating: retrieval, eligibility, rendering, model visibility, authority, or judgment. <strong>The lab publishes failures that survive contact with real upstream systems — including results that weaken our own claims.</strong></p>
+      <p class="hero-copy">ContextMesh traces consequential changes in evidence state: retrieval, eligibility, rendering, model visibility, inspection, authority, reduction, and judgment. <strong>The lab separates external reproductions from ContextMesh self-contracts, and keeps results that weaken our own claims.</strong></p>
       <div class="hero-actions">
         <a class="btn primary" href="#cases">Inspect the evidence ↓</a>
         <a class="btn" href="https://github.com/hippoley/ContextMesh/issues/1">Bring a failure ↗</a>
@@ -201,6 +201,7 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
         <button class="deck-tab" data-case="ragflow" aria-pressed="false">RAGFlow</button>
         <button class="deck-tab" data-case="dify" aria-pressed="false">Dify</button>
         <button class="deck-tab" data-case="mem0" aria-pressed="false">Mem0</button>
+        <button class="deck-tab" data-case="contextmesh" aria-pressed="false">ContextMesh</button>
       </div>
       <div class="deck-main" aria-live="polite">
         <div class="deck-label" id="deckLabel">decisive rank</div>
@@ -212,9 +213,9 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
   </section>
 
   <section class="index" aria-label="Reality Lab summary">
-    <div class="index-item"><span>Verified mechanisms</span><strong>4 systems</strong><small>Cognee · RAGFlow · Dify · Mem0</small></div>
+    <div class="index-item"><span>Evidence surfaces</span><strong>4 + 1</strong><small>4 upstream systems · 1 ContextMesh self-contract</small></div>
     <div class="index-item"><span>Before / after deltas</span><strong>2 executable</strong><small>Cognee MMR · RAGFlow D24</small></div>
-    <div class="index-item"><span>Evidence lifecycle</span><strong>8 stages</strong><small>from ingest to judgment</small></div>
+    <div class="index-item"><span>Evidence lifecycle</span><strong>10 stages</strong><small>from ingest through inspection and reduction to judgment</small></div>
     <div class="index-item"><span>Method</span><strong>falsifiable</strong><small>counterexamples are first-class results</small></div>
   </section>
 
@@ -229,10 +230,39 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-off
       <button class="filter" data-filter="model-visible" aria-pressed="false">Model visibility</button>
       <button class="filter" data-filter="authority" aria-pressed="false">Authority</button>
       <button class="filter" data-filter="budget" aria-pressed="false">Budget semantics</button>
+      <button class="filter" data-filter="inspected" aria-pressed="false">Over-context execution</button>
     </div>
 
     <div class="cases">
-      <article class="case" id="case-cognee" data-stage="eligible" data-case="cognee">
+      <article class="case" id="case-contextmesh" data-stage="inspected" data-stages="inspected reduced" data-case="contextmesh">
+        <div class="case-top"><div class="case-project"><strong>ContextMesh</strong>synthetic over-context execution contract</div><span class="pill">self-contract</span></div>
+        <h3>~1.10M estimated corpus tokens executed through a 16K simulated model window.</h3>
+        <p>This is a ContextMesh self-test, not an external framework comparison. Twelve files were split into 384 required blocks; every block was inspected through bounded requests, the transition hash chain remained valid, and a decisive exception hidden in file 11 survived into the DecisionBundle.</p>
+        <div class="case-delta"><div class="state before"><span>external corpus</span><strong>~1.10M estimated tokens</strong></div><i>→</i><div class="state after"><span>bounded execution</span><strong>384 / 384 inspected</strong></div></div>
+        <div class="case-actions"><div><button class="inspect" aria-expanded="false">Inspect trace</button><button class="share-case" aria-label="Share this Reality case">Share</button></div><div class="case-links"><a class="case-link" href="https://github.com/hippoley/ContextMesh/actions/runs/36299795477">run ↗</a><a class="case-link" href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Over-Context-1.1M-2026-09-27.md">evidence ↗</a></div></div>
+        <div class="case-detail"><pre>files                         12
+estimated corpus tokens      1,100,234
+simulated model window       16,000 tokens
+corpus / window              68.765x
+
+required blocks              384
+visited / inspected          384 / 384
+coverage                     100%
+
+max observed request         12,652 chars
+configured request budget    64,000 chars
+request budget respected     true
+
+transition receipts          384
+transition chain valid       true
+decisive exception survived  true
+
+Boundary:
+This proves bounded execution shape and evidence preservation,
+not native 1.1M-token attention or perfect real-model semantic recall.</pre></div>
+      </article>
+
+      <article class="case" id="case-cognee" data-stage="eligible" data-stages="eligible" data-case="cognee">
         <div class="case-top"><div class="case-project"><strong>Cognee</strong>1.6.0 CHUNKS + PR #3707 MMR</div><span class="pill">falsification result</span></div>
         <h3>Rank 17 was a real blind spot. MMR moved the decisive source to rank 2.</h3>
         <p>The baseline reproduced the original crowding failure. Replaying the exact unmerged MMR selector over the same candidate order and embeddings recovered the decisive source in both controlled fixtures.</p>
@@ -251,7 +281,7 @@ MMR fixes these controlled crowding cases.
 Full coverage remains a different contract: rank does not define final eligibility.</pre></div>
       </article>
 
-      <article class="case" id="case-ragflow" data-stage="budget" data-case="ragflow">
+      <article class="case" id="case-ragflow" data-stage="budget" data-stages="budget" data-case="ragflow">
         <div class="case-top"><div class="case-project"><strong>RAGFlow</strong>current main · D24</div><span class="pill amber">validated patch</span></div>
         <h3>The model had a 128K context window, but chat fitting behaved like 16K.</h3>
         <p>The resolver already carried separate context and output limits. The execution path collapsed them back together. A minimal split-budget patch now passes the same before/after contract probe and targeted RAGFlow service tests.</p>
@@ -273,7 +303,7 @@ after
 CGO_ENABLED=0 go test ./internal/service ...  PASS</pre></div>
       </article>
 
-      <article class="case" id="case-dify" data-stage="model-visible" data-case="dify">
+      <article class="case" id="case-dify" data-stage="model-visible" data-stages="model-visible" data-case="dify">
         <div class="case-top"><div class="case-project"><strong>Dify</strong>current-main renderer boundary</div><span class="pill">reproduced</span></div>
         <h3>The source was read successfully. The decisive middle instruction still never reached the model.</h3>
         <p>An 11,343-byte synthetic instruction source placed a must-follow marker in the middle. The ordinary shell observation exposed roughly 8 KiB of head + tail, making the decisive span model-invisible.</p>
@@ -292,7 +322,7 @@ Failure stage:
 rendered -> model-visible</pre></div>
       </article>
 
-      <article class="case" id="case-mem0" data-stage="authority" data-case="mem0">
+      <article class="case" id="case-mem0" data-stage="authority" data-stages="authority" data-case="mem0">
         <div class="case-top"><div class="case-project"><strong>Mem0</strong>2.2.0 · local Qdrant + FastEmbed</div><span class="pill">live replay</span></div>
         <h3>Both conflicting memories were retrievable. Similarity could not decide which one was authoritative.</h3>
         <p>The active verified fact and newer contested fact had close semantic scores. Explicit lifecycle filtering, not ranking alone, made authority policy visible.</p>
@@ -326,11 +356,13 @@ retrieval succeeds; authority remains unresolved without lifecycle policy.</pre>
         <button class="life" data-life="all" aria-pressed="false"><b>1</b><strong>Ingested</strong><small>source entered runtime</small></button>
         <button class="life" data-life="all" aria-pressed="false"><b>2</b><strong>Stored</strong><small>addressable payload exists</small></button>
         <button class="life" data-life="all" aria-pressed="false"><b>3</b><strong>Retrieved</strong><small>candidate surfaced</small></button>
-        <button class="life" data-life="eligible" aria-pressed="false"><b>4</b><strong>Eligible</strong><small>rank/cutoff can remove it</small></button>
-        <button class="life" data-life="model-visible" aria-pressed="false"><b>5</b><strong>Rendered</strong><small>transport preserves span</small></button>
-        <button class="life" data-life="model-visible" aria-pressed="false"><b>6</b><strong>Model-visible</strong><small>decisive semantics survive</small></button>
-        <button class="life" data-life="authority" aria-pressed="false"><b>7</b><strong>Authority</strong><small>active / contested / stale</small></button>
-        <button class="life" data-life="all" aria-pressed="false"><b>8</b><strong>Judged</strong><small>verdict over usable evidence</small></button>
+        <button class="life" data-life="eligible" aria-pressed="false"><b>4</b><strong>Eligible</strong><small>policy still permits participation</small></button>
+        <button class="life" data-life="model-visible" aria-pressed="false"><b>5</b><strong>Rendered</strong><small>transport preserves representation</small></button>
+        <button class="life" data-life="model-visible" aria-pressed="false"><b>6</b><strong>Model-visible</strong><small>decisive semantics survive transport</small></button>
+        <button class="life" data-life="inspected" aria-pressed="false"><b>7</b><strong>Inspected</strong><small>semantic inspection actually completed</small></button>
+        <button class="life" data-life="authority" aria-pressed="false"><b>8</b><strong>Authority</strong><small>active / contested / stale</small></button>
+        <button class="life" data-life="reduced" aria-pressed="false"><b>9</b><strong>Reduced</strong><small>compression preserves epistemic diversity</small></button>
+        <button class="life" data-life="all" aria-pressed="false"><b>10</b><strong>Judged</strong><small>contract permits final verdict</small></button>
       </div>
     </div>
   </section>
@@ -345,6 +377,7 @@ retrieval succeeds; authority remains unresolved without lifecycle policy.</pre>
       <div class="event featured"><time>Sep 26</time><div class="event-dot"></div><div class="event-body"><h3>Cognee MMR weakened our original claim</h3><p>The exact selector from PR #3707 moved both decisive sources from rank 17 to rank 2. The lab records that as a positive upstream result, not as a loss to hide.</p><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Cognee-PR3707-MMR-rank17-2026-09-26.md">open before/after ↗</a></div></div>
       <div class="event featured"><time>Sep 26</time><div class="event-dot"></div><div class="event-body"><h3>RAGFlow D24 moved from proof to validated patch</h3><p>Current main reproduced the budget contract failure. The minimal split-budget patch passed targeted internal/service Go tests.</p><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/RAGFlow-D24-before-after-2026-09-26.md">open patch evidence ↗</a></div></div>
       <div class="event"><time>Sep 26</time><div class="event-dot"></div><div class="event-body"><h3>External contracts tested in Graphiti and Dify</h3><p>Current upstream discussions now cover ingestion verification, traversal frontier survival, memory authority, retrieval diagnostics, hidden-middle visibility, and replay-safe capability state.</p><a href="https://github.com/hippoley/ContextMesh/issues/2">open contributor board ↗</a></div></div>
+      <div class="event featured"><time>Sep 27</time><div class="event-dot"></div><div class="event-body"><h3>Over-context execution became an executable self-contract</h3><p>A 12-file synthetic corpus at ~1.10M estimated tokens was executed through a 16K simulated model window with 384/384 required blocks inspected. v0.16 also made inspection and reduction explicit semantic transitions, introduced stable evidence identity, monotonic typed reduction, DecisionBundle overflow blocking, and lossless decision sharding.</p><a href="https://github.com/hippoley/ContextMesh/blob/main/docs/reality/Over-Context-1.1M-2026-09-27.md">open self-contract ↗</a></div></div>
     </div>
   </section>
 
@@ -361,7 +394,8 @@ let signals={
   cognee:{label:"decisive rank",before:"17",after:"2",copy:"Cognee PR #3707's exact MMR selector moved the decisive source into top-5 in both controlled fixtures.",trace:[["retrieved #17","hit"],["eligible","loss"],["MMR #2","hit"],["visible","hit"]]},
   ragflow:{label:"effective fit budget",before:"16K",after:"128K",copy:"The patch keeps context fitting on context_length while preserving max_output as the generation ceiling.",trace:[["resolved","hit"],["budget bound","loss"],["split contract","hit"],["Go tests","hit"]]},
   dify:{label:"decisive span",before:"read",after:"hidden",copy:"The instruction source loaded, but the middle span disappeared at the rendering/model-visibility boundary.",trace:[["selected","hit"],["read","hit"],["rendered","loss"],["model-visible","loss"]]},
-  mem0:{label:"authority",before:"2 facts",after:"1 active",copy:"Semantic retrieval exposed both histories; lifecycle state, not similarity alone, resolved which fact stayed authoritative.",trace:[["stored","hit"],["retrieved","hit"],["authority","loss"],["filtered","hit"]]}
+  mem0:{label:"authority",before:"2 facts",after:"1 active",copy:"Semantic retrieval exposed both histories; lifecycle state, not similarity alone, resolved which fact stayed authoritative.",trace:[["stored","hit"],["retrieved","hit"],["authority","loss"],["filtered","hit"]]},
+  contextmesh:{label:"corpus / request budget",before:"1.10M",after:"16K-bound",copy:"Synthetic self-contract: 384/384 required blocks were inspected through bounded requests and the decisive exception survived into DecisionBundle.",trace:[["68.8x corpus/window","hit"],["bounded requests","hit"],["384/384 inspected","hit"],["exception survived","hit"]]}
 };
 function renderSignal(key){
   const d=signals[key];
@@ -410,7 +444,7 @@ function applyFilter(name){
     b.classList.toggle("active",active);
     b.setAttribute("aria-pressed",String(active));
   });
-  document.querySelectorAll(".case").forEach(c=>c.classList.toggle("hidden",name!=="all"&&c.dataset.stage!==name));
+  document.querySelectorAll(".case").forEach(c=>{const stages=(c.dataset.stages||c.dataset.stage||"").split(/\s+/).filter(Boolean);c.classList.toggle("hidden",name!=="all"&&!stages.includes(name));});
 }
 document.querySelectorAll(".filter").forEach(b=>b.addEventListener("click",()=>applyFilter(b.dataset.filter)));
 document.querySelectorAll(".life").forEach(b=>b.addEventListener("click",()=>{applyFilter(b.dataset.life);document.querySelector("#cases").scrollIntoView({behavior:"smooth",block:"start"});}));
