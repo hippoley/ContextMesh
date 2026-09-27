@@ -10,7 +10,7 @@ from typing import Any
 
 from .evidence import render_typed_evidence
 from .models import ContextBlock, EvaluationState, Modality, UsageMetrics
-from .semantics import DecisionBundle, render_decision_bundle
+from .semantics import DecisionBundle, render_decision_bundle_checked
 
 
 def _content_text(value: Any) -> str:
@@ -359,6 +359,22 @@ class OpenAICompatibleJudge:
         )
         return self._chat([{"role": "user", "content": prompt}])
 
+    def preflight_finalize(self, state: EvaluationState) -> str | None:
+        if state.decision_bundle is None:
+            return None
+        limit = self._max_text_chars(state.question, state.answer, overhead_chars=7000)
+        bundle_budget = max(6_000, min(48_000, (limit // 2) if limit else 48_000))
+        bundle = DecisionBundle.model_validate(state.decision_bundle)
+        rendered = render_decision_bundle_checked(bundle, max_chars=bundle_budget)
+        if rendered.complete:
+            return None
+        return (
+            "DecisionBundle exceeds the final model-facing budget; refusing lossy "
+            f"finalization until typed reduction can preserve the full decision state. "
+            f"required_chars={rendered.required_chars}, max_chars={rendered.max_chars}, "
+            f"omitted_units={len(rendered.omitted_ids)}"
+        )
+
     def finalize(self, state: EvaluationState) -> tuple[float, str]:
         notes = state.model_context_notes()
         limit = self._max_text_chars(state.question, state.answer, overhead_chars=7000)
@@ -372,7 +388,14 @@ class OpenAICompatibleJudge:
         bundle_budget = max(6_000, min(48_000, (limit // 2) if limit else 48_000))
         if state.decision_bundle is not None:
             bundle = DecisionBundle.model_validate(state.decision_bundle)
-            decision_state = render_decision_bundle(bundle, max_chars=bundle_budget)
+            rendered_bundle = render_decision_bundle_checked(bundle, max_chars=bundle_budget)
+            if not rendered_bundle.complete:
+                raise RuntimeError(
+                    "refusing to judge an incomplete DecisionBundle: "
+                    f"required_chars={rendered_bundle.required_chars} "
+                    f"max_chars={rendered_bundle.max_chars}"
+                )
+            decision_state = rendered_bundle.text
         else:
             decision_state = "(no structured DecisionBundle available)"
 
