@@ -8,7 +8,7 @@ from typing import Any, Iterable
 from pydantic import BaseModel, Field
 
 from .diagnostics import EvidenceStage
-from .models import EvidenceKind
+from .models import Evidence, EvidenceKind
 
 
 class ExecutionMode(str, Enum):
@@ -360,3 +360,205 @@ def validate_monotonic_reduction(
         errors.append(f"input has no reduction disposition: {unit.id}")
 
     return ReductionValidation(ok=not errors, errors=errors, warnings=warnings)
+
+
+class DecisionBundle(BaseModel):
+    claims: list[SemanticEvidenceUnit] = Field(default_factory=list)
+    exceptions: list[SemanticEvidenceUnit] = Field(default_factory=list)
+    contradictions: list[SemanticEvidenceUnit] = Field(default_factory=list)
+    requirements: list[SemanticEvidenceUnit] = Field(default_factory=list)
+    facts: list[SemanticEvidenceUnit] = Field(default_factory=list)
+    unresolved_authority: list[SemanticEvidenceUnit] = Field(default_factory=list)
+    source_ids: set[str] = Field(default_factory=set)
+    evidence_ids: set[str] = Field(default_factory=set)
+    kind_counts: dict[str, int] = Field(default_factory=dict)
+
+    @property
+    def total_units(self) -> int:
+        return len(self.evidence_ids)
+
+
+def semantic_units_from_evidence(evidence: Iterable[Evidence]) -> list[SemanticEvidenceUnit]:
+    units: list[SemanticEvidenceUnit] = []
+    for item in evidence:
+        for atom in item.atoms:
+            atom_id = atom.id or (
+                "ev_" + hashlib.sha256(
+                    (
+                        item.block_id
+                        + "\x1f"
+                        + atom.kind.value
+                        + "\x1f"
+                        + " ".join(atom.text.split()).lower()
+                    ).encode("utf-8")
+                ).hexdigest()[:20]
+            )
+            units.append(
+                SemanticEvidenceUnit(
+                    id=atom_id,
+                    kind=atom.kind,
+                    text=atom.text,
+                    source_ids={item.block_id},
+                    decisive=("decisive" in atom.tags),
+                    metadata={
+                        "source_path": item.source.path,
+                        "locator": item.source.locator,
+                        "normalized_value": atom.normalized_value,
+                        "unit": atom.unit,
+                        "date": atom.date,
+                        "polarity": atom.polarity,
+                        "confidence": atom.confidence,
+                        "tags": list(atom.tags),
+                    },
+                )
+            )
+    return units
+
+
+def _canonical_unit_key(unit: SemanticEvidenceUnit) -> tuple:
+    normalized_value = str(unit.metadata.get("normalized_value") or "").strip().lower()
+    canonical_text = " ".join(unit.text.split()).strip().lower()
+    if normalized_value:
+        semantic_value = normalized_value
+    else:
+        semantic_value = canonical_text
+    return (
+        unit.kind.value,
+        semantic_value,
+        str(unit.metadata.get("unit") or "").strip().lower(),
+        str(unit.metadata.get("date") or "").strip().lower(),
+        str(unit.metadata.get("polarity") or "affirm").strip().lower(),
+        unit.authority_state.value,
+    )
+
+
+def reduce_semantic_units(
+    units: Iterable[SemanticEvidenceUnit],
+) -> tuple[list[SemanticEvidenceUnit], ReductionReceipt, ReductionValidation]:
+    """Conservative typed reduction.
+
+    v0.16 deliberately merges only canonical duplicates. It does not ask a model to
+    decide semantic equivalence. This establishes a safe baseline before introducing
+    model-proposed merges behind the monotonic reduction guard.
+    """
+
+    inputs = list(units)
+    groups: dict[tuple, list[SemanticEvidenceUnit]] = {}
+    order: list[tuple] = []
+    for unit in inputs:
+        key = _canonical_unit_key(unit)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(unit)
+
+    outputs: list[SemanticEvidenceUnit] = []
+    merged_from: dict[str, list[str]] = {}
+
+    for key in order:
+        group = groups[key]
+        if len(group) == 1:
+            outputs.append(group[0])
+            continue
+
+        source_ids: set[str] = set()
+        for unit in group:
+            source_ids.update(unit.source_ids)
+
+        raw_id = "\x1e".join(sorted(unit.id for unit in group))
+        merged_id = "red_" + hashlib.sha256(raw_id.encode("utf-8")).hexdigest()[:20]
+        representative = group[0]
+        merged = representative.model_copy(
+            update={
+                "id": merged_id,
+                "source_ids": source_ids,
+                "decisive": any(unit.decisive for unit in group),
+                "metadata": {
+                    **representative.metadata,
+                    "merged_count": len(group),
+                    "merged_ids": [unit.id for unit in group],
+                },
+            }
+        )
+        outputs.append(merged)
+        merged_from[merged_id] = [unit.id for unit in group]
+
+    receipt = ReductionReceipt(
+        input_ids=[unit.id for unit in inputs],
+        output_ids=[unit.id for unit in outputs],
+        merged_from=merged_from,
+        reason_codes=["canonical-duplicate-merge"],
+    )
+    validation = validate_monotonic_reduction(inputs, outputs, receipt)
+    return outputs, receipt, validation
+
+
+def build_decision_bundle(units: Iterable[SemanticEvidenceUnit]) -> DecisionBundle:
+    bundle = DecisionBundle()
+    counts: dict[str, int] = {}
+
+    for unit in units:
+        bundle.source_ids.update(unit.source_ids)
+        bundle.evidence_ids.add(unit.id)
+        counts[unit.kind.value] = counts.get(unit.kind.value, 0) + 1
+
+        if unit.authority_state in _UNRESOLVED_AUTHORITY:
+            bundle.unresolved_authority.append(unit)
+
+        if unit.kind == EvidenceKind.EXCEPTION:
+            bundle.exceptions.append(unit)
+        elif unit.kind == EvidenceKind.CONTRADICTION:
+            bundle.contradictions.append(unit)
+        elif unit.kind == EvidenceKind.REQUIREMENT:
+            bundle.requirements.append(unit)
+        elif unit.kind == EvidenceKind.CLAIM:
+            bundle.claims.append(unit)
+        else:
+            bundle.facts.append(unit)
+
+    bundle.kind_counts = dict(sorted(counts.items()))
+    return bundle
+
+
+def render_decision_bundle(bundle: DecisionBundle, *, max_chars: int = 48_000) -> str:
+    """Render a bounded decision-facing view without erasing critical categories."""
+
+    sections = [
+        ("EXCEPTIONS", bundle.exceptions),
+        ("CONTRADICTIONS", bundle.contradictions),
+        ("REQUIREMENTS", bundle.requirements),
+        ("UNRESOLVED_AUTHORITY", bundle.unresolved_authority),
+        ("CLAIMS", bundle.claims),
+        ("FACTS", bundle.facts),
+    ]
+    lines = [
+        (
+            f"DECISION_BUNDLE total={bundle.total_units} "
+            f"sources={len(bundle.source_ids)} kinds={bundle.kind_counts}"
+        )
+    ]
+
+    def append_line(line: str) -> bool:
+        current = sum(len(x) + 1 for x in lines)
+        if current + len(line) + 1 > max_chars:
+            return False
+        lines.append(line)
+        return True
+
+    for label, items in sections:
+        if not items:
+            continue
+        if not append_line(f"\n[{label}] count={len(items)}"):
+            break
+        for unit in items:
+            source_text = ",".join(sorted(unit.source_ids))
+            line = (
+                f"- id={unit.id} kind={unit.kind.value} authority={unit.authority_state.value} "
+                f"sources={source_text} :: {unit.text}"
+            )
+            if not append_line(line):
+                # Critical categories are rendered first. If the bounded view fills,
+                # lower-priority claims/facts are the first material omitted.
+                return "\n".join(lines)
+
+    return "\n".join(lines)
