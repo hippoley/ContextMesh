@@ -1042,6 +1042,8 @@ def job_detail(corpus_id: str, job_id: str):
             "ingest_ready": manifest.coverage_ready,
             "unresolved_units": manifest.unresolved_units,
             "execution_contract": cp.state.execution_contract,
+            "transition_receipts": len(cp.state.transition_receipts),
+            "transition_chain_valid": _transition_summary(cp.state)["chain_valid"],
             "transitions": _transition_summary(cp.state),
             "semantic_units": len(cp.state.semantic_units),
             "reduction_receipts": len(cp.state.reduction_receipts),
