@@ -473,14 +473,15 @@ class ProgressiveEvaluator:
         expected = coverage.expected
         manifest = self.store.get_manifest(corpus_id)
         full_complete = coverage.complete and manifest.coverage_ready
+        blockers = list(state.finalization_blockers if finalization_blockers is None else finalization_blockers)
         return EvaluationResult(
             corpus_id=corpus_id,
             score=score,
             coverage=coverage.coverage,
             complete=full_complete,
             coverage_complete=full_complete,
-            finalized=score is not None and not (finalization_blockers or []),
-            judgment_valid=score is not None and not (finalization_blockers or []),
+            finalized=score is not None and not blockers,
+            judgment_valid=score is not None and not blockers,
             visited_blocks=len(expected & state.visited),
             total_blocks=len(expected),
             evidence=state.evidence,
@@ -500,7 +501,7 @@ class ProgressiveEvaluator:
             execution_contract_mode=(state.execution_contract or {}).get("mode"),
             transition_receipts=len(state.transition_receipts),
             transition_chain_valid=self._transition_ledger(state).verify_chain(),
-            finalization_blockers=finalization_blockers or [],
+            finalization_blockers=blockers,
             semantic_units=len(state.semantic_units),
             reduction_receipts=len(state.reduction_receipts),
             decision_bundle=state.decision_bundle,
@@ -567,6 +568,8 @@ class ProgressiveEvaluator:
             )
             self._checkpoint(job_id, corpus_id, ordered, 0, state, False, status="queued")
 
+        # A resumed job may be continuing after a repairable blocker.
+        state.finalization_blockers = []
         coverage = CoverageController(expected=expected, visited=state.visited)
 
         # Fail fast when the chosen route cannot consume one or more required source
@@ -575,6 +578,7 @@ class ProgressiveEvaluator:
         unsupported = self._preflight_unsupported(reader, question, answer)
         if unsupported:
             state.failures.update(unsupported)
+            state.finalization_blockers = [f"capability:unsupported={len(unsupported)}"]
             self._sync_usage(state)
             self._checkpoint(job_id, corpus_id, ordered, self._next_cursor(ordered, state.visited), state, False, status="capability_blocked")
             self._emit_progress(job_id, corpus_id, coverage, state, "capability_blocked")
@@ -599,6 +603,7 @@ class ProgressiveEvaluator:
         for start in range(0, len(remaining), self.execution_batch_size):
             if self.cancellation_check and self.cancellation_check(corpus_id, job_id):
                 cursor = self._next_cursor(ordered, state.visited)
+                state.finalization_blockers = ["cancelled"]
                 self._sync_usage(state)
                 self._checkpoint(job_id, corpus_id, ordered, cursor, state, False, status="cancelled")
                 self._emit_progress(job_id, corpus_id, coverage, state, "cancelled")
@@ -629,6 +634,11 @@ class ProgressiveEvaluator:
         # by resuming the same job, including failures that lie before the old cursor.
         if not coverage.complete:
             cursor = self._next_cursor(ordered, state.visited)
+            missing_count = len(coverage.missing)
+            state.finalization_blockers = [f"inspected:missing={missing_count}"]
+            failed_count = len(set(state.failures) & expected)
+            if failed_count:
+                state.finalization_blockers.append(f"failed-required={failed_count}")
             self._sync_usage(state)
             self._checkpoint(job_id, corpus_id, ordered, cursor, state, False, status="blocked" if state.failures else "paused")
             self._emit_progress(job_id, corpus_id, coverage, state, "blocked" if state.failures else "paused")
@@ -648,6 +658,7 @@ class ProgressiveEvaluator:
             semantic_coverage = self._semantic_coverage(expected, state)
             blockers = semantic_coverage.finalization_blockers(active_contract)
             if blockers:
+                state.finalization_blockers = list(blockers)
                 self._sync_usage(state)
                 rationale = (
                     "Execution contract blocked finalization: "
@@ -676,6 +687,7 @@ class ProgressiveEvaluator:
 
         manifest = self.store.get_manifest(corpus_id)
         if not manifest.coverage_ready:
+            state.finalization_blockers = ["ingest-semantic-coverage-incomplete"]
             self._sync_usage(state)
             rationale = (
                 "Execution visited every currently addressable block, but ingest/semantic coverage is incomplete; "
@@ -693,8 +705,9 @@ class ProgressiveEvaluator:
         if callable(preflight_finalize):
             reason = preflight_finalize(state)
             if reason:
-                self._sync_usage(state)
                 blockers = ["decision-bundle-overflow"]
+                state.finalization_blockers = list(blockers)
+                self._sync_usage(state)
                 self._checkpoint(
                     job_id,
                     corpus_id,
@@ -722,6 +735,7 @@ class ProgressiveEvaluator:
                 )
 
         score, rationale = self.judge.finalize(state)
+        state.finalization_blockers = []
         self._sync_usage(state)
         self._checkpoint(job_id, corpus_id, ordered, len(ordered), state, True, final_score=score, final_rationale=rationale, status="complete")
         self._emit_progress(job_id, corpus_id, coverage, state, "complete")
