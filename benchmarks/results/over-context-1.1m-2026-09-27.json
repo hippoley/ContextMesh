@@ -1,0 +1,33 @@
+{
+  "complete": true,
+  "corpus_chars": 4400939,
+  "corpus_to_context_ratio": 68.765,
+  "coverage": 1.0,
+  "decision_bundle_exceptions": 3,
+  "decisive_exception_survived": true,
+  "estimated_corpus_tokens": 1100234,
+  "execution_contract_mode": "full-coverage",
+  "files": 12,
+  "fixture": "multi-file-over-context-full-coverage",
+  "judge_calls": 384,
+  "max_observed_request_chars": 12652,
+  "max_request_chars": 64000,
+  "reduction_receipts": 0,
+  "request_budget_respected": true,
+  "required_blocks": 384,
+  "schema_version": 1,
+  "score": 100.0,
+  "semantic_units": 5,
+  "simulated_model_context_tokens": 16000,
+  "transition_chain_valid": true,
+  "transition_receipts": 384,
+  "visited_blocks": 384,
+  "window_chars": 12000,
+  "source_run": "https://github.com/hippoley/ContextMesh/actions/runs/36299795477",
+  "limitations": [
+    "Synthetic corpus",
+    "Estimated tokens use a fixed 4 chars/token approximation rather than a provider tokenizer",
+    "BudgetJudge is deterministic and does not measure real-model semantic recall",
+    "This validates execution shape, coverage, bounded requests and preservation, not 1M-token native attention"
+  ]
+}
