@@ -165,6 +165,7 @@ class EvaluationState(BaseModel):
     semantic_units: list[dict[str, Any]] = Field(default_factory=list)
     reduction_receipts: list[dict[str, Any]] = Field(default_factory=list)
     decision_bundle: dict[str, Any] | None = None
+    finalization_blockers: list[str] = Field(default_factory=list)
 
     def model_context_notes(self) -> list[str]:
         return [*self.reduced_notes, *self.working_notes]
