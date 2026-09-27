@@ -15,6 +15,7 @@ class EvidenceStage(str, Enum):
     MODEL_VISIBLE = "model-visible"
     INSPECTED = "inspected"
     AUTHORITY = "authority"
+    REDUCED = "reduced"
     JUDGED = "judged"
 
 
