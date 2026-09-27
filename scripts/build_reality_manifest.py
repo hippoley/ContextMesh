@@ -27,6 +27,7 @@ def build_manifest() -> dict:
     ragflow = load("ragflow-d24-before-after-2026-09-26.json")
     dify = load("dify-42889-2026-09-24.json")
     mem0 = load("mem0-2.2.0-temporal-authority-2026-09-24.json")
+    contextmesh = load("over-context-1.1m-2026-09-27.json")
 
     cognee_ranks_before = {row["released_decisive_rank"] for row in cognee["comparisons"]}
     cognee_ranks_after = {row["mmr_decisive_rank"] for row in cognee["comparisons"]}
@@ -46,14 +47,40 @@ def build_manifest() -> dict:
             "ragflow": source_record("ragflow-d24-before-after-2026-09-26.json"),
             "dify": source_record("dify-42889-2026-09-24.json"),
             "mem0": source_record("mem0-2.2.0-temporal-authority-2026-09-24.json"),
+            "contextmesh": source_record("over-context-1.1m-2026-09-27.json"),
         },
         "verified_through": max(
             cognee["date"],
             ragflow["date"],
             dify["date"],
             mem0["date"],
+            contextmesh["date"],
         ),
         "cases": {
+            "contextmesh": {
+                "label": "corpus / request budget",
+                "before": f'{contextmesh["estimated_corpus_tokens"] / 1_000_000:.2f}M',
+                "after": f'{contextmesh["simulated_model_context_tokens"] // 1000}K-bound',
+                "source_run": contextmesh["source_run"],
+                "evidence_class": contextmesh["evidence_class"],
+                "corpus_to_context_ratio": contextmesh["corpus_to_context_ratio"],
+                "required_blocks": contextmesh["required_blocks"],
+                "visited_blocks": contextmesh["visited_blocks"],
+                "coverage": contextmesh["coverage"],
+                "request_budget_respected": contextmesh["request_budget_respected"],
+                "decisive_exception_survived": contextmesh["decisive_exception_survived"],
+                "copy": (
+                    "A synthetic self-contract executed ~1.10M estimated corpus tokens "
+                    "through bounded requests against a 16K simulated window, inspected "
+                    "384/384 required blocks, and preserved the decisive exception."
+                ),
+                "trace": [
+                    [f'{contextmesh["corpus_to_context_ratio"]:.1f}x corpus/window', "hit"],
+                    ["bounded requests", "hit"],
+                    [f'{contextmesh["visited_blocks"]}/{contextmesh["required_blocks"]} inspected', "hit"],
+                    ["exception survived", "hit"],
+                ],
+            },
             "cognee": {
                 "label": "decisive rank",
                 "before": str(next(iter(cognee_ranks_before))),
