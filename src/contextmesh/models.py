@@ -261,6 +261,9 @@ class ModelRoute(BaseModel):
     api_key_env: str | None = None
     enabled: bool = True
     max_context_tokens: int | None = None
+    tokenizer_spec: str | None = None
+    token_budget_safety_factor: float = 0.90
+    chars_per_token_estimate: float = 1.0
     input_cost_per_million: float = 0.0
     output_cost_per_million: float = 0.0
     notes: str = ""
