@@ -551,11 +551,27 @@ def _primary_bundle_sections(
     return out
 
 
+def _provenance_ref(source_ids: set[str], *, sample_size: int = 4) -> str:
+    ordered = sorted(source_ids)
+    if not ordered:
+        return "source_count=0"
+    if len(ordered) <= sample_size:
+        return f"source_count={len(ordered)} sources={','.join(ordered)}"
+
+    canonical = "\x1e".join(ordered).encode("utf-8")
+    digest = hashlib.sha256(canonical).hexdigest()[:20]
+    sample = ",".join(ordered[:sample_size])
+    return (
+        f"source_count={len(ordered)} provenance_sha256={digest} "
+        f"source_sample={sample}"
+    )
+
+
 def _decision_unit_line(category: str, unit: SemanticEvidenceUnit) -> str:
-    source_text = ",".join(sorted(unit.source_ids))
+    provenance = _provenance_ref(unit.source_ids)
     return (
         f"- category={category} id={unit.id} kind={unit.kind.value} "
-        f"authority={unit.authority_state.value} sources={source_text} :: {unit.text}"
+        f"authority={unit.authority_state.value} {provenance} :: {unit.text}"
     )
 
 
