@@ -187,6 +187,9 @@ class EvaluationResult(BaseModel):
     score: float | None
     coverage: float
     complete: bool
+    coverage_complete: bool = False
+    finalized: bool = False
+    judgment_valid: bool = False
     visited_blocks: int
     total_blocks: int
     evidence: list[Evidence]
