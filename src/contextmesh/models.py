@@ -111,6 +111,7 @@ class EvidenceKind(str, Enum):
 
 
 class EvidenceAtom(BaseModel):
+    id: str | None = None
     kind: EvidenceKind = EvidenceKind.CLAIM
     text: str
     normalized_value: str | None = None
@@ -119,6 +120,7 @@ class EvidenceAtom(BaseModel):
     polarity: str = "affirm"
     confidence: float = 1.0
     tags: list[str] = Field(default_factory=list)
+    related_atom_ids: list[str] = Field(default_factory=list)
 
 
 class Evidence(BaseModel):
@@ -160,6 +162,9 @@ class EvaluationState(BaseModel):
     usage: UsageMetrics = Field(default_factory=UsageMetrics)
     execution_contract: dict[str, Any] | None = None
     transition_receipts: list[dict[str, Any]] = Field(default_factory=list)
+    semantic_units: list[dict[str, Any]] = Field(default_factory=list)
+    reduction_receipts: list[dict[str, Any]] = Field(default_factory=list)
+    decision_bundle: dict[str, Any] | None = None
 
     def model_context_notes(self) -> list[str]:
         return [*self.reduced_notes, *self.working_notes]
@@ -202,6 +207,9 @@ class EvaluationResult(BaseModel):
     transition_receipts: int = 0
     transition_chain_valid: bool = True
     finalization_blockers: list[str] = Field(default_factory=list)
+    semantic_units: int = 0
+    reduction_receipts: int = 0
+    decision_bundle: dict[str, Any] | None = None
 
 
 class IngestStatus(str, Enum):
