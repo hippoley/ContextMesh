@@ -10,6 +10,7 @@ The goal is not to rank frameworks. The goal is to answer a narrower question:
 
 | System | Failure stage | Result | Status | Date | Evidence |
 | --- | --- | --- | --- | --- | --- |
+| **ContextMesh self-contract** | over-context execution | **~1.10M estimated corpus tokens** executed through a **16K simulated model window** with 384/384 required blocks inspected and decisive exception preserved | validated synthetic execution contract | 2026-09-27 | [result](Over-Context-1.1M-2026-09-27.md) · [JSON](../../benchmarks/results/over-context-1.1m-2026-09-27.json) · [run](https://github.com/hippoley/ContextMesh/actions/runs/36299795477) |
 | **Cognee 1.6.0** | `eligible` / rank cutoff | decisive source at **rank 17**, outside top-5 in two controlled CHUNKS fixtures | reproduced | 2026-09-24 | [rank-depth result](Cognee-1.6.0-rank-depth-2026-09-24.md) · [JSON](../../benchmarks/results/cognee-1.6.0-rank-depth-2026-09-24.json) |
 | **Cognee PR #3707** | `eligible` / diversification | exact MMR selector moved decisive source **17 → 2** in both fixtures | **falsification / positive upstream result** | 2026-09-26 | [before/after](Cognee-PR3707-MMR-rank17-2026-09-26.md) · [JSON](../../benchmarks/results/cognee-mmr-rank17-2026-09-26.json) · [run](https://github.com/hippoley/ContextMesh/actions/runs/36213382612) |
 | **RAGFlow current main** | context-budget semantics | `128000` context was effectively fitted as `16384` because max output was reused as input budget | reproduced | 2026-09-26 | [D24 proof](RAGFlow-D24-2026-09-26.md) · [JSON](../../benchmarks/results/ragflow-d24-2026-09-26.json) |
@@ -28,7 +29,9 @@ ingested
   -> eligible
   -> rendered
   -> model-visible
+  -> inspected
   -> authority
+  -> reduced
   -> judged
 ```
 
