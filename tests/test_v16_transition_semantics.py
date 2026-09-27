@@ -8,6 +8,8 @@ from contextmesh.semantics import (
     SemanticEvidenceUnit,
     TransitionAction,
     TransitionLedger,
+    build_decision_bundle,
+    reduce_semantic_units,
     validate_monotonic_reduction,
 )
 
@@ -255,3 +257,129 @@ def test_resume_continues_transition_hash_chain(tmp_path):
     assert completed.complete is True
     assert completed.transition_receipts == manifest.required_blocks
     assert completed.transition_chain_valid is True
+
+
+def test_canonical_reducer_merges_only_same_typed_fact():
+    a = SemanticEvidenceUnit(
+        id="a",
+        kind=EvidenceKind.REQUIREMENT,
+        text="Payment must be made within 30 days.",
+        source_ids={"doc-a"},
+    )
+    b = SemanticEvidenceUnit(
+        id="b",
+        kind=EvidenceKind.REQUIREMENT,
+        text="Payment must be made within 30 days.",
+        source_ids={"doc-b"},
+    )
+    near_duplicate = SemanticEvidenceUnit(
+        id="c",
+        kind=EvidenceKind.REQUIREMENT,
+        text="Payment should usually be made within 30 days.",
+        source_ids={"doc-c"},
+    )
+
+    reduced, receipt, validation = reduce_semantic_units([a, b, near_duplicate])
+
+    assert validation.ok is True
+    assert len(reduced) == 2
+    merged = next(unit for unit in reduced if unit.id.startswith("red_"))
+    assert merged.source_ids == {"doc-a", "doc-b"}
+    assert set(receipt.merged_from[merged.id]) == {"a", "b"}
+    assert any(unit.id == "c" for unit in reduced)
+
+
+def test_decision_bundle_keeps_epistemic_categories_separate():
+    units = [
+        SemanticEvidenceUnit(
+            id="claim",
+            kind=EvidenceKind.CLAIM,
+            text="Termination is permitted.",
+            source_ids={"master"},
+        ),
+        SemanticEvidenceUnit(
+            id="exception",
+            kind=EvidenceKind.EXCEPTION,
+            text="Except where section 17.4 applies.",
+            source_ids={"amendment"},
+        ),
+        SemanticEvidenceUnit(
+            id="conflict",
+            kind=EvidenceKind.CONTRADICTION,
+            text="The schedule requires 60-day notice.",
+            source_ids={"schedule"},
+            authority_state=AuthorityState.CONTESTED,
+        ),
+    ]
+
+    bundle = build_decision_bundle(units)
+
+    assert [x.id for x in bundle.claims] == ["claim"]
+    assert [x.id for x in bundle.exceptions] == ["exception"]
+    assert [x.id for x in bundle.contradictions] == ["conflict"]
+    assert [x.id for x in bundle.unresolved_authority] == ["conflict"]
+    assert bundle.source_ids == {"master", "amendment", "schedule"}
+
+
+def test_evidence_atom_identity_is_stable_for_same_block():
+    from contextmesh.evidence import extract_evidence_atoms
+    from contextmesh.models import ContextBlock, Modality, SourceRef
+
+    block = ContextBlock(
+        id="block-1",
+        corpus_id="c",
+        modality=Modality.TEXT,
+        text="Unless emergency maintenance is declared, service must remain available.",
+        source=SourceRef(asset_id="asset-1", path="policy.md"),
+    )
+    first = extract_evidence_atoms(block, "Policy materially changes the answer.")
+    second = extract_evidence_atoms(block, "Policy materially changes the answer.")
+
+    assert first
+    assert [x.id for x in first] == [x.id for x in second]
+    assert all(x.id and x.id.startswith("ev_") for x in first)
+
+
+def test_runtime_builds_decision_bundle_and_reduction_receipt(tmp_path):
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.store import FileContextStore
+
+    class DuplicateEvidenceJudge:
+        def inspect(self, question, answer, block, notes):
+            return "Payment must be made within 30 days.", True
+
+        def reduce_notes(self, question, answer, notes, level):
+            return "legacy explanation only"
+
+        def finalize(self, state):
+            assert state.decision_bundle is not None
+            bundle = state.decision_bundle
+            assert bundle["requirements"]
+            return 88.0, "decision bundle consumed"
+
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("Payment must be made within 30 days.", encoding="utf-8")
+    b.write_text("Payment must be made within 30 days.", encoding="utf-8")
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths([a, b], store, "corp_v16_bundle", window_chars=200, overlap_chars=0)
+
+    result = ProgressiveEvaluator(
+        store,
+        DuplicateEvidenceJudge(),
+        reduction_batch_size=2,
+    ).evaluate(
+        manifest.corpus_id,
+        "When is payment due?",
+        "Payment is due within 30 days.",
+        contract=ExecutionContract.full_coverage(manifest.coverage_ids()),
+    )
+
+    assert result.complete is True
+    assert result.score == 88.0
+    assert result.decision_bundle is not None
+    assert result.decision_bundle["requirements"]
+    assert result.semantic_units < result.evidence_atoms
+    assert result.reduction_receipts >= 1
