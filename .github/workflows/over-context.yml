@@ -1,0 +1,37 @@
+name: Over-context contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'benchmarks/over_context_execution.py'
+      - 'src/contextmesh/evidence.py'
+      - 'src/contextmesh/models.py'
+      - 'src/contextmesh/runtime.py'
+      - 'src/contextmesh/semantics.py'
+      - 'src/contextmesh/judges.py'
+      - '.github/workflows/over-context.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  over-context:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e '.[dev,rich]'
+      - name: Run 1M+ token multi-file contract
+        run: |
+          python benchmarks/over_context_execution.py \
+            --target-tokens 1100000 \
+            --files 12 \
+            --simulated-context-tokens 16000 \
+            --output /tmp/over-context-result.json
+      - name: Show result
+        run: cat /tmp/over-context-result.json
