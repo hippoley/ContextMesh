@@ -10,6 +10,7 @@ from contextmesh.semantics import (
     TransitionLedger,
     build_decision_bundle,
     reduce_semantic_units,
+    render_decision_bundle_checked,
     validate_monotonic_reduction,
 )
 
@@ -395,3 +396,77 @@ def test_runtime_builds_decision_bundle_and_reduction_receipt(tmp_path):
     assert all(receipt["from_stage"] == "inspected" for receipt in merge_receipts)
     assert all(receipt["to_stage"] == "reduced" for receipt in merge_receipts)
     assert all(receipt["policy_id"] == "typed-canonical-reducer" for receipt in merge_receipts)
+
+
+def test_decision_bundle_renderer_reports_overflow_instead_of_silent_truncation():
+    units = [
+        SemanticEvidenceUnit(
+            id=f"exception-{i}",
+            kind=EvidenceKind.EXCEPTION,
+            text=("decisive exception " + str(i) + " ") * 20,
+            source_ids={f"doc-{i}"},
+        )
+        for i in range(20)
+    ]
+    bundle = build_decision_bundle(units)
+    rendered = render_decision_bundle_checked(bundle, max_chars=1200)
+
+    assert rendered.complete is False
+    assert rendered.required_chars > rendered.max_chars
+    assert rendered.omitted_ids
+    assert any(x.startswith("exception-") for x in rendered.omitted_ids)
+
+
+def test_runtime_blocks_final_score_when_decision_bundle_cannot_fit(tmp_path):
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.judges import OpenAICompatibleJudge
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.store import FileContextStore
+
+    class NoNetworkJudge(OpenAICompatibleJudge):
+        def inspect(self, question, answer, block, notes):
+            return block.text, True
+
+    source = tmp_path / "many-exceptions.txt"
+    source.write_text(
+        "\n".join(
+            (
+                f"Clause {i}: Unless exception-{i} applies, "
+                + ("this unique requirement remains controlling. " * 8)
+            )
+            for i in range(80)
+        ),
+        encoding="utf-8",
+    )
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        [source],
+        store,
+        "corp_v16_overflow",
+        window_chars=480,
+        overlap_chars=0,
+    )
+    judge = NoNetworkJudge(
+        model="never-called",
+        base_url="http://127.0.0.1:9",
+        max_context_tokens=4096,
+        reserve_output_tokens=512,
+        chars_per_token_estimate=3.0,
+    )
+
+    result = ProgressiveEvaluator(
+        store,
+        judge,
+        reduction_batch_size=8,
+    ).evaluate(
+        manifest.corpus_id,
+        "Do any exceptions change the answer?",
+        "No exceptions apply.",
+        contract=ExecutionContract.full_coverage(manifest.coverage_ids()),
+    )
+
+    assert result.complete is True
+    assert result.score is None
+    assert result.finalization_blockers == ["decision-bundle-overflow"]
+    assert "refusing lossy finalization" in result.rationale.lower()
+    assert result.decision_bundle is not None
