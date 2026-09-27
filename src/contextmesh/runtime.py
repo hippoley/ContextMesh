@@ -11,7 +11,19 @@ from .diagnostics import EvidenceStage
 from .evidence import evidence_kind_counts, extract_evidence_atoms
 from .models import EvaluationCheckpoint, EvaluationResult, EvaluationState, Evidence, ReductionNode
 from .reader import CorpusReader
-from .semantics import CoverageSnapshot, ExecutionContract, TransitionAction, TransitionLedger, TransitionReceipt
+from .semantics import (
+    CoverageSnapshot,
+    DecisionBundle,
+    ExecutionContract,
+    ReductionReceipt,
+    SemanticEvidenceUnit,
+    TransitionAction,
+    TransitionLedger,
+    TransitionReceipt,
+    build_decision_bundle,
+    reduce_semantic_units,
+    semantic_units_from_evidence,
+)
 from .store import FileContextStore
 
 
@@ -347,6 +359,38 @@ class ProgressiveEvaluator:
         snapshot.failed_subjects = set(state.failures) & expected
         return snapshot
 
+    @staticmethod
+    def _typed_units(state: EvaluationState) -> list[SemanticEvidenceUnit]:
+        return [SemanticEvidenceUnit.model_validate(x) for x in state.semantic_units]
+
+    def _reduce_typed_state(self, state: EvaluationState) -> None:
+        units = self._typed_units(state)
+        if not units:
+            state.decision_bundle = DecisionBundle().model_dump(mode="json")
+            return
+
+        reduced, receipt, validation = reduce_semantic_units(units)
+        if not validation.ok:
+            raise RuntimeError(
+                "typed monotonic reduction violated: " + "; ".join(validation.errors)
+            )
+
+        # Store a receipt only when the reduction actually merged something. A no-op
+        # normalization should not inflate the audit trail.
+        if receipt.merged_from:
+            state.reduction_receipts.append(receipt.model_dump(mode="json"))
+
+        state.semantic_units = [unit.model_dump(mode="json") for unit in reduced]
+        state.decision_bundle = build_decision_bundle(reduced).model_dump(mode="json")
+
+    @staticmethod
+    def _decision_bundle(state: EvaluationState) -> DecisionBundle:
+        if state.decision_bundle is not None:
+            return DecisionBundle.model_validate(state.decision_bundle)
+        return build_decision_bundle(
+            [SemanticEvidenceUnit.model_validate(x) for x in state.semantic_units]
+        )
+
     def _merge_outcome(self, state: EvaluationState, reader: CorpusReader, outcome: _InspectionOutcome) -> None:
         state.inspection_attempts[outcome.block_id] = state.inspection_attempts.get(outcome.block_id, 0) + outcome.attempts
         block = reader.read(outcome.block_id)
@@ -376,7 +420,18 @@ class ProgressiveEvaluator:
         if outcome.note:
             state.working_notes.append(outcome.note)
         if outcome.relevant:
-            state.evidence.append(Evidence(block_id=block.id, note=outcome.note or "", source=block.source, modality=block.modality, atoms=extract_evidence_atoms(block, outcome.note or "")))
+            evidence = Evidence(
+                block_id=block.id,
+                note=outcome.note or "",
+                source=block.source,
+                modality=block.modality,
+                atoms=extract_evidence_atoms(block, outcome.note or ""),
+            )
+            state.evidence.append(evidence)
+            state.semantic_units.extend(
+                unit.model_dump(mode="json")
+                for unit in semantic_units_from_evidence([evidence])
+            )
 
     def _result(
         self,
@@ -417,6 +472,9 @@ class ProgressiveEvaluator:
             transition_receipts=len(state.transition_receipts),
             transition_chain_valid=self._transition_ledger(state).verify_chain(),
             finalization_blockers=finalization_blockers or [],
+            semantic_units=len(state.semantic_units),
+            reduction_receipts=len(state.reduction_receipts),
+            decision_bundle=state.decision_bundle,
         )
 
     def preflight(self, corpus_id: str) -> dict:
@@ -528,6 +586,11 @@ class ProgressiveEvaluator:
                 if len(state.reduced_notes) >= self.reduction_batch_size * 2:
                     self._compact_reduced_notes(state)
 
+            # Typed evidence is the preservation channel. Reduction is deliberately
+            # conservative: only canonical duplicates can merge in v0.16.
+            if len(state.semantic_units) >= self.reduction_batch_size * 4:
+                self._reduce_typed_state(state)
+
             cursor = self._next_cursor(ordered, state.visited)
             self._sync_usage(state)
             self._checkpoint(job_id, corpus_id, ordered, cursor, state, False, status="running")
@@ -595,6 +658,7 @@ class ProgressiveEvaluator:
             return self._result(corpus_id, job_id, state, coverage, score=None, rationale=rationale)
         self._flush_working_notes(state)
         self._compact_reduced_notes(state)
+        self._reduce_typed_state(state)
         score, rationale = self.judge.finalize(state)
         self._sync_usage(state)
         self._checkpoint(job_id, corpus_id, ordered, len(ordered), state, True, final_score=score, final_rationale=rationale, status="complete")
