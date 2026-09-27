@@ -10,7 +10,7 @@ from typing import Any
 
 from .evidence import render_typed_evidence
 from .models import ContextBlock, EvaluationState, Modality, UsageMetrics
-from .semantics import DecisionBundle, render_decision_bundle_checked
+from .semantics import DecisionBundle, render_decision_bundle_checked, shard_decision_bundle
 
 
 def _content_text(value: Any) -> str:
@@ -368,11 +368,13 @@ class OpenAICompatibleJudge:
         rendered = render_decision_bundle_checked(bundle, max_chars=bundle_budget)
         if rendered.complete:
             return None
+        shards = shard_decision_bundle(bundle, max_chars=bundle_budget)
         return (
             "DecisionBundle exceeds the final model-facing budget; refusing lossy "
-            f"finalization until typed reduction can preserve the full decision state. "
-            f"required_chars={rendered.required_chars}, max_chars={rendered.max_chars}, "
-            f"omitted_units={len(rendered.omitted_ids)}"
+            f"finalization. The complete decision state can be transported losslessly "
+            f"as {shards.shard_count} shard(s), but no cross-shard verdict aggregation "
+            f"contract is assumed yet. required_chars={rendered.required_chars}, "
+            f"max_chars={rendered.max_chars}, omitted_units={len(rendered.omitted_ids)}"
         )
 
     def finalize(self, state: EvaluationState) -> tuple[float, str]:
