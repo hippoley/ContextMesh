@@ -540,3 +540,137 @@ def test_api_rejects_retrieval_mode_on_full_coverage_job_endpoint(tmp_path, monk
     )
     with pytest.raises(ValueError, match="served by /api/corpora"):
         api_module._contract_for_request(req)
+
+
+def test_job_detail_separates_coverage_from_judgment_validity(tmp_path, monkeypatch):
+    import contextmesh.api as api_module
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.judges import HeuristicJudge
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.store import FileContextStore
+
+    source = tmp_path / "status.txt"
+    source.write_text("Unless maintenance applies, service must remain available.", encoding="utf-8")
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths([source], store, "corp_v16_status", window_chars=200, overlap_chars=0)
+    monkeypatch.setattr(api_module, "STORE", store)
+
+    ProgressiveEvaluator(store, HeuristicJudge()).evaluate(
+        manifest.corpus_id,
+        "Is downtime always allowed?",
+        "Yes.",
+        job_id="job_v16_status",
+        contract=ExecutionContract.full_coverage(manifest.coverage_ids()),
+    )
+
+    detail = api_module.job_detail(manifest.corpus_id, "job_v16_status")
+    assert detail["coverage_complete"] is True
+    assert detail["finalized"] is True
+    assert detail["judgment_valid"] is True
+    assert detail["finalization_blockers"] == []
+    assert detail["inspection_coverage"] == 1.0
+    assert detail["transitions"]["by_stage"]["inspected"] == manifest.required_blocks
+
+
+def test_job_detail_and_semantic_artifacts_are_bounded_and_paginated(tmp_path, monkeypatch):
+    import contextmesh.api as api_module
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.runtime import ProgressiveEvaluator
+    from contextmesh.store import FileContextStore
+
+    class AllRelevantJudge:
+        def inspect(self, question, answer, block, notes):
+            return f"Unless exception for {block.id} applies, service must remain available.", True
+
+        def reduce_notes(self, question, answer, notes, level):
+            return f"L{level}: {len(notes)} findings"
+
+        def finalize(self, state):
+            return 90.0, "ok"
+
+    source = tmp_path / "large-job.txt"
+    source.write_text(
+        "\n".join(f"Clause {i}: service must remain available unless exception {i} applies." for i in range(90)),
+        encoding="utf-8",
+    )
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths([source], store, "corp_v16_pages", window_chars=90, overlap_chars=0)
+    monkeypatch.setattr(api_module, "STORE", store)
+
+    ProgressiveEvaluator(
+        store,
+        AllRelevantJudge(),
+        reduction_batch_size=8,
+    ).evaluate(
+        manifest.corpus_id,
+        "Which exceptions exist?",
+        "None.",
+        job_id="job_v16_pages",
+        contract=ExecutionContract.full_coverage(manifest.coverage_ids()),
+    )
+
+    detail = api_module.job_detail(manifest.corpus_id, "job_v16_pages")
+    assert detail["evidence_total"] > detail["evidence_preview_limit"]
+    assert detail["evidence_truncated"] is True
+    assert len(detail["evidence"]) == detail["evidence_preview_limit"]
+    assert "items" not in detail["decision_bundle"]
+    assert detail["detail_endpoints"]["transitions"].endswith("/transitions")
+
+    evidence_page = api_module.job_evidence(
+        manifest.corpus_id, "job_v16_pages", offset=50, limit=20
+    )
+    assert evidence_page["total"] == detail["evidence_total"]
+    assert len(evidence_page["items"]) <= 20
+
+    transition_page = api_module.job_transitions(
+        manifest.corpus_id, "job_v16_pages", offset=0, limit=10, to_stage="inspected"
+    )
+    assert transition_page["total"] >= manifest.required_blocks
+    assert len(transition_page["items"]) == 10
+    assert transition_page["chain_valid"] is True
+
+    exception_page = api_module.job_decision_bundle(
+        manifest.corpus_id,
+        "job_v16_pages",
+        category="exceptions",
+        offset=0,
+        limit=5,
+    )
+    assert exception_page["total"] >= 1
+    assert len(exception_page["items"]) <= 5
+    assert exception_page["summary"]["available"] is True
+
+
+def test_sync_evaluate_endpoint_materializes_contract(tmp_path, monkeypatch):
+    import contextmesh.api as api_module
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.store import FileContextStore
+
+    source = tmp_path / "sync.txt"
+    source.write_text("A required clause exists.", encoding="utf-8")
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths([source], store, "corp_v16_sync", window_chars=200, overlap_chars=0)
+    monkeypatch.setattr(api_module, "STORE", store)
+
+    result = api_module.evaluate(
+        api_module.EvaluateRequest(
+            corpus_id=manifest.corpus_id,
+            question="Does the clause exist?",
+            answer="Yes.",
+        )
+    )
+
+    assert result.execution_contract_mode == "full-coverage"
+    assert result.coverage_complete is True
+    assert result.judgment_valid is True
+
+
+def test_workspace_recognizes_semantic_blocked_terminal_states():
+    from pathlib import Path
+    import contextmesh.api as api_module
+
+    js = (api_module.WEB_ROOT / "contextmesh.js").read_text(encoding="utf-8")
+    assert "contract_blocked" in js
+    assert "decision_bundle_blocked" in js
+    assert "execution_mode:'full-coverage'" in js
+    assert "evidence_total" in js
