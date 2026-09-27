@@ -520,6 +520,161 @@ def build_decision_bundle(units: Iterable[SemanticEvidenceUnit]) -> DecisionBund
     return bundle
 
 
+def _primary_bundle_sections(
+    bundle: DecisionBundle,
+) -> list[tuple[str, list[SemanticEvidenceUnit]]]:
+    """Return each evidence unit exactly once in its primary epistemic category.
+
+    unresolved_authority is a cross-cutting view, not a second copy of the same
+    evidence. Authority remains explicit on every rendered unit.
+    """
+    sections = [
+        ("EXCEPTIONS", bundle.exceptions),
+        ("CONTRADICTIONS", bundle.contradictions),
+        ("REQUIREMENTS", bundle.requirements),
+        ("CLAIMS", bundle.claims),
+        ("FACTS", bundle.facts),
+    ]
+    seen: set[str] = set()
+    out: list[tuple[str, list[SemanticEvidenceUnit]]] = []
+    for label, items in sections:
+        unique = [unit for unit in items if unit.id not in seen]
+        seen.update(unit.id for unit in unique)
+        if unique:
+            out.append((label, unique))
+
+    unresolved_only = [
+        unit for unit in bundle.unresolved_authority if unit.id not in seen
+    ]
+    if unresolved_only:
+        out.append(("UNRESOLVED_AUTHORITY", unresolved_only))
+    return out
+
+
+def _decision_unit_line(category: str, unit: SemanticEvidenceUnit) -> str:
+    source_text = ",".join(sorted(unit.source_ids))
+    return (
+        f"- category={category} id={unit.id} kind={unit.kind.value} "
+        f"authority={unit.authority_state.value} sources={source_text} :: {unit.text}"
+    )
+
+
+class DecisionBundleShard(BaseModel):
+    index: int
+    total_shards: int
+    text: str
+    char_count: int
+    unit_ids: list[str]
+    category_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class DecisionBundleShardSet(BaseModel):
+    max_chars: int
+    total_units: int
+    shard_count: int
+    complete: bool
+    shards: list[DecisionBundleShard] = Field(default_factory=list)
+
+
+def shard_decision_bundle(
+    bundle: DecisionBundle,
+    *,
+    max_chars: int = 48_000,
+) -> DecisionBundleShardSet:
+    """Partition a DecisionBundle without summarizing or dropping evidence.
+
+    Sharding solves the transport/window problem only. It deliberately does not
+    invent a cross-shard verdict aggregation rule.
+    """
+    if max_chars < 1024:
+        raise ValueError("max_chars must be >= 1024 for a decision shard")
+
+    entries: list[tuple[str, SemanticEvidenceUnit, str]] = []
+    for category, items in _primary_bundle_sections(bundle):
+        for unit in items:
+            entries.append((category, unit, _decision_unit_line(category, unit)))
+
+    if not entries:
+        return DecisionBundleShardSet(
+            max_chars=max_chars,
+            total_units=0,
+            shard_count=0,
+            complete=True,
+            shards=[],
+        )
+
+    # Reserve enough space for deterministic shard metadata. Evidence lines are never
+    # clipped: a single oversized evidence unit is an explicit error.
+    header_reserve = 320
+    content_budget = max_chars - header_reserve
+    groups: list[list[tuple[str, SemanticEvidenceUnit, str]]] = []
+    current: list[tuple[str, SemanticEvidenceUnit, str]] = []
+    current_chars = 0
+
+    for entry in entries:
+        line = entry[2]
+        cost = len(line) + 1
+        if cost > content_budget:
+            raise ValueError(
+                f"evidence unit {entry[1].id} exceeds one shard budget: "
+                f"line_chars={len(line)}, content_budget={content_budget}"
+            )
+        if current and current_chars + cost > content_budget:
+            groups.append(current)
+            current = []
+            current_chars = 0
+        current.append(entry)
+        current_chars += cost
+    if current:
+        groups.append(current)
+
+    total_shards = len(groups)
+    shards: list[DecisionBundleShard] = []
+    all_ids: list[str] = []
+
+    for index, group in enumerate(groups, 1):
+        counts: dict[str, int] = {}
+        for category, _, _ in group:
+            counts[category.lower()] = counts.get(category.lower(), 0) + 1
+        unit_ids = [unit.id for _, unit, _ in group]
+        all_ids.extend(unit_ids)
+        header = (
+            f"DECISION_SHARD {index}/{total_shards} "
+            f"units={len(group)} categories={dict(sorted(counts.items()))} "
+            f"unresolved_authority_total={len(bundle.unresolved_authority)}"
+        )
+        text = "\n".join([header, *[line for _, _, line in group]])
+        if len(text) > max_chars:
+            raise RuntimeError(
+                f"internal shard budget error: shard={index} chars={len(text)} max={max_chars}"
+            )
+        shards.append(
+            DecisionBundleShard(
+                index=index,
+                total_shards=total_shards,
+                text=text,
+                char_count=len(text),
+                unit_ids=unit_ids,
+                category_counts=dict(sorted(counts.items())),
+            )
+        )
+
+    expected_ids = set(bundle.evidence_ids)
+    observed_ids = set(all_ids)
+    complete = (
+        observed_ids == expected_ids
+        and len(all_ids) == len(observed_ids)
+        and len(all_ids) == bundle.total_units
+    )
+    return DecisionBundleShardSet(
+        max_chars=max_chars,
+        total_units=bundle.total_units,
+        shard_count=total_shards,
+        complete=complete,
+        shards=shards,
+    )
+
+
 class DecisionBundleRender(BaseModel):
     text: str
     complete: bool
@@ -540,18 +695,12 @@ def render_decision_bundle_checked(
     blocker rather than a silent lossy transform.
     """
 
-    sections = [
-        ("EXCEPTIONS", bundle.exceptions),
-        ("CONTRADICTIONS", bundle.contradictions),
-        ("REQUIREMENTS", bundle.requirements),
-        ("UNRESOLVED_AUTHORITY", bundle.unresolved_authority),
-        ("CLAIMS", bundle.claims),
-        ("FACTS", bundle.facts),
-    ]
+    sections = _primary_bundle_sections(bundle)
     all_lines = [
         (
             f"DECISION_BUNDLE total={bundle.total_units} "
-            f"sources={len(bundle.source_ids)} kinds={bundle.kind_counts}"
+            f"sources={len(bundle.source_ids)} kinds={bundle.kind_counts} "
+            f"unresolved_authority={len(bundle.unresolved_authority)}"
         )
     ]
     line_ids: list[str | None] = [None]
@@ -562,11 +711,7 @@ def render_decision_bundle_checked(
         all_lines.append(f"\n[{label}] count={len(items)}")
         line_ids.append(None)
         for unit in items:
-            source_text = ",".join(sorted(unit.source_ids))
-            all_lines.append(
-                f"- id={unit.id} kind={unit.kind.value} authority={unit.authority_state.value} "
-                f"sources={source_text} :: {unit.text}"
-            )
+            all_lines.append(_decision_unit_line(label, unit))
             line_ids.append(unit.id)
 
     required_chars = sum(len(line) + 1 for line in all_lines)
