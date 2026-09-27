@@ -30,7 +30,7 @@ from .models import AssetIngestState, EvaluationCheckpoint, EvaluationState, Ing
 from .observability import collect_runtime_telemetry
 from .reader import CorpusReader
 from .runtime import ProgressiveEvaluator
-from .semantics import ExecutionContract, ExecutionMode, TransitionLedger, TransitionReceipt
+from .semantics import DecisionBundle, ExecutionContract, ExecutionMode, TransitionLedger, TransitionReceipt
 from .store import FileContextStore
 from .uploads import S3MultipartAdapter, UploadSessionStore
 from .audit import audit_corpus
@@ -856,6 +856,7 @@ def evaluation_preflight(req: PreflightRequest):
 def evaluate(req: EvaluateRequest):
     try:
         judge = _judge_for_request(req)
+        contract = _contract_for_request(req)
         return ProgressiveEvaluator(
             STORE,
             judge,
@@ -873,6 +874,7 @@ def evaluate(req: EvaluateRequest):
             job_id=req.job_id,
             resume=req.resume,
             max_blocks=req.max_blocks,
+            contract=contract,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus/job not found") from e
@@ -940,6 +942,53 @@ def search_blocks(corpus_id: str, q: str = Query(..., min_length=1), limit: int 
         raise HTTPException(status_code=404, detail="corpus not found") from e
 
 
+def _decision_bundle_summary(state: EvaluationState) -> dict[str, Any]:
+    if state.decision_bundle is None:
+        return {
+            "available": False,
+            "total_units": 0,
+            "source_count": 0,
+            "kind_counts": {},
+            "categories": {},
+        }
+    bundle = DecisionBundle.model_validate(state.decision_bundle)
+    categories = {
+        "claims": len(bundle.claims),
+        "exceptions": len(bundle.exceptions),
+        "contradictions": len(bundle.contradictions),
+        "requirements": len(bundle.requirements),
+        "facts": len(bundle.facts),
+        "unresolved_authority": len(bundle.unresolved_authority),
+    }
+    return {
+        "available": True,
+        "total_units": bundle.total_units,
+        "source_count": len(bundle.source_ids),
+        "kind_counts": bundle.kind_counts,
+        "categories": categories,
+    }
+
+
+def _transition_summary(state: EvaluationState) -> dict[str, Any]:
+    by_stage: dict[str, int] = {}
+    by_action: dict[str, int] = {}
+    for raw in state.transition_receipts:
+        receipt = TransitionReceipt.model_validate(raw)
+        stage = receipt.to_stage.value
+        action = receipt.action.value
+        by_stage[stage] = by_stage.get(stage, 0) + 1
+        by_action[action] = by_action.get(action, 0) + 1
+    ledger = TransitionLedger(
+        receipts=[TransitionReceipt.model_validate(x) for x in state.transition_receipts]
+    )
+    return {
+        "total": len(state.transition_receipts),
+        "chain_valid": ledger.verify_chain(),
+        "by_stage": dict(sorted(by_stage.items())),
+        "by_action": dict(sorted(by_action.items())),
+    }
+
+
 @app.get("/api/jobs/{corpus_id}/{job_id}")
 def job_detail(corpus_id: str, job_id: str):
     try:
@@ -948,17 +997,37 @@ def job_detail(corpus_id: str, job_id: str):
         expected = set(manifest.coverage_ids())
         visited = expected & cp.state.visited
         failures = {k: v for k, v in cp.state.failures.items() if k in expected}
+        coverage_complete = (
+            len(visited) == len(expected)
+            and manifest.coverage_ready
+        )
+        evidence_preview_limit = 50
+        evidence_total = len(cp.state.evidence)
         return {
             "job_id": cp.job_id,
             "corpus_id": cp.corpus_id,
             "complete": cp.complete,
+            "coverage_complete": coverage_complete,
+            "finalized": cp.complete,
+            "judgment_valid": (
+                cp.complete
+                and cp.final_score is not None
+                and not cp.state.finalization_blockers
+            ),
             "status": cp.status,
             "coverage": len(visited) / len(expected) if expected else 1.0,
             "visited": len(visited),
             "total": len(expected),
-            "missing": [x for x in cp.ordered_block_ids if x in expected and x not in cp.state.visited][:200],
+            "missing": [
+                x for x in cp.ordered_block_ids
+                if x in expected and x not in cp.state.visited
+            ][:200],
             "failures": failures,
-            "evidence": cp.state.evidence,
+            "finalization_blockers": list(cp.state.finalization_blockers),
+            "evidence": cp.state.evidence[:evidence_preview_limit],
+            "evidence_total": evidence_total,
+            "evidence_preview_limit": evidence_preview_limit,
+            "evidence_truncated": evidence_total > evidence_preview_limit,
             "evidence_atoms": sum(len(item.atoms) for item in cp.state.evidence),
             "evidence_kind_counts": evidence_kind_counts(cp.state.evidence),
             "reduction_nodes": cp.state.reduction_nodes,
@@ -969,19 +1038,124 @@ def job_detail(corpus_id: str, job_id: str):
             "usage": cp.state.usage,
             "ingest_coverage": manifest.ingest_coverage,
             "semantic_coverage": manifest.semantic_coverage,
+            "inspection_coverage": len(visited) / len(expected) if expected else 1.0,
             "ingest_ready": manifest.coverage_ready,
             "unresolved_units": manifest.unresolved_units,
             "execution_contract": cp.state.execution_contract,
-            "transition_receipts": len(cp.state.transition_receipts),
-            "transition_chain_valid": TransitionLedger(
-                receipts=[
-                    TransitionReceipt.model_validate(x)
-                    for x in cp.state.transition_receipts
-                ]
-            ).verify_chain(),
+            "transitions": _transition_summary(cp.state),
             "semantic_units": len(cp.state.semantic_units),
             "reduction_receipts": len(cp.state.reduction_receipts),
-            "decision_bundle": cp.state.decision_bundle,
+            "decision_bundle": _decision_bundle_summary(cp.state),
+            "detail_endpoints": {
+                "evidence": f"/api/jobs/{corpus_id}/{job_id}/evidence",
+                "transitions": f"/api/jobs/{corpus_id}/{job_id}/transitions",
+                "decision_bundle": f"/api/jobs/{corpus_id}/{job_id}/decision-bundle",
+            },
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="corpus/job not found") from e
+
+
+@app.get("/api/jobs/{corpus_id}/{job_id}/evidence")
+def job_evidence(
+    corpus_id: str,
+    job_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+):
+    try:
+        cp = STORE.get_checkpoint(corpus_id, job_id)
+        total = len(cp.state.evidence)
+        return {
+            "job_id": job_id,
+            "corpus_id": corpus_id,
+            "offset": offset,
+            "limit": limit,
+            "total": total,
+            "items": cp.state.evidence[offset : offset + limit],
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="corpus/job not found") from e
+
+
+@app.get("/api/jobs/{corpus_id}/{job_id}/transitions")
+def job_transitions(
+    corpus_id: str,
+    job_id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    to_stage: str | None = None,
+    action: str | None = None,
+):
+    try:
+        cp = STORE.get_checkpoint(corpus_id, job_id)
+        receipts = [
+            TransitionReceipt.model_validate(x)
+            for x in cp.state.transition_receipts
+        ]
+        if to_stage:
+            receipts = [x for x in receipts if x.to_stage.value == to_stage]
+        if action:
+            receipts = [x for x in receipts if x.action.value == action]
+        total = len(receipts)
+        return {
+            "job_id": job_id,
+            "corpus_id": corpus_id,
+            "offset": offset,
+            "limit": limit,
+            "total": total,
+            "chain_valid": _transition_summary(cp.state)["chain_valid"],
+            "items": receipts[offset : offset + limit],
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail="corpus/job not found") from e
+
+
+@app.get("/api/jobs/{corpus_id}/{job_id}/decision-bundle")
+def job_decision_bundle(
+    corpus_id: str,
+    job_id: str,
+    category: str = Query("exceptions"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+):
+    try:
+        cp = STORE.get_checkpoint(corpus_id, job_id)
+        if cp.state.decision_bundle is None:
+            return {
+                "job_id": job_id,
+                "corpus_id": corpus_id,
+                "category": category,
+                "offset": offset,
+                "limit": limit,
+                "total": 0,
+                "items": [],
+                "summary": _decision_bundle_summary(cp.state),
+            }
+        bundle = DecisionBundle.model_validate(cp.state.decision_bundle)
+        categories = {
+            "claims": bundle.claims,
+            "exceptions": bundle.exceptions,
+            "contradictions": bundle.contradictions,
+            "requirements": bundle.requirements,
+            "facts": bundle.facts,
+            "unresolved_authority": bundle.unresolved_authority,
+        }
+        if category not in categories:
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown DecisionBundle category: {category}",
+            )
+        items = categories[category]
+        return {
+            "job_id": job_id,
+            "corpus_id": corpus_id,
+            "category": category,
+            "offset": offset,
+            "limit": limit,
+            "total": len(items),
+            "items": items[offset : offset + limit],
+            "summary": _decision_bundle_summary(cp.state),
         }
     except FileNotFoundError as e:
         raise HTTPException(status_code=404, detail="corpus/job not found") from e
@@ -1060,15 +1234,16 @@ def admin_overview():
 
     telemetry = collect_runtime_telemetry()
     runtime = {
-        "version": "0.14.0",
+        "version": __version__,
         "store": str(STORE.root),
         "default judge": "heuristic / model route / OpenAI-compatible",
         "Docling": "available" if importlib.util.find_spec("docling") else "optional, not installed",
         "RLM": "available" if importlib.util.find_spec("rlm") or importlib.util.find_spec("rlms") else "optional, not installed",
         "LMCache": "available" if importlib.util.find_spec("lmcache") else "serving-layer optional",
-        "coverage policy": "ingest + semantic + execution coverage must all pass before final score",
+        "coverage policy": "ingest readiness + required-block inspection + active ExecutionContract gate finalization",
         "ranking policy": "scheduling only; never filtering",
-        "overflow policy": "exhaustive map + bounded hierarchical reduce + source rehydration",
+        "reduction policy": "canonical typed merges only; epistemic diversity may not disappear silently",
+        "overflow policy": "DecisionBundle overflow blocks judgment instead of silently truncating",
         "block payload backend": getattr(STORE.block_store, "backend", STORE.block_backend),
         "job queue backend": "sqlite-wal",
         "active workers": len(QUEUE.workers()),
