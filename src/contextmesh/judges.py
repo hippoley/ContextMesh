@@ -10,6 +10,7 @@ from typing import Any
 
 from .evidence import render_typed_evidence
 from .models import ContextBlock, EvaluationState, Modality, UsageMetrics
+from .semantics import DecisionBundle, render_decision_bundle
 
 
 def _content_text(value: Any) -> str:
@@ -364,15 +365,28 @@ class OpenAICompatibleJudge:
         if limit and sum(len(x) + 1 for x in notes) > limit:
             notes = [self.reduce_notes(state.question, state.answer, notes, 99)]
         joined = "\n".join(notes)
+
         typed_budget = max(4_000, min(32_000, (limit // 3) if limit else 32_000))
         typed = render_typed_evidence(state.evidence, max_chars=typed_budget)
+
+        bundle_budget = max(6_000, min(48_000, (limit // 2) if limit else 48_000))
+        if state.decision_bundle is not None:
+            bundle = DecisionBundle.model_validate(state.decision_bundle)
+            decision_state = render_decision_bundle(bundle, max_chars=bundle_budget)
+        else:
+            decision_state = "(no structured DecisionBundle available)"
+
         prompt = (
-            "Produce strict JSON {score:number,rationale:string}. Score the candidate answer against the question using the "
-            "complete, hierarchically reduced inspection state below. Full corpus coverage has already been enforced by the runtime. "
-            "Typed evidence is a source-linked preservation channel for numbers, dates, exceptions, contradictions and requirements; "
-            "treat it as authoritative evidence metadata, not as a replacement for the reduced inspection state.\n\n"
-            f"QUESTION:\n{state.question}\n\nANSWER:\n{state.answer}\n\nREDUCED INSPECTION STATE:\n{joined}"
-            f"\n\nTYPED EVIDENCE STATE:\n{typed or '(none)'}"
+            "Produce strict JSON {score:number,rationale:string}. Score the candidate answer against the question. "
+            "Full corpus coverage and runtime execution contracts have already been enforced before this call. "
+            "The DECISION BUNDLE is the primary preservation channel: exceptions, contradictions, requirements and unresolved "
+            "authority must not be ignored merely because a free-form reduction is shorter or smoother. "
+            "The reduced inspection state is an explanatory/context channel. Legacy typed evidence is included as a source-linked "
+            "cross-check for numbers, dates and critical atoms.\n\n"
+            f"QUESTION:\n{state.question}\n\nANSWER:\n{state.answer}"
+            f"\n\nDECISION BUNDLE:\n{decision_state}"
+            f"\n\nREDUCED INSPECTION STATE:\n{joined}"
+            f"\n\nLEGACY TYPED EVIDENCE:\n{typed or '(none)'}"
         )
         raw = self._chat([{"role": "user", "content": prompt}])
         obj = _parse_json_object(raw)
