@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from benchmarks.verify_frozen_public_proof import (
+from contextmesh.frozen_proof import (
     FrozenProofMismatch,
     verify_frozen_public_proof,
 )
