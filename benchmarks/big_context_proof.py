@@ -105,6 +105,7 @@ def main() -> int:
             min_cases=args.min_needles,
             min_kinds=args.min_needle_kinds,
         ),
+        manifest=manifest,
     )
 
     gate3 = None
