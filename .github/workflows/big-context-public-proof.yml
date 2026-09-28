@@ -55,6 +55,27 @@ jobs:
             --required-max-ratio 20 \
             --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
 
+      - name: Generate stricter Gate 4 v2 candidate panel
+        id: gate4_v2
+        continue-on-error: true
+        run: |
+          python benchmarks/plan_gate4_scale.py nist-public-big-context-v1 \
+            --store /tmp/contextmesh-nist-proof/store \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --model-context-tokens 131072 \
+            --ratios "1,2,5,10,20" \
+            --needle-sample-size 12 \
+            --required-max-ratio 20 \
+            --require-cross-file \
+            --require-all-local-positions \
+            --output /tmp/contextmesh-nist-proof/results/gate4-v2-candidate.json
+
+      - name: Show stricter Gate 4 v2 candidate
+        if: always()
+        run: |
+          echo "candidate-step-outcome=${{ steps.gate4_v2.outcome }}"
+          cat /tmp/contextmesh-nist-proof/results/gate4-v2-candidate.json 2>/dev/null || true
+
       - name: Verify current rebuild matches frozen public proof
         run: |
           python benchmarks/verify_frozen_public_proof.py \
