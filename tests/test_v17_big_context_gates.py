@@ -961,3 +961,131 @@ def test_batched_task_baseline_visits_blocks_once_not_tasks_times_blocks(tmp_pat
     assert set(calls) == set(manifest.coverage_ids())
     assert len(calls) == manifest.required_blocks
     assert len(calls) < len(tasks) * manifest.required_blocks
+
+
+
+def test_gate4_plan_uses_exact_target_blocks_not_whole_target_assets(tmp_path: Path):
+    from contextmesh.big_context_proof import Gate4Spec, plan_gate4_scale
+
+    p = tmp_path / "large-target.txt"
+    p.write_text(
+        ("early filler " * 500)
+        + "\nDECISIVE_SCALE_NEEDLE\n"
+        + ("late filler " * 900),
+        encoding="utf-8",
+    )
+    distractor = tmp_path / "distractor.txt"
+    distractor.write_text("distractor " * 3000, encoding="utf-8")
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        [p, distractor],
+        store,
+        "gate4-exact-anchor",
+        window_chars=1800,
+        overlap_chars=0,
+    )
+    target = next(
+        store.get_block(manifest.corpus_id, block_id)
+        for block_id in manifest.coverage_ids()
+        if "DECISIVE_SCALE_NEEDLE" in store.get_block(manifest.corpus_id, block_id).text
+    )
+    same_asset_blocks = [
+        block_id
+        for block_id in manifest.coverage_ids()
+        if Path(store.get_block(manifest.corpus_id, block_id).source.path).name == p.name
+    ]
+    assert len(same_asset_blocks) > 1
+
+    needle = NeedleCase(
+        id="scale-exact",
+        kind=NeedleKind.EXACT,
+        question="Find the decisive scale needle.",
+        target_assets=[p.name],
+        target_block_ids=[target.id],
+        expected_present=True,
+        match_terms=["DECISIVE_SCALE_NEEDLE"],
+        corpus_position=CorpusPosition.MIDDLE,
+        local_position=LocalPosition.MIDDLE,
+    )
+    report = plan_gate4_scale(
+        store,
+        manifest.corpus_id,
+        [needle],
+        Gate4Spec(
+            ratios=[1, 2],
+            model_context_tokens=2500,
+            needle_sample_size=1,
+            task_sample_size=0,
+            required_max_ratio=2,
+        ),
+    )
+
+    assert report.ready_for_live_gate4 is True
+    assert report.anchor_block_ids == [target.id]
+    assert report.points[0].anchor_blocks == 1
+    assert report.points[0].anchor_preserved is True
+    assert report.points[0].selected_blocks < len(same_asset_blocks) + len(
+        [
+            block_id
+            for block_id in manifest.coverage_ids()
+            if Path(store.get_block(manifest.corpus_id, block_id).source.path).name
+            == distractor.name
+        ]
+    )
+
+
+def test_gate4_plan_is_nested_and_stably_fingerprinted(tmp_path: Path):
+    from contextmesh.big_context_proof import Gate4Spec, plan_gate4_scale
+
+    paths = []
+    for i in range(8):
+        p = tmp_path / f"scale-plan-{i}.txt"
+        marker = " PLAN_ANCHOR_42" if i == 6 else ""
+        p.write_text(("distractor evidence " * 300) + marker, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        paths,
+        store,
+        "gate4-plan",
+        window_chars=2500,
+        overlap_chars=0,
+    )
+    target = next(
+        store.get_block(manifest.corpus_id, block_id)
+        for block_id in manifest.coverage_ids()
+        if "PLAN_ANCHOR_42" in store.get_block(manifest.corpus_id, block_id).text
+    )
+    needle = NeedleCase(
+        id="plan",
+        kind=NeedleKind.EXACT,
+        question="Find PLAN_ANCHOR_42",
+        target_assets=[Path(target.source.path).name],
+        target_block_ids=[target.id],
+        expected_present=True,
+        match_terms=["PLAN_ANCHOR_42"],
+        corpus_position=CorpusPosition.LATE,
+        local_position=LocalPosition.MIDDLE,
+    )
+    spec = Gate4Spec(
+        ratios=[1, 2, 5],
+        model_context_tokens=2000,
+        needle_sample_size=1,
+        task_sample_size=0,
+        required_max_ratio=5,
+    )
+
+    first = plan_gate4_scale(store, manifest.corpus_id, [needle], spec)
+    second = plan_gate4_scale(store, manifest.corpus_id, [needle], spec)
+
+    assert first.ready_for_live_gate4 is True
+    assert all(point.anchor_preserved for point in first.points)
+    assert all(point.nested_with_previous for point in first.points)
+    assert [p.projection_fingerprint for p in first.points] == [
+        p.projection_fingerprint for p in second.points
+    ]
+    for smaller, larger in zip(first.points, first.points[1:]):
+        assert set(smaller.block_ids).issubset(set(larger.block_ids))
+        assert smaller.selected_blocks <= larger.selected_blocks
