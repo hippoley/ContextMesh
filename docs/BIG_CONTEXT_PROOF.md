@@ -229,6 +229,29 @@ Negative Accuracy drop     <= 2 pp
 
 Cost and latency ratios are always recorded. They become hard blockers only when an explicit operational threshold is configured.
 
+### Promotion contract
+
+A repeated run can also produce a separate release decision:
+
+```text
+PROMOTE
+HOLD
+REJECT
+```
+
+This decision does not replace Gate 5. Gate 5 answers whether the candidate is within drift limits; the promotion contract answers whether it should replace the current reference under explicit operational policy.
+
+Default workflow promotion constraints are:
+
+```text
+Gate 5 status                    PASS
+20x ContextMesh recall drop      <= 5 pp
+candidate/reference cost ratio   <= 1.25x
+candidate/reference latency      <= 1.25x
+```
+
+Missing comparability or unavailable operational ratios produce `HOLD`, not `PROMOTE`.
+
 ## Run the proof
 
 First live run:
