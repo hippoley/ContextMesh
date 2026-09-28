@@ -340,3 +340,243 @@ def test_gate3_fails_when_live_recovery_is_weak():
     gate = evaluate_gate3(needle, [baseline], Gate3Spec())
     assert gate.status == "fail"
     assert any(x.startswith("evidence-recall:") for x in gate.blockers)
+
+
+
+def test_gate4_scale_curve_keeps_anchor_evidence_and_grows_distractors(tmp_path: Path):
+    from contextmesh.big_context_proof import (
+        Gate4Spec,
+        TaskCase,
+        run_scale_curve,
+    )
+    from contextmesh.models import UsageMetrics
+
+    paths = []
+    for i in range(12):
+        p = tmp_path / f"scale-{i:02d}.txt"
+        marker = " SCALE_NEEDLE_4242 decisive exception." if i == 10 else ""
+        p.write_text(("distractor operational paragraph " * 70) + marker, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(paths, store, "scale-source")
+
+    class ScaleJudge:
+        route_id = "scale-judge"
+
+        def can_inspect(self, block):
+            return True
+
+        def inspect(self, question, answer, block, notes):
+            if "scale_needle_4242" in block.text.lower():
+                return block.text, True
+            return f"{block.id}: inspected", False
+
+        def reduce_notes(self, question, answer, notes, level):
+            return f"L{level}: {len(notes)}"
+
+        def finalize(self, state):
+            return (95.0, "supported") if "correct-answer" in state.answer else (5.0, "rejected")
+
+        def score_full(self, question, answer, blocks):
+            return (95.0, "supported") if "correct-answer" in answer else (5.0, "rejected")
+
+        def usage_snapshot(self):
+            return UsageMetrics(route_id=self.route_id)
+
+    needle = NeedleCase(
+        id="scale-needle",
+        kind=NeedleKind.EXCEPTION,
+        question="Find SCALE_NEEDLE_4242",
+        target_assets=["scale-10.txt"],
+        expected_present=True,
+        expected_answer="SCALE_NEEDLE_4242",
+        match_terms=["SCALE_NEEDLE_4242"],
+        corpus_position=CorpusPosition.LATE,
+        local_position=LocalPosition.MIDDLE,
+    )
+    tasks = [
+        TaskCase(
+            id="scale-task",
+            question="Is the candidate supported?",
+            candidate_answer="correct-answer",
+            expected_min_score=90,
+        )
+    ]
+
+    report = run_scale_curve(
+        store,
+        manifest.corpus_id,
+        ScaleJudge,
+        [needle],
+        tasks,
+        Gate4Spec(
+            ratios=[1, 2, 5],
+            model_context_tokens=3000,
+            needle_sample_size=1,
+            task_sample_size=1,
+            min_evidence_recall=1.0,
+            min_task_accuracy=1.0,
+            max_recall_drop=0.0,
+            required_max_ratio=5.0,
+        ),
+    )
+
+    assert report.status == "pass"
+    assert len(report.points) == 3
+    assert all(point.status == "pass" for point in report.points)
+    assert all(point.evidence_recall == 1.0 for point in report.points)
+    assert all(point.task_accuracy == 1.0 for point in report.points)
+    assert report.max_completed_ratio >= 5.0
+    assert report.recall_drop == 0.0
+    assert report.points[0].selected_blocks < report.points[-1].selected_blocks
+
+
+def test_gate4_fails_when_source_corpus_cannot_reach_required_ratio(tmp_path: Path):
+    from contextmesh.big_context_proof import Gate4Spec, TaskCase, run_scale_curve
+    from contextmesh.models import UsageMetrics
+
+    paths = []
+    for i in range(3):
+        p = tmp_path / f"small-{i}.txt"
+        p.write_text(("small " * 100) + (" NEEDLE_SMALL" if i == 2 else ""), encoding="utf-8")
+        paths.append(p)
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(paths, store, "small-scale")
+
+    class Judge:
+        route_id = "j"
+        def can_inspect(self, block): return True
+        def inspect(self, question, answer, block, notes):
+            return (block.text, "needle_small" in block.text.lower())
+        def reduce_notes(self, question, answer, notes, level): return "reduced"
+        def finalize(self, state): return 100.0, "ok"
+        def score_full(self, question, answer, blocks): return 100.0, "ok"
+        def usage_snapshot(self): return UsageMetrics(route_id=self.route_id)
+
+    needle = NeedleCase(
+        id="n",
+        kind=NeedleKind.EXACT,
+        question="find NEEDLE_SMALL",
+        target_assets=["small-2.txt"],
+        expected_present=True,
+        expected_answer="NEEDLE_SMALL",
+        match_terms=["NEEDLE_SMALL"],
+        corpus_position=CorpusPosition.LATE,
+        local_position=LocalPosition.TAIL,
+    )
+    task = TaskCase(
+        id="t",
+        question="q",
+        candidate_answer="a",
+        expected_min_score=90,
+    )
+
+    report = run_scale_curve(
+        store,
+        manifest.corpus_id,
+        Judge,
+        [needle],
+        [task],
+        Gate4Spec(
+            ratios=[1, 20],
+            model_context_tokens=1000,
+            needle_sample_size=1,
+            task_sample_size=1,
+            required_max_ratio=20,
+        ),
+    )
+
+    assert report.status == "fail"
+    assert any("scale-point-blocked:20x" in x for x in report.blockers)
+
+
+def test_gate5_detects_quality_drift_but_can_leave_cost_as_observational():
+    from contextmesh.big_context_proof import (
+        Gate5Spec,
+        ProofRunSnapshot,
+        evaluate_gate5_drift,
+    )
+
+    reference = ProofRunSnapshot(
+        run_id="r0",
+        route_id="route-a",
+        model="model-a",
+        model_version="2026-09-01",
+        prompt_version="p1",
+        chunk_policy="12k",
+        reducer_policy="typed-0.16",
+        evidence_recall=0.96,
+        task_accuracy=0.93,
+        authority_accuracy=0.98,
+        negative_accuracy=1.0,
+        estimated_cost_usd=1.0,
+        latency_seconds=100,
+    )
+    safe = ProofRunSnapshot(
+        run_id="r1",
+        route_id="route-a",
+        model="model-a",
+        model_version="2026-09-15",
+        prompt_version="p2",
+        chunk_policy="12k",
+        reducer_policy="typed-0.16",
+        evidence_recall=0.95,
+        task_accuracy=0.92,
+        authority_accuracy=0.98,
+        negative_accuracy=0.99,
+        estimated_cost_usd=2.5,
+        latency_seconds=140,
+    )
+
+    report = evaluate_gate5_drift(reference, [safe], Gate5Spec())
+
+    assert report.status == "pass"
+    assert report.deltas[0].cost_ratio == 2.5
+    assert report.deltas[0].latency_ratio == 1.4
+    assert report.deltas[0].config_fingerprint != reference.config_fingerprint
+
+
+def test_gate5_blocks_recall_task_and_authority_regressions():
+    from contextmesh.big_context_proof import (
+        Gate5Spec,
+        ProofRunSnapshot,
+        evaluate_gate5_drift,
+    )
+
+    reference = ProofRunSnapshot(
+        run_id="base",
+        route_id="r",
+        model="m",
+        evidence_recall=0.97,
+        task_accuracy=0.94,
+        authority_accuracy=0.99,
+        negative_accuracy=1.0,
+    )
+    regressed = ProofRunSnapshot(
+        run_id="candidate",
+        route_id="r",
+        model="m2",
+        evidence_recall=0.88,
+        task_accuracy=0.82,
+        authority_accuracy=0.90,
+        negative_accuracy=0.96,
+    )
+
+    report = evaluate_gate5_drift(
+        reference,
+        [regressed],
+        Gate5Spec(
+            max_evidence_recall_drop=0.05,
+            max_task_accuracy_drop=0.05,
+            max_authority_accuracy_drop=0.02,
+            max_negative_accuracy_drop=0.02,
+        ),
+    )
+
+    assert report.status == "fail"
+    blockers = " ".join(report.blockers)
+    assert "evidence-recall-drop" in blockers
+    assert "task-accuracy-drop" in blockers
+    assert "authority-accuracy-drop" in blockers
+    assert "negative-accuracy-drop" in blockers
