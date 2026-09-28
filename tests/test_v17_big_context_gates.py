@@ -860,3 +860,104 @@ def test_recovery_requires_exact_target_block_when_ground_truth_freezes_one(tmp_
     assert report.evidence_recall == 0.0
     assert report.results[0].recovered is False
     assert report.results[0].matched_assets == []
+
+
+
+def test_batched_task_baseline_visits_blocks_once_not_tasks_times_blocks(tmp_path: Path):
+    from contextmesh.big_context_proof import TaskCase, run_task_baselines
+    from contextmesh.models import UsageMetrics
+
+    paths = []
+    for i in range(4):
+        p = tmp_path / f"task-batch-{i}.txt"
+        p.write_text(
+            ("ordinary evidence " * 100)
+            + (f" FACT_{i} controls the decision." if i < 3 else ""),
+            encoding="utf-8",
+        )
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        paths,
+        store,
+        "task-batch-proof",
+        window_chars=5000,
+        overlap_chars=0,
+    )
+    calls = []
+
+    class BatchTaskJudge:
+        route_id = "batch-task"
+
+        def can_inspect(self, block):
+            return True
+
+        def inspect_task_batch(self, block, tasks):
+            assert all(
+                set(item) == {"id", "question", "candidate_answer"}
+                for item in tasks
+            )
+            assert "expected_min_score" not in str(tasks)
+            assert "expected_max_score" not in str(tasks)
+            calls.append(block.id)
+            out = {}
+            for item in tasks:
+                marker = item["question"].split()[-1]
+                if marker in block.text:
+                    out[item["id"]] = f"{marker} is present in the source."
+            return out
+
+        def inspect(self, question, answer, block, notes):
+            raise AssertionError("per-task traversal must not be used")
+
+        def reduce_notes(self, question, answer, notes, level):
+            return f"L{level}:{len(notes)}"
+
+        def finalize(self, state):
+            return (
+                (95.0, "supported")
+                if "supported" in state.answer
+                else (5.0, "rejected")
+            )
+
+        def score_full(self, question, answer, blocks):
+            return (
+                (95.0, "supported")
+                if "supported" in answer
+                else (5.0, "rejected")
+            )
+
+        def usage_snapshot(self):
+            return UsageMetrics(route_id=self.route_id)
+
+    tasks = [
+        TaskCase(
+            id=f"task-{i}",
+            question=f"Find FACT_{i}",
+            candidate_answer="supported answer",
+            expected_min_score=90,
+            tags=["batch"],
+        )
+        for i in range(3)
+    ]
+
+    summaries = run_task_baselines(
+        store,
+        manifest.corpus_id,
+        BatchTaskJudge,
+        tasks,
+        lexical_top_ks=(),
+        include_direct=False,
+        include_full_coverage=True,
+        max_workers=2,
+    )
+
+    assert len(summaries) == 1
+    summary = summaries[0]
+    assert summary.baseline == "contextmesh-full-coverage"
+    assert summary.task_accuracy == 1.0
+    assert summary.blocked_tasks == 0
+    assert set(calls) == set(manifest.coverage_ids())
+    assert len(calls) == manifest.required_blocks
+    assert len(calls) < len(tasks) * manifest.required_blocks
