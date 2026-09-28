@@ -1089,3 +1089,84 @@ def test_gate4_plan_is_nested_and_stably_fingerprinted(tmp_path: Path):
     for smaller, larger in zip(first.points, first.points[1:]):
         assert set(smaller.block_ids).issubset(set(larger.block_ids))
         assert smaller.selected_blocks <= larger.selected_blocks
+
+
+
+def test_gate4_live_rejects_tampered_frozen_projection_before_model_calls(tmp_path: Path):
+    from contextmesh.big_context_proof import Gate4Spec, plan_gate4_scale, run_scale_curve
+
+    paths = []
+    for i in range(6):
+        p = tmp_path / f"frozen-{i}.txt"
+        marker = " FROZEN_NEEDLE_9" if i == 4 else ""
+        p.write_text(("stable distractor " * 250) + marker, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        paths,
+        store,
+        "frozen-plan",
+        window_chars=2200,
+        overlap_chars=0,
+    )
+    target = next(
+        store.get_block(manifest.corpus_id, block_id)
+        for block_id in manifest.coverage_ids()
+        if "FROZEN_NEEDLE_9" in store.get_block(manifest.corpus_id, block_id).text
+    )
+    needle = NeedleCase(
+        id="frozen",
+        kind=NeedleKind.EXACT,
+        question="Find FROZEN_NEEDLE_9",
+        target_assets=[Path(target.source.path).name],
+        target_block_ids=[target.id],
+        expected_present=True,
+        match_terms=["FROZEN_NEEDLE_9"],
+        corpus_position=CorpusPosition.LATE,
+        local_position=LocalPosition.MIDDLE,
+    )
+    spec = Gate4Spec(
+        ratios=[1, 2],
+        model_context_tokens=2000,
+        needle_sample_size=1,
+        task_sample_size=0,
+        required_max_ratio=2,
+    )
+    plan = plan_gate4_scale(store, manifest.corpus_id, [needle], spec)
+    assert plan.ready_for_live_gate4 is True
+
+    tampered_point = plan.points[0].model_copy(
+        update={"projection_fingerprint": "0" * 64}
+    )
+    tampered = plan.model_copy(
+        update={"points": [tampered_point, *plan.points[1:]]}
+    )
+
+    calls = []
+
+    class NeverCallJudge:
+        route_id = "never"
+        def can_inspect(self, block):
+            calls.append(block.id)
+            raise AssertionError("model path must not be reached")
+        def inspect(self, question, answer, block, notes):
+            raise AssertionError
+        def score_full(self, question, answer, blocks):
+            raise AssertionError
+        def usage_snapshot(self):
+            from contextmesh.models import UsageMetrics
+            return UsageMetrics(route_id=self.route_id)
+
+    with pytest.raises(ValueError, match="fingerprint mismatch"):
+        run_scale_curve(
+            store,
+            manifest.corpus_id,
+            NeverCallJudge,
+            [needle],
+            [],
+            spec,
+            frozen_plan=tampered,
+        )
+
+    assert calls == []
