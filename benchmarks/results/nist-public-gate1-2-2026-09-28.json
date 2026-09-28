@@ -4,14 +4,14 @@
   "evidence_class": "contextmesh-public-proof-gate1-2",
   "claim_scope": "Real public corpus qualification and frozen multimodal ground-truth matrix only. Gates 3-5 are not proven by this artifact.",
   "repository": "hippoley/ContextMesh",
-  "head_sha": "ae0be9f6129a034009740f28bb623b7abe63810a",
+  "head_sha": "d158cb0dea241e6fc0aed97f984eb77e1ca36758",
   "workflow_run": {
-    "id": 36372832730,
-    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36372832730",
+    "id": 36373761033,
+    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36373761033",
     "conclusion": "success",
-    "artifact_id": 10949746651,
+    "artifact_id": 10949814209,
     "artifact_name": "big-context-public-nist-preflight",
-    "artifact_zip_sha256": "392764f6d8814dbdde4e8f402f0be0edcbd80737b453f46acd5e08266ccd6901"
+    "artifact_zip_sha256": "40b2c1cce7fea75f5de3fea3146f4486574d67b60d9733a97b2c29ec7c4dde72"
   },
   "gate1": {
     "status": "pass",
@@ -20,8 +20,8 @@
     "total_bytes": 17010982,
     "total_chars": 3882513,
     "estimated_tokens": 3882513,
-    "model_context_tokens": 128000,
-    "corpus_to_context_ratio": 30.3321,
+    "model_context_tokens": 131072,
+    "corpus_to_context_ratio": 29.6212,
     "required_blocks": 1841,
     "modalities": {
       "image": 899,
@@ -148,5 +148,21 @@
       "size_bytes": 30276,
       "sha256": "ee38049cbad684967ffcc830f2986cdcb1b054fb29a77e1d47491607682ce38d"
     }
-  ]
+  ],
+  "live_cost_preflight": {
+    "status": "pass",
+    "model": "qwen3-vl-8b-instruct",
+    "provider": "Alibaba Cloud Model Studio / DashScope",
+    "region": "China (Beijing)",
+    "context_window_tokens": 131072,
+    "estimated_input_tokens": 89344074,
+    "estimated_output_tokens": 1375143,
+    "input_price_cny_per_million": 0.5,
+    "output_price_cny_per_million": 2,
+    "estimated_cost_cny": 47.42,
+    "max_estimated_cost_cny": 80,
+    "safety_factor": 1.35,
+    "note": "Conservative architecture-level estimate only; this is not a provider invoice and does not prove Gate 3.",
+    "pricing_source": "https://help.aliyun.com/zh/model-studio/qwen3-vl-8b-instruct"
+  }
 }
