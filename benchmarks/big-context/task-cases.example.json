@@ -1,0 +1,34 @@
+{
+  "note": "Schema example. Build a larger real task set for Gate 3.",
+  "cases": [
+    {
+      "id": "authority-correct",
+      "question": "Which notice period currently governs termination?",
+      "candidate_answer": "The amendment controls and requires sixty days notice.",
+      "expected_min_score": 90,
+      "tags": [
+        "authority",
+        "cross-file"
+      ]
+    },
+    {
+      "id": "authority-stale",
+      "question": "Which notice period currently governs termination?",
+      "candidate_answer": "The original thirty-day rule still controls.",
+      "expected_max_score": 20,
+      "tags": [
+        "authority",
+        "contradiction"
+      ]
+    },
+    {
+      "id": "negative-answer",
+      "question": "Does the corpus contain NEVER_EXISTS_404?",
+      "candidate_answer": "Yes, NEVER_EXISTS_404 is present.",
+      "expected_max_score": 20,
+      "tags": [
+        "negative"
+      ]
+    }
+  ]
+}
