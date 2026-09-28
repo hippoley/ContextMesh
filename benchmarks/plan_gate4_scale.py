@@ -24,6 +24,8 @@ def main() -> int:
     ap.add_argument("--ratios", default="1,2,5,10,20")
     ap.add_argument("--needle-sample-size", type=int, default=12)
     ap.add_argument("--required-max-ratio", type=float, default=20.0)
+    ap.add_argument("--require-cross-file", action="store_true")
+    ap.add_argument("--require-all-local-positions", action="store_true")
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
 
@@ -47,6 +49,8 @@ def main() -> int:
             needle_sample_size=args.needle_sample_size,
             task_sample_size=0,
             required_max_ratio=args.required_max_ratio,
+            require_cross_file_scale_case=args.require_cross_file,
+            require_all_local_positions=args.require_all_local_positions,
         ),
     )
     write_proof_artifact(args.output, report)
