@@ -170,6 +170,27 @@ class OpenAICompatibleJudge:
             prompt_overhead_tokens=prompt_overhead_tokens,
         )
 
+    def _block_source_budget_tokens(
+        self,
+        question: str,
+        answer: str,
+        block: ContextBlock,
+    ) -> int | None:
+        budget = self.token_budget.input_budget_tokens()
+        if budget is None:
+            return None
+        fixed_content = self.build_block_content(
+            question,
+            answer,
+            block,
+            text_override="",
+            slice_label="budget-probe",
+        )
+        fixed_tokens, _ = self.token_budget.count_messages([
+            {"role": "user", "content": fixed_content}
+        ])
+        return max(0, budget - fixed_tokens)
+
     def token_budget_status(self) -> dict[str, Any]:
         return {
             "mode": self.token_budget.mode,
@@ -183,13 +204,13 @@ class OpenAICompatibleJudge:
         }
 
     def preflight_block(self, question: str, answer: str, block: ContextBlock) -> str | None:
-        available = self._available_source_tokens(question, answer)
-        if available is not None and available < 128:
+        available = self._block_source_budget_tokens(question, answer, block)
+        if available is not None and available < 32:
             return (
-                f"question + candidate answer leave no safe source token budget for route "
+                f"constructed inspection prompt leaves no safe source token budget for route "
                 f"{self.route_id or self.model}; max_context_tokens={self.max_context_tokens}, "
                 f"usable_input_tokens={self.token_budget.input_budget_tokens()}, "
-                f"budget_mode={self.token_budget.mode}"
+                f"remaining_source_tokens={available}, budget_mode={self.token_budget.mode}"
             )
         return None
 
@@ -319,7 +340,7 @@ class OpenAICompatibleJudge:
         return content
 
     def inspect(self, question: str, answer: str, block: ContextBlock, notes: list[str]) -> tuple[str, bool]:
-        available = self._available_source_tokens(question, answer)
+        available = self._block_source_budget_tokens(question, answer, block)
         parts = (
             self.token_budget.split_text(
                 block.text or "",
