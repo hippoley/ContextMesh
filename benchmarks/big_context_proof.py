@@ -61,7 +61,7 @@ def main() -> int:
     ap.add_argument("--min-corpus-ratio", type=float, default=5.0)
     ap.add_argument("--min-needles", type=int, default=100)
     ap.add_argument("--min-needle-kinds", type=int, default=8)
-    ap.add_argument("--needle-sample-size", type=int, default=24)
+    ap.add_argument("--needle-sample-size", type=int, default=12)
     ap.add_argument("--task-sample-size", type=int, default=12)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--model-version")
