@@ -1208,61 +1208,73 @@ def run_task_baselines(
         summaries.append(_summarize_baseline(f"lexical-top-{top_k}", rows))
 
     if include_full_coverage:
-        rows = []
-        contract = ExecutionContract.full_coverage(manifest.coverage_ids())
-        for case in items:
-            judge = judge_factory()
-            started = time.perf_counter()
-            try:
-                result = ProgressiveEvaluator(
+        batch_probe = judge_factory()
+        if callable(getattr(batch_probe, "inspect_task_batch", None)):
+            summaries.append(
+                run_batched_full_coverage_task_baseline(
                     store,
-                    judge,
-                    max_workers=max_workers,
-                    retry_attempts=1,
-                ).evaluate(
                     corpus_id,
-                    case.question,
-                    case.candidate_answer,
-                    contract=contract,
+                    judge_factory,
+                    items,
+                    max_workers=max_workers,
                 )
-                rows.append(
-                    BaselineTaskResult(
-                        baseline="contextmesh-full-coverage",
-                        task_id=case.id,
-                        score=result.score,
-                        correct=(
-                            result.judgment_valid
-                            and _score_is_correct(case, result.score)
-                        ),
-                        blocked=not result.judgment_valid,
-                        latency_seconds=time.perf_counter() - started,
-                        selected_blocks=result.visited_blocks,
-                        coverage=result.coverage,
-                        estimated_cost_usd=result.usage.estimated_cost_usd,
-                        prompt_tokens=result.usage.prompt_tokens,
-                        completion_tokens=result.usage.completion_tokens,
-                        tags=list(case.tags),
-                        error=(
-                            "; ".join(result.finalization_blockers)
-                            if result.finalization_blockers
-                            else None
-                        ),
+            )
+        else:
+            rows = []
+            contract = ExecutionContract.full_coverage(manifest.coverage_ids())
+            for case in items:
+                judge = judge_factory()
+                started = time.perf_counter()
+                try:
+                    result = ProgressiveEvaluator(
+                        store,
+                        judge,
+                        max_workers=max_workers,
+                        retry_attempts=1,
+                    ).evaluate(
+                        corpus_id,
+                        case.question,
+                        case.candidate_answer,
+                        contract=contract,
                     )
-                )
-            except Exception as exc:
-                rows.append(
-                    BaselineTaskResult(
-                        baseline="contextmesh-full-coverage",
-                        task_id=case.id,
-                        blocked=True,
-                        latency_seconds=time.perf_counter() - started,
-                        error=str(exc),
-                        tags=list(case.tags),
+                    rows.append(
+                        BaselineTaskResult(
+                            baseline="contextmesh-full-coverage",
+                            task_id=case.id,
+                            score=result.score,
+                            correct=(
+                                result.judgment_valid
+                                and _score_is_correct(case, result.score)
+                            ),
+                            blocked=not result.judgment_valid,
+                            latency_seconds=time.perf_counter() - started,
+                            selected_blocks=result.visited_blocks,
+                            coverage=result.coverage,
+                            estimated_cost_usd=result.usage.estimated_cost_usd,
+                            prompt_tokens=result.usage.prompt_tokens,
+                            completion_tokens=result.usage.completion_tokens,
+                            tags=list(case.tags),
+                            error=(
+                                "; ".join(result.finalization_blockers)
+                                if result.finalization_blockers
+                                else None
+                            ),
+                        )
                     )
-                )
-        summaries.append(
-            _summarize_baseline("contextmesh-full-coverage", rows)
-        )
+                except Exception as exc:
+                    rows.append(
+                        BaselineTaskResult(
+                            baseline="contextmesh-full-coverage",
+                            task_id=case.id,
+                            blocked=True,
+                            latency_seconds=time.perf_counter() - started,
+                            error=str(exc),
+                            tags=list(case.tags),
+                        )
+                    )
+            summaries.append(
+                _summarize_baseline("contextmesh-full-coverage", rows)
+            )
 
     if include_direct:
         rows = []
