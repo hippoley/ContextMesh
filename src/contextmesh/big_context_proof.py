@@ -227,9 +227,12 @@ class NeedleCase(BaseModel):
 class Gate2NeedleSpec(BaseModel):
     min_cases: int = 100
     min_kinds: int = 8
+    min_modalities: int = 2
     require_positions: bool = True
     require_negative: bool = True
     require_cross_file: bool = True
+    require_target_assets: bool = True
+    require_match_terms: bool = True
 
 
 class Gate2NeedleMatrixReport(BaseModel):
@@ -255,6 +258,8 @@ class Gate2NeedleMatrixReport(BaseModel):
 def validate_needle_matrix(
     cases: Iterable[NeedleCase],
     spec: Gate2NeedleSpec | None = None,
+    *,
+    manifest: CorpusManifest | None = None,
 ) -> Gate2NeedleMatrixReport:
     spec = spec or Gate2NeedleSpec()
     items = list(cases)
@@ -268,6 +273,10 @@ def validate_needle_matrix(
         blockers.append(f"needle-count:need>={spec.min_cases},got={len(items)}")
     if len(kinds) < spec.min_kinds:
         blockers.append(f"needle-kinds:need>={spec.min_kinds},got={len(kinds)}")
+    if len(modalities) < spec.min_modalities:
+        blockers.append(
+            f"needle-modalities:need>={spec.min_modalities},got={len(modalities)}"
+        )
     if spec.require_positions:
         for value in CorpusPosition:
             if not corpus_positions[value.value]:
@@ -279,6 +288,32 @@ def validate_needle_matrix(
         blockers.append("missing-kind:negative")
     if spec.require_cross_file and not kinds[NeedleKind.CROSS_FILE.value]:
         blockers.append("missing-kind:cross-file")
+
+    if spec.require_target_assets:
+        missing_targets = [
+            case.id
+            for case in items
+            if case.expected_present and not case.target_assets
+        ]
+        if missing_targets:
+            blockers.append(f"missing-target-assets={len(missing_targets)}")
+
+    if spec.require_match_terms:
+        missing_terms = [case.id for case in items if not case.match_terms]
+        if missing_terms:
+            blockers.append(f"missing-match-terms={len(missing_terms)}")
+
+    if manifest is not None:
+        known_assets = {Path(path).name for path in manifest.assets}
+        unknown: set[str] = set()
+        for case in items:
+            for target in case.target_assets:
+                if Path(target).name not in known_assets:
+                    unknown.add(Path(target).name)
+        if unknown:
+            blockers.append(
+                "unknown-target-assets:" + ",".join(sorted(unknown)[:20])
+            )
 
     return Gate2NeedleMatrixReport(
         status=GateStatus.PASS if not blockers else GateStatus.FAIL,
