@@ -11,6 +11,11 @@ on:
         options:
           - dashscope
           - openai
+      dashscope_base_url:
+        description: 'Workspace OpenAI-compatible endpoint (no credential)'
+        required: true
+        default: 'https://llm-i2t8pyfa3dcqmr2r.cn-beijing.maas.aliyuncs.com/compatible-mode/v1'
+        type: string
       model:
         description: 'Model name'
         required: true
@@ -105,13 +110,18 @@ jobs:
           MODEL: ${{ inputs.model }}
           CONTEXT_TOKENS: ${{ inputs.context_tokens }}
           WORKERS: ${{ inputs.workers }}
+          DASHSCOPE_BASE_URL: ${{ inputs.dashscope_base_url }}
         run: |
           if [ "$PROVIDER" = "dashscope" ]; then
             if [ -z "$DASHSCOPE_API_KEY" ]; then
               echo "::error::DASHSCOPE_API_KEY repository secret is required for the live proof."
               exit 2
             fi
-            export PROOF_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            if [[ "$DASHSCOPE_BASE_URL" != https://*/compatible-mode/v1 ]]; then
+              echo "::error::dashscope_base_url must be an HTTPS OpenAI-compatible /compatible-mode/v1 endpoint."
+              exit 2
+            fi
+            export PROOF_BASE_URL="$DASHSCOPE_BASE_URL"
             export PROOF_API_ENV="DASHSCOPE_API_KEY"
           elif [ "$PROVIDER" = "openai" ]; then
             if [ -z "$OPENAI_API_KEY" ]; then
