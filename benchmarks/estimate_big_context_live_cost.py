@@ -40,6 +40,7 @@ def main() -> int:
     ap.add_argument("--final-output-tokens-per-task", type=int, default=768)
     ap.add_argument("--safety-factor", type=float, default=1.35)
     ap.add_argument("--run-scale", action="store_true")
+    ap.add_argument("--scale-plan", type=Path)
     ap.add_argument("--ratios", default="1,2,5,10,20")
     ap.add_argument("--scale-needle-sample-size", type=int, default=12)
     ap.add_argument("--output", type=Path)
@@ -92,24 +93,55 @@ def main() -> int:
 
     scale_input = 0
     scale_output = 0
+    scale_plan_fingerprint = None
+    scale_panel_case_ids: list[str] = []
     if args.run_scale:
-        ratios = [float(x.strip()) for x in args.ratios.split(",") if x.strip()]
-        sampled = needles[: max(1, args.scale_needle_sample_size)]
-        scale_payload = _payload_chars(sampled, task=False)
-        image_fraction = image_blocks / max(1, blocks)
-        for ratio in ratios:
-            target = min(total_chars, int(args.context_tokens * ratio))
-            selected_blocks = min(
-                blocks,
-                max(1, int(math.ceil(target / max(1.0, avg_block_chars)))),
-            )
-            selected_images = int(math.ceil(selected_blocks * image_fraction))
-            scale_input += (
-                selected_blocks * (scale_payload + per_block_fixed)
-                + target
-                + selected_images * args.image_reserve_tokens
-            )
-            scale_output += selected_blocks * args.output_tokens_per_block
+        if args.scale_plan:
+            scale_plan = json.loads(args.scale_plan.read_text(encoding="utf-8"))
+            scale_panel_case_ids = list(scale_plan.get("selected_case_ids") or [])
+            selected_case_set = set(scale_panel_case_ids)
+            sampled = [
+                case for case in needles
+                if str(case.get("id") or "") in selected_case_set
+            ]
+            if len(sampled) != len(scale_panel_case_ids):
+                raise SystemExit(
+                    "scale plan references cases that are missing from the needle matrix"
+                )
+            scale_payload = _payload_chars(sampled, task=False)
+            scale_plan_fingerprint = scale_plan.get("anchor_fingerprint")
+            for point in scale_plan.get("points") or []:
+                selected_blocks = int(point.get("selected_blocks") or 0)
+                target = int(point.get("estimated_tokens") or 0)
+                point_modalities = point.get("modality_counts") or {}
+                selected_images = int(point_modalities.get("image") or 0)
+                scale_input += (
+                    selected_blocks * (scale_payload + per_block_fixed)
+                    + target
+                    + selected_images * args.image_reserve_tokens
+                )
+                scale_output += selected_blocks * args.output_tokens_per_block
+        else:
+            ratios = [float(x.strip()) for x in args.ratios.split(",") if x.strip()]
+            sampled = needles[: max(1, args.scale_needle_sample_size)]
+            scale_panel_case_ids = [
+                str(case.get("id") or "") for case in sampled
+            ]
+            scale_payload = _payload_chars(sampled, task=False)
+            image_fraction = image_blocks / max(1, blocks)
+            for ratio in ratios:
+                target = min(total_chars, int(args.context_tokens * ratio))
+                selected_blocks = min(
+                    blocks,
+                    max(1, int(math.ceil(target / max(1.0, avg_block_chars)))),
+                )
+                selected_images = int(math.ceil(selected_blocks * image_fraction))
+                scale_input += (
+                    selected_blocks * (scale_payload + per_block_fixed)
+                    + target
+                    + selected_images * args.image_reserve_tokens
+                )
+                scale_output += selected_blocks * args.output_tokens_per_block
 
     raw_input = needle_input + task_input + final_input + lexical_input + scale_input
     raw_output = traversal_output + final_output + lexical_output + scale_output
@@ -134,6 +166,8 @@ def main() -> int:
         "estimated_cost_cny": round(estimated_cost, 2),
         "max_estimated_cost_cny": args.max_estimated_cost_cny,
         "run_scale": args.run_scale,
+        "scale_plan_fingerprint": scale_plan_fingerprint,
+        "scale_panel_case_ids": scale_panel_case_ids,
         "components": {
             "gate3_needle_input": needle_input,
             "gate3_task_input": task_input,
