@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/build_public_nist_proof.py'
+      - 'benchmarks/estimate_big_context_live_cost.py'
       - 'benchmarks/big-context/nist-public-corpus.json'
       - 'src/contextmesh/big_context_proof.py'
       - 'src/contextmesh/ingest.py'
@@ -36,8 +37,20 @@ jobs:
           python benchmarks/build_public_nist_proof.py \
             --workdir /tmp/contextmesh-nist-proof \
             --output-dir /tmp/contextmesh-nist-proof/results \
-            --model-context-tokens 128000 \
+            --model-context-tokens 131072 \
             --min-corpus-ratio 5
+
+      - name: Estimate first live proof cost with Qwen3-VL-8B public pricing
+        run: |
+          python benchmarks/estimate_big_context_live_cost.py \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/corpus-manifest.json \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-nist-proof/results/task-cases.json \
+            --context-tokens 131072 \
+            --input-cny-per-million 0.5 \
+            --output-cny-per-million 2 \
+            --max-estimated-cost-cny 80 \
+            --output /tmp/contextmesh-nist-proof/results/live-cost-estimate-qwen3-vl-8b.json
 
       - name: Show proof summaries
         if: always()
