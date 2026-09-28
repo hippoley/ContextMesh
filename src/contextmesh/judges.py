@@ -11,6 +11,7 @@ from typing import Any
 from .evidence import render_typed_evidence
 from .models import ContextBlock, EvaluationState, Modality, UsageMetrics
 from .semantics import DecisionBundle, render_decision_bundle_checked, shard_decision_bundle
+from .token_budget import TextTokenBudget, TokenBudgetExceeded, load_token_counter
 
 
 def _content_text(value: Any) -> str:
@@ -127,7 +128,9 @@ class OpenAICompatibleJudge:
         capabilities: list[str] | set[str] | None = None,
         max_context_tokens: int | None = None,
         reserve_output_tokens: int = 1200,
-        chars_per_token_estimate: float = 3.2,
+        chars_per_token_estimate: float = 1.0,
+        tokenizer_spec: str | None = None,
+        token_budget_safety_factor: float = 0.90,
         request_timeout_seconds: float = 120.0,
     ):
         self.model = model
@@ -141,49 +144,57 @@ class OpenAICompatibleJudge:
         self.capabilities = set(capabilities or ["text", "table", "vision"])
         self.max_context_tokens = max_context_tokens
         self.reserve_output_tokens = max(256, int(reserve_output_tokens))
-        self.chars_per_token_estimate = max(1.5, float(chars_per_token_estimate))
+        self.chars_per_token_estimate = max(0.25, float(chars_per_token_estimate))
+        self.tokenizer_spec = tokenizer_spec
+        self.token_budget_safety_factor = max(0.1, min(1.0, float(token_budget_safety_factor)))
+        self.token_budget = TextTokenBudget(
+            max_context_tokens=self.max_context_tokens,
+            reserve_output_tokens=self.reserve_output_tokens,
+            safety_factor=self.token_budget_safety_factor,
+            chars_per_token_estimate=self.chars_per_token_estimate,
+            counter_spec=load_token_counter(tokenizer_spec, model=model),
+        )
         self.request_timeout_seconds = max(5.0, float(request_timeout_seconds))
         self._usage = UsageMetrics(route_id=route_id)
 
-    def _max_text_chars(self, question: str = "", answer: str = "", *, overhead_chars: int = 5000) -> int | None:
-        if not self.max_context_tokens:
-            return None
-        usable_tokens = max(512, self.max_context_tokens - self.reserve_output_tokens)
-        total_chars = int(usable_tokens * self.chars_per_token_estimate)
-        return max(1000, total_chars - len(question) - len(answer) - overhead_chars)
+    def _available_source_tokens(
+        self,
+        question: str = "",
+        answer: str = "",
+        *,
+        prompt_overhead_tokens: int = 2200,
+    ) -> int | None:
+        return self.token_budget.available_text_tokens(
+            question=question,
+            answer=answer,
+            prompt_overhead_tokens=prompt_overhead_tokens,
+        )
 
-    @staticmethod
-    def _split_text(text: str, limit: int, overlap: int = 600) -> list[str]:
-        if len(text) <= limit:
-            return [text]
-        out: list[str] = []
-        start = 0
-        while start < len(text):
-            end = min(len(text), start + limit)
-            if end < len(text):
-                # Prefer a natural boundary near the end without sacrificing coverage.
-                floor = max(start + limit // 2, start)
-                cut = max(text.rfind("\n", floor, end), text.rfind(". ", floor, end))
-                if cut > floor:
-                    end = cut + 1
-            out.append(text[start:end])
-            if end >= len(text):
-                break
-            start = max(start + 1, end - min(overlap, limit // 5))
-        return out
+    def token_budget_status(self) -> dict[str, Any]:
+        return {
+            "mode": self.token_budget.mode,
+            "exact_text": self.token_budget.exact,
+            "tokenizer_spec": self.tokenizer_spec,
+            "max_context_tokens": self.max_context_tokens,
+            "reserve_output_tokens": self.reserve_output_tokens,
+            "safety_factor": self.token_budget_safety_factor,
+            "usable_input_tokens": self.token_budget.input_budget_tokens(),
+            "chars_per_token_estimate": self.chars_per_token_estimate,
+        }
 
     def preflight_block(self, question: str, answer: str, block: ContextBlock) -> str | None:
-        if self.max_context_tokens:
-            base_chars = len(question) + len(answer) + 5000
-            capacity = int(max(512, self.max_context_tokens - self.reserve_output_tokens) * self.chars_per_token_estimate)
-            if base_chars >= capacity:
-                return (
-                    f"question + candidate answer leave no safe context budget for route {self.route_id or self.model}; "
-                    f"max_context_tokens={self.max_context_tokens}"
-                )
+        available = self._available_source_tokens(question, answer)
+        if available is not None and available < 128:
+            return (
+                f"question + candidate answer leave no safe source token budget for route "
+                f"{self.route_id or self.model}; max_context_tokens={self.max_context_tokens}, "
+                f"usable_input_tokens={self.token_budget.input_budget_tokens()}, "
+                f"budget_mode={self.token_budget.mode}"
+            )
         return None
 
     def _chat(self, messages: list[dict[str, Any]]) -> str:
+        self.token_budget.assert_messages(messages)
         body = json.dumps({"model": self.model, "messages": messages, "temperature": 0}).encode()
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
@@ -308,8 +319,16 @@ class OpenAICompatibleJudge:
         return content
 
     def inspect(self, question: str, answer: str, block: ContextBlock, notes: list[str]) -> tuple[str, bool]:
-        limit = self._max_text_chars(question, answer)
-        parts = self._split_text(block.text or "", limit) if limit else [block.text or ""]
+        available = self._available_source_tokens(question, answer)
+        parts = (
+            self.token_budget.split_text(
+                block.text or "",
+                budget_tokens=available,
+                overlap_chars=600,
+            )
+            if available is not None
+            else [block.text or ""]
+        )
         findings: list[str] = []
         relevant_any = False
         for i, part in enumerate(parts, 1):
@@ -334,17 +353,35 @@ class OpenAICompatibleJudge:
         return f"{block.id} route-aware slices={len(findings)}; {combined}", relevant_any
 
     def reduce_notes(self, question: str, answer: str, notes: list[str], level: int) -> str:
-        limit = self._max_text_chars(question, answer, overhead_chars=7000)
-        if limit and sum(len(x) + 1 for x in notes) > limit:
+        limit = self._available_source_tokens(
+            question,
+            answer,
+            prompt_overhead_tokens=2600,
+        )
+        total_note_tokens = sum(self.token_budget.count(x) + 1 for x in notes)
+        if limit is not None and total_note_tokens > limit:
             groups: list[list[str]] = []
             current: list[str] = []
             size = 0
             for note in notes:
-                if current and size + len(note) + 1 > limit:
-                    groups.append(current)
-                    current, size = [], 0
-                current.append(note)
-                size += len(note) + 1
+                note_tokens = self.token_budget.count(note) + 1
+                if note_tokens > limit:
+                    # Legacy explanation text is allowed to split, but the typed
+                    # preservation channel remains source-linked and untouched.
+                    pieces = self.token_budget.split_text(
+                        note,
+                        budget_tokens=limit,
+                        overlap_chars=0,
+                    )
+                else:
+                    pieces = [note]
+                for piece in pieces:
+                    piece_tokens = self.token_budget.count(piece) + 1
+                    if current and size + piece_tokens > limit:
+                        groups.append(current)
+                        current, size = [], 0
+                    current.append(piece)
+                    size += piece_tokens
             if current:
                 groups.append(current)
             reduced = [self.reduce_notes(question, answer, g, level + 1) for g in groups]
@@ -362,41 +399,65 @@ class OpenAICompatibleJudge:
     def preflight_finalize(self, state: EvaluationState) -> str | None:
         if state.decision_bundle is None:
             return None
-        limit = self._max_text_chars(state.question, state.answer, overhead_chars=7000)
-        bundle_budget = max(6_000, min(48_000, (limit // 2) if limit else 48_000))
-        bundle = DecisionBundle.model_validate(state.decision_bundle)
-        rendered = render_decision_bundle_checked(bundle, max_chars=bundle_budget)
-        if rendered.complete:
+        available = self._available_source_tokens(
+            state.question,
+            state.answer,
+            prompt_overhead_tokens=3200,
+        )
+        if available is None:
             return None
-        shards = shard_decision_bundle(bundle, max_chars=bundle_budget)
+
+        bundle_token_budget = max(512, available // 2)
+        bundle = DecisionBundle.model_validate(state.decision_bundle)
+        rendered_full = render_decision_bundle_checked(bundle, max_chars=100_000_000)
+        required_tokens = self.token_budget.count(rendered_full.text)
+        if required_tokens <= bundle_token_budget:
+            return None
+
+        # Shards are a transport representation only. Use a conservative char budget
+        # so each shard will also fit under the token gate for the fallback path.
+        shard_chars = max(
+            1024,
+            int(bundle_token_budget * min(1.0, self.chars_per_token_estimate)),
+        )
+        shards = shard_decision_bundle(bundle, max_chars=shard_chars)
         return (
-            "DecisionBundle exceeds the final model-facing budget; refusing lossy "
+            "DecisionBundle exceeds the final model-facing token budget; refusing lossy "
             f"finalization. The complete decision state can be transported losslessly "
             f"as {shards.shard_count} shard(s), but no cross-shard verdict aggregation "
-            f"contract is assumed yet. required_chars={rendered.required_chars}, "
-            f"max_chars={rendered.max_chars}, omitted_units={len(rendered.omitted_ids)}"
+            f"contract is assumed yet. required_tokens={required_tokens}, "
+            f"bundle_token_budget={bundle_token_budget}, budget_mode={self.token_budget.mode}"
         )
 
     def finalize(self, state: EvaluationState) -> tuple[float, str]:
         notes = state.model_context_notes()
-        limit = self._max_text_chars(state.question, state.answer, overhead_chars=7000)
-        if limit and sum(len(x) + 1 for x in notes) > limit:
-            notes = [self.reduce_notes(state.question, state.answer, notes, 99)]
+        available = self._available_source_tokens(
+            state.question,
+            state.answer,
+            prompt_overhead_tokens=3200,
+        )
+        if available is not None:
+            note_tokens = sum(self.token_budget.count(x) + 1 for x in notes)
+            if note_tokens > max(512, available // 3):
+                notes = [self.reduce_notes(state.question, state.answer, notes, 99)]
         joined = "\n".join(notes)
 
-        typed_budget = max(4_000, min(32_000, (limit // 3) if limit else 32_000))
-        typed = render_typed_evidence(state.evidence, max_chars=typed_budget)
+        # Legacy typed evidence is a cross-check only. Keep its textual render
+        # conservative; the final request gate remains authoritative.
+        typed_budget_chars = 16_000 if available is not None else 32_000
+        typed = render_typed_evidence(state.evidence, max_chars=typed_budget_chars)
 
-        bundle_budget = max(6_000, min(48_000, (limit // 2) if limit else 48_000))
         if state.decision_bundle is not None:
             bundle = DecisionBundle.model_validate(state.decision_bundle)
-            rendered_bundle = render_decision_bundle_checked(bundle, max_chars=bundle_budget)
-            if not rendered_bundle.complete:
-                raise RuntimeError(
-                    "refusing to judge an incomplete DecisionBundle: "
-                    f"required_chars={rendered_bundle.required_chars} "
-                    f"max_chars={rendered_bundle.max_chars}"
-                )
+            rendered_bundle = render_decision_bundle_checked(bundle, max_chars=100_000_000)
+            if available is not None:
+                bundle_tokens = self.token_budget.count(rendered_bundle.text)
+                if bundle_tokens > max(512, available // 2):
+                    raise RuntimeError(
+                        "refusing to judge an incomplete token-budgeted DecisionBundle: "
+                        f"required_tokens={bundle_tokens} "
+                        f"bundle_token_budget={max(512, available // 2)}"
+                    )
             decision_state = rendered_bundle.text
         else:
             decision_state = "(no structured DecisionBundle available)"
