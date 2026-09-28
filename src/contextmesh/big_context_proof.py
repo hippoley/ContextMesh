@@ -5,6 +5,7 @@ import json
 import math
 import time
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from enum import Enum
 from pathlib import Path
@@ -577,6 +578,216 @@ def run_full_coverage_needles(
         evidence_term_fidelity=term_fidelity,
         negative_accuracy=negative_accuracy,
         unsupported_cases=sum(1 for r in results if r.unsupported_blocks or r.error),
+        by_kind=dict(sorted(by_kind.items())),
+        by_corpus_position=dict(sorted(by_position.items())),
+        results=results,
+    )
+
+
+
+
+def run_batched_full_coverage_needles(
+    store: FileContextStore,
+    corpus_id: str,
+    judge_factory: Callable[[], ProofJudge],
+    cases: Iterable[NeedleCase],
+    *,
+    max_workers: int = 4,
+    retry_attempts: int = 2,
+) -> NeedleRecoveryReport:
+    """Recover many needle cases with one full-corpus pass per question batch.
+
+    The model receives only {id, question}. Target assets, expected answers,
+    match terms, kind labels and positions remain scorer-only ground truth.
+
+    An OpenAICompatibleJudge exposes inspect_question_batch(), which recursively
+    splits only when its route token budget requires it. Judges without that
+    capability fall back to the slower per-case proof path.
+    """
+    items = list(cases)
+    if not items:
+        return NeedleRecoveryReport(
+            corpus_id=corpus_id,
+            total_cases=0,
+            present_cases=0,
+            negative_cases=0,
+            evidence_recall=1.0,
+            evidence_term_fidelity=1.0,
+            negative_accuracy=1.0,
+            unsupported_cases=0,
+            by_kind={},
+            by_corpus_position={},
+            results=[],
+        )
+
+    probe = judge_factory()
+    batch_fn = getattr(probe, "inspect_question_batch", None)
+    if not callable(batch_fn):
+        return run_full_coverage_needles(
+            store,
+            corpus_id,
+            judge_factory,
+            items,
+            max_workers=max_workers,
+        )
+
+    manifest = store.get_manifest(corpus_id)
+    blocks = [store.get_block(corpus_id, bid) for bid in manifest.coverage_ids()]
+    questions = [{"id": case.id, "question": case.question} for case in items]
+    matches_by_case: dict[str, list[tuple[ContextBlock, str]]] = {
+        case.id: [] for case in items
+    }
+    failures: dict[str, str] = {}
+    unsupported: set[str] = set()
+    started = time.perf_counter()
+
+    def inspect_one(block: ContextBlock):
+        judge = judge_factory()
+        if not judge.can_inspect(block):
+            return block, None, "unsupported"
+        last_error = None
+        for attempt in range(1, max(1, retry_attempts) + 1):
+            try:
+                matches = judge.inspect_question_batch(block, questions)
+                return block, matches, None
+            except Exception as exc:
+                last_error = exc
+                if attempt < retry_attempts:
+                    time.sleep(min(2.0, 0.25 * attempt))
+        return block, None, str(last_error)
+
+    worker_count = max(1, max_workers)
+    with ThreadPoolExecutor(max_workers=worker_count) as pool:
+        futures = [pool.submit(inspect_one, block) for block in blocks]
+        for future in as_completed(futures):
+            block, matches, error = future.result()
+            if error == "unsupported":
+                unsupported.add(block.id)
+                continue
+            if error:
+                failures[block.id] = error
+                continue
+            for case_id, note in (matches or {}).items():
+                if case_id in matches_by_case:
+                    matches_by_case[case_id].append((block, note))
+
+    elapsed = time.perf_counter() - started
+    inspected = len(blocks) - len(unsupported) - len(failures)
+    coverage = inspected / len(blocks) if blocks else 1.0
+    case_by_id = {case.id: case for case in items}
+    results: list[NeedleRunResult] = []
+
+    for case in items:
+        matched_terms: set[str] = set()
+        matched_assets: set[str] = set()
+        raw_matches = matches_by_case.get(case.id, [])
+
+        if not case.expected_present:
+            recovered = not raw_matches
+            term_recall = 1.0 if recovered else 0.0
+        else:
+            for block, note in raw_matches:
+                if not _asset_matches(block.source.path, case.target_assets):
+                    continue
+                searchable = "\n".join([block.text or "", note or ""])
+                hits = _term_hits(searchable, case.match_terms)
+                if hits:
+                    matched_terms.update(hits)
+                    matched_assets.add(Path(block.source.path).name)
+
+            if case.match_terms:
+                term_recall = len(matched_terms) / len(set(case.match_terms))
+                terms_ok = (
+                    term_recall >= 1.0 if case.match_all_terms else bool(matched_terms)
+                )
+            else:
+                term_recall = 1.0 if matched_assets else 0.0
+                terms_ok = bool(matched_assets)
+
+            required_asset_hits = case.required_asset_hits
+            if required_asset_hits is None:
+                required_asset_hits = (
+                    len(case.target_assets)
+                    if case.kind == NeedleKind.CROSS_FILE and case.target_assets
+                    else 1
+                )
+            recovered = terms_ok and len(matched_assets) >= required_asset_hits
+
+        results.append(
+            NeedleRunResult(
+                case_id=case.id,
+                kind=case.kind,
+                expected_present=case.expected_present,
+                recovered=recovered,
+                term_recall=term_recall,
+                matched_terms=sorted(matched_terms),
+                matched_assets=sorted(matched_assets),
+                relevant_blocks=len(raw_matches),
+                visited_blocks=inspected,
+                total_blocks=len(blocks),
+                unsupported_blocks=len(unsupported) + len(failures),
+                coverage=coverage,
+                judgment_valid=(
+                    coverage == 1.0 and not unsupported and not failures
+                ),
+                latency_seconds=elapsed,
+                error=(
+                    f"unsupported={len(unsupported)},failures={len(failures)}"
+                    if unsupported or failures
+                    else None
+                ),
+            )
+        )
+
+    present = [row for row in results if row.expected_present]
+    negatives = [row for row in results if not row.expected_present]
+    evidence_recall = (
+        sum(1 for row in present if row.recovered) / len(present)
+        if present
+        else 1.0
+    )
+    evidence_term_fidelity = (
+        sum(row.term_recall for row in present) / len(present)
+        if present
+        else 1.0
+    )
+    negative_accuracy = (
+        sum(1 for row in negatives if row.recovered) / len(negatives)
+        if negatives
+        else 1.0
+    )
+
+    by_kind: dict[str, float] = {}
+    for kind in NeedleKind:
+        group = [row for row in results if row.kind == kind]
+        if group:
+            by_kind[kind.value] = (
+                sum(1 for row in group if row.recovered) / len(group)
+            )
+
+    by_position: dict[str, float] = {}
+    for position in CorpusPosition:
+        group = [
+            row for row in results
+            if case_by_id[row.case_id].corpus_position == position
+        ]
+        if group:
+            by_position[position.value] = (
+                sum(1 for row in group if row.recovered) / len(group)
+            )
+
+    return NeedleRecoveryReport(
+        corpus_id=corpus_id,
+        route_id=getattr(probe, "route_id", None),
+        total_cases=len(results),
+        present_cases=len(present),
+        negative_cases=len(negatives),
+        evidence_recall=evidence_recall,
+        evidence_term_fidelity=evidence_term_fidelity,
+        negative_accuracy=negative_accuracy,
+        unsupported_cases=sum(
+            1 for row in results if row.unsupported_blocks or row.error
+        ),
         by_kind=dict(sorted(by_kind.items())),
         by_corpus_position=dict(sorted(by_position.items())),
         results=results,
