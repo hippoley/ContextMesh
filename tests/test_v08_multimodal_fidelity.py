@@ -209,3 +209,48 @@ def test_text_family_formats_are_addressable(tmp_path: Path, suffix: str, conten
     assert m.required_blocks >= 1
     text = "\n".join(store.get_block(m.corpus_id, x).text for x in m.required_block_ids)
     assert "needle" in text
+
+
+
+def test_xlsx_optional_table_bound_preserves_formula_aware_text(tmp_path: Path):
+    from openpyxl import Workbook
+
+    p = tmp_path / "wide.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Wide"
+    ws.append(["key", "notes", "calc"])
+    for i in range(1, 24):
+        ws.append([f"k{i}", "y" * 120, f"=LEN(B{i+1})"])
+    wb.save(p)
+
+    default_store = FileContextStore(tmp_path / "xlsx-default-store")
+    default_manifest = ingest_paths([p], default_store, "xlsx-default")
+    default_blocks = [
+        default_store.get_block(default_manifest.corpus_id, block_id)
+        for block_id in default_manifest.required_block_ids
+        if default_store.get_block(default_manifest.corpus_id, block_id).modality == Modality.TABLE
+    ]
+    default_text = "".join(block.text for block in default_blocks)
+
+    bounded_store = FileContextStore(tmp_path / "xlsx-bounded-store")
+    bounded_manifest = ingest_paths(
+        [p],
+        bounded_store,
+        "xlsx-bounded",
+        max_table_block_chars=480,
+    )
+    bounded_blocks = [
+        bounded_store.get_block(bounded_manifest.corpus_id, block_id)
+        for block_id in bounded_manifest.required_block_ids
+        if bounded_store.get_block(bounded_manifest.corpus_id, block_id).modality == Modality.TABLE
+    ]
+
+    assert len(bounded_blocks) > len(default_blocks)
+    assert all(len(block.text) <= 480 for block in bounded_blocks)
+    assert "".join(block.text for block in bounded_blocks) == default_text
+    assert "FORMULA(=LEN(B2))" in default_text
+    assert all(
+        block.metadata.get("bounded_from_block_id")
+        for block in bounded_blocks
+    )
