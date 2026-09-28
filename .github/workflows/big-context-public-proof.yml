@@ -11,8 +11,11 @@ on:
       - 'benchmarks/verify_frozen_public_proof.py'
       - 'benchmarks/results/nist-public-gate1-2-2026-09-28.json'
       - 'benchmarks/results/nist-public-gate4-preflight-2026-09-28.json'
+      - 'benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json'
+      - 'benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json'
       - 'benchmarks/big-context/nist-public-corpus.json'
       - 'src/contextmesh/big_context_proof.py'
+      - 'src/contextmesh/frozen_proof.py'
       - 'src/contextmesh/ingest.py'
       - 'src/contextmesh/rich_ingest.py'
       - '.github/workflows/big-context-public-proof.yml'
@@ -36,49 +39,36 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[dev,rich]'
 
-      - name: Build public NIST corpus and Gate 1-2 proof
+      - name: Rebuild frozen NIST v1 before-state
         run: |
           python benchmarks/build_public_nist_proof.py \
             --workdir /tmp/contextmesh-nist-proof \
-            --output-dir /tmp/contextmesh-nist-proof/results \
+            --output-dir /tmp/contextmesh-nist-proof/results/v1 \
             --model-context-tokens 131072 \
-            --min-corpus-ratio 5
+            --min-corpus-ratio 5 \
+            --corpus-id nist-public-big-context-v1
 
-      - name: Freeze Gate 4 nested scale projections (no model calls)
+      - name: Rebuild frozen Gate 4 v1 plan
         run: |
           python benchmarks/plan_gate4_scale.py nist-public-big-context-v1 \
             --store /tmp/contextmesh-nist-proof/store \
-            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --needles /tmp/contextmesh-nist-proof/results/v1/needle-matrix.json \
             --model-context-tokens 131072 \
             --ratios "1,2,5,10,20" \
             --needle-sample-size 12 \
             --required-max-ratio 20 \
-            --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
+            --output /tmp/contextmesh-nist-proof/results/v1/gate4-scale-plan.json
 
-      - name: Generate stricter Gate 4 v2 candidate panel
-        id: gate4_v2
-        continue-on-error: true
+      - name: Verify frozen NIST v1 evidence
         run: |
-          python benchmarks/plan_gate4_scale.py nist-public-big-context-v1 \
-            --store /tmp/contextmesh-nist-proof/store \
-            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
-            --model-context-tokens 131072 \
-            --ratios "1,2,5,10,20" \
-            --needle-sample-size 12 \
-            --required-max-ratio 20 \
-            --require-cross-file \
-            --require-all-local-positions \
-            --output /tmp/contextmesh-nist-proof/results/gate4-v2-candidate.json
+          python benchmarks/verify_frozen_public_proof.py \
+            --download-manifest /tmp/contextmesh-nist-proof/results/v1/download-manifest.json \
+            --gate4-plan /tmp/contextmesh-nist-proof/results/v1/gate4-scale-plan.json \
+            --gate1-2-proof benchmarks/results/nist-public-gate1-2-2026-09-28.json \
+            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-2026-09-28.json \
+            --output /tmp/contextmesh-nist-proof/results/v1/frozen-proof-verification.json
 
-      - name: Show stricter Gate 4 v2 candidate
-        if: always()
-        run: |
-          echo "candidate-step-outcome=${{ steps.gate4_v2.outcome }}"
-          cat /tmp/contextmesh-nist-proof/results/gate4-v2-candidate.json 2>/dev/null || true
-
-      - name: Build bounded-table NIST proof v2 candidate
-        id: proof_v2
-        continue-on-error: true
+      - name: Build official bounded-table NIST v2 proof
         run: |
           python benchmarks/build_public_nist_proof.py \
             --workdir /tmp/contextmesh-nist-proof \
@@ -89,15 +79,8 @@ jobs:
             --max-table-block-chars 12000 \
             --reuse-downloads
 
-      - name: Plan strict Gate 4 over bounded-table proof v2
-        id: gate4_v2_bounded
-        if: always()
-        continue-on-error: true
+      - name: Freeze strict Gate 4 v2 plan
         run: |
-          if [ ! -f /tmp/contextmesh-nist-proof/results/v2/needle-matrix.json ]; then
-            echo "v2 needle matrix missing; bounded-table proof build did not complete"
-            exit 2
-          fi
           python benchmarks/plan_gate4_scale.py nist-public-big-context-v2 \
             --store /tmp/contextmesh-nist-proof/store \
             --needles /tmp/contextmesh-nist-proof/results/v2/needle-matrix.json \
@@ -109,66 +92,72 @@ jobs:
             --require-all-local-positions \
             --output /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json
 
-      - name: Show bounded-table v2 before-after
-        if: always()
-        run: |
-          echo '--- v1 block size audit ---'
-          cat /tmp/contextmesh-nist-proof/results/block-size-audit.json 2>/dev/null || true
-          echo '--- v2 block size audit ---'
-          cat /tmp/contextmesh-nist-proof/results/v2/block-size-audit.json 2>/dev/null || true
-          echo '--- v2 Gate 1 ---'
-          cat /tmp/contextmesh-nist-proof/results/v2/gate1.json 2>/dev/null || true
-          echo '--- v2 Gate 2 ---'
-          cat /tmp/contextmesh-nist-proof/results/v2/gate2.json 2>/dev/null || true
-          echo '--- v2 strict Gate 4 ---'
-          cat /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json 2>/dev/null || true
-
-      - name: Verify current rebuild matches frozen public proof
+      - name: Verify frozen NIST v2 evidence
         run: |
           python benchmarks/verify_frozen_public_proof.py \
-            --download-manifest /tmp/contextmesh-nist-proof/results/download-manifest.json \
-            --gate4-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
-            --gate1-2-proof benchmarks/results/nist-public-gate1-2-2026-09-28.json \
-            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-2026-09-28.json \
-            --output /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
+            --download-manifest /tmp/contextmesh-nist-proof/results/v2/download-manifest.json \
+            --gate4-plan /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json \
+            --gate1-2-proof benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json \
+            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json \
+            --output /tmp/contextmesh-nist-proof/results/v2/frozen-proof-verification.json
 
-      - name: Estimate first live proof cost with Qwen3-VL-8B public pricing
+      - name: Assert bounded-table v2 removed route-sized coverage units
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("/tmp/contextmesh-nist-proof/results")
+          v1 = json.loads((root / "v1/block-size-audit.json").read_text())
+          v2 = json.loads((root / "v2/block-size-audit.json").read_text())
+          assert v1["blocks_over_model_context_chars"] == 2, v1
+          assert v1["max_chars_by_modality"]["table"] == 356080, v1
+          assert v2["blocks_over_12000_chars"] == 0, v2
+          assert v2["blocks_over_model_context_chars"] == 0, v2
+          assert v2["max_chars_by_modality"]["table"] <= 12000, v2
+          print("BOUNDED_TABLE_BEFORE_AFTER_VERIFIED")
+          PY
+
+      - name: Estimate Gate 3 live cost on official v2
         run: |
           python benchmarks/estimate_big_context_live_cost.py \
-            --corpus-manifest /tmp/contextmesh-nist-proof/results/corpus-manifest.json \
-            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
-            --tasks /tmp/contextmesh-nist-proof/results/task-cases.json \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/v2/corpus-manifest.json \
+            --needles /tmp/contextmesh-nist-proof/results/v2/needle-matrix.json \
+            --tasks /tmp/contextmesh-nist-proof/results/v2/task-cases.json \
             --context-tokens 131072 \
             --input-cny-per-million 0.5 \
             --output-cny-per-million 2 \
             --max-estimated-cost-cny 80 \
-            --output /tmp/contextmesh-nist-proof/results/live-cost-estimate-qwen3-vl-8b.json
+            --output /tmp/contextmesh-nist-proof/results/v2/live-cost-estimate-qwen3-vl-8b.json
 
-      - name: Estimate Gate 3 + Gate 4 live cost envelope
+      - name: Estimate Gate 3 + Gate 4 v2 cost envelope
         run: |
           python benchmarks/estimate_big_context_live_cost.py \
-            --corpus-manifest /tmp/contextmesh-nist-proof/results/corpus-manifest.json \
-            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
-            --tasks /tmp/contextmesh-nist-proof/results/task-cases.json \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/v2/corpus-manifest.json \
+            --needles /tmp/contextmesh-nist-proof/results/v2/needle-matrix.json \
+            --tasks /tmp/contextmesh-nist-proof/results/v2/task-cases.json \
             --context-tokens 131072 \
             --input-cny-per-million 0.5 \
             --output-cny-per-million 2 \
             --max-estimated-cost-cny 300 \
             --run-scale \
-            --scale-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
-            --output /tmp/contextmesh-nist-proof/results/live-cost-estimate-gate3-plus-gate4.json
+            --scale-plan /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json \
+            --output /tmp/contextmesh-nist-proof/results/v2/live-cost-estimate-gate3-plus-gate4.json
 
-      - name: Show proof summaries
+      - name: Show official proof summary
         if: always()
         run: |
-          echo '--- Gate 1 ---'
-          cat /tmp/contextmesh-nist-proof/results/gate1.json 2>/dev/null || true
-          echo '--- Gate 2 ---'
-          cat /tmp/contextmesh-nist-proof/results/gate2.json 2>/dev/null || true
-          echo '--- Gate 4 scale plan ---'
-          cat /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json 2>/dev/null || true
-          echo '--- Gate 3 + Gate 4 cost envelope ---'
-          cat /tmp/contextmesh-nist-proof/results/live-cost-estimate-gate3-plus-gate4.json 2>/dev/null || true
+          echo '--- v1 block-size before ---'
+          cat /tmp/contextmesh-nist-proof/results/v1/block-size-audit.json 2>/dev/null || true
+          echo '--- v2 Gate 1 ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/gate1.json 2>/dev/null || true
+          echo '--- v2 Gate 2 ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/gate2.json 2>/dev/null || true
+          echo '--- v2 block-size after ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/block-size-audit.json 2>/dev/null || true
+          echo '--- v2 Gate 4 frozen plan ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json 2>/dev/null || true
+          echo '--- v2 Gate 3 + Gate 4 cost envelope ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/live-cost-estimate-gate3-plus-gate4.json 2>/dev/null || true
 
       - name: Upload public proof artifacts
         if: always()
