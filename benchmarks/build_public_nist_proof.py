@@ -438,6 +438,56 @@ def _build_matrix(store: FileContextStore, corpus_id: str) -> list[NeedleCase]:
             )
         )
 
+    # Image-text fidelity: pair a rendered PDF visual page with the independent
+    # text channel from the same real page. The model-facing case targets the image
+    # block; the text channel supplies scorer-only ground truth for the wording.
+    text_by_page: dict[tuple[str, int], list[tuple[ContextBlock, str]]] = defaultdict(list)
+    image_by_page: dict[tuple[str, int], ContextBlock] = {}
+    for block in blocks:
+        page = block.source.locator.get("page")
+        if not isinstance(page, int):
+            continue
+        key = (Path(block.source.path).name, page)
+        channel = str(block.source.locator.get("channel") or "")
+        if block.modality == Modality.TEXT and channel == "text":
+            for sentence in _sentences(block.text):
+                text_by_page[key].append((block, sentence))
+        elif block.modality == Modality.IMAGE and channel == "visual":
+            image_by_page[key] = block
+
+    image_candidates: list[tuple[ContextBlock, str]] = []
+    for key in sorted(set(text_by_page) & set(image_by_page)):
+        visual = image_by_page[key]
+        sentences = text_by_page[key]
+        if not sentences:
+            continue
+        # Use a source sentence with enough distinctive terms to make the visual
+        # assertion falsifiable without exposing the sentence itself in the question.
+        best = max(sentences, key=lambda item: len(_keywords(item[1], 4)))[1]
+        phrase = _phrase(best, 10)
+        if len(phrase) >= 40 and len(_keywords(best, 2)) >= 2:
+            image_candidates.append((visual, best))
+
+    for idx, (block, sentence) in enumerate(_take_diverse(image_candidates, 12)):
+        phrase = _phrase(sentence, 10)
+        kws = _keywords(sentence, 3)
+        cases.append(
+            _case(
+                f"image-text-{idx:03d}",
+                NeedleKind.IMAGE_TEXT,
+                block,
+                phrase,
+                positions,
+                question=(
+                    "Read the rendered source page and locate the wording concerning "
+                    f"{', '.join(kws) or 'the relevant topic'}."
+                ),
+                match_terms=[phrase],
+                modality=Modality.IMAGE,
+                tags=["vision", "image-text"],
+            )
+        )
+
     # Negative probes are fixed absent markers and have no oracle asset.
     for idx in range(10):
         marker = f"CONTEXTMESH_NIST_ABSENT_{idx:03d}_ZXQ"
@@ -459,8 +509,10 @@ def _build_matrix(store: FileContextStore, corpus_id: str) -> list[NeedleCase]:
 
     # The corpus is large enough that some specialized pools can vary by upstream
     # release. Preserve the required taxonomy and fill only with additional exact
-    # real-source cases if total count is below 110.
-    if len(cases) < 110:
+    # real-source cases if total count is below 120. Image-text cases are never
+    # synthesized by this fallback: if the visual pool is unavailable, Gate 2 should
+    # expose that loss rather than turn text evidence into fake vision coverage.
+    if len(cases) < 120:
         existing = {case.match_terms[0] for case in cases if case.match_terms}
         for block, sentence in _take_diverse(text_pool, 200):
             phrase = _phrase(sentence, 12)
@@ -480,7 +532,7 @@ def _build_matrix(store: FileContextStore, corpus_id: str) -> list[NeedleCase]:
                 )
             )
             existing.add(phrase)
-            if len(cases) >= 110:
+            if len(cases) >= 120:
                 break
 
     return cases
