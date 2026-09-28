@@ -3,7 +3,9 @@
 **Date:** 2026-09-28  
 **Status:** **Gate 1 PASS · Gate 2 PASS**  
 **Corpus:** `nist-public-big-context-v2`  
-**Reference run:** https://github.com/hippoley/ContextMesh/actions/runs/36393959366
+**Reference run:** https://github.com/hippoley/ContextMesh/actions/runs/36395147919  
+**Artifact ID:** `10958350568`  
+**Artifact ZIP SHA-256:** `909bda0123a6776ead4ded011abde6db7e727d4a1e6108610cf8032b1fd7ed86`
 
 This is the official bounded-coverage-unit version of the public NIST proof corpus. It uses the same 12 source files and the same source SHA set as v1.
 
