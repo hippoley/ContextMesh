@@ -87,37 +87,46 @@ jobs:
       - name: Rebuild public NIST corpus and frozen Gate 1-2 artifacts
         run: |
           python benchmarks/build_public_nist_proof.py \
-            --workdir /tmp/contextmesh-live-proof \
-            --output-dir /tmp/contextmesh-live-proof/results \
+            --workdir /tmp/contextmesh-nist-proof \
+            --output-dir /tmp/contextmesh-nist-proof/results \
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --min-corpus-ratio 5
 
       - name: Freeze Gate 4 scale plan before any provider call
         run: |
           python benchmarks/plan_gate4_scale.py nist-public-big-context-v1 \
-            --store /tmp/contextmesh-live-proof/store \
-            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
+            --store /tmp/contextmesh-nist-proof/store \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --ratios "1,2,5,10,20" \
             --needle-sample-size 12 \
             --required-max-ratio 20 \
-            --output /tmp/contextmesh-live-proof/results/gate4-scale-plan.json
+            --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
+
+      - name: Verify rebuilt corpus and Gate 4 plan against committed frozen evidence
+        run: |
+          python benchmarks/verify_frozen_public_proof.py \
+            --download-manifest /tmp/contextmesh-nist-proof/results/download-manifest.json \
+            --gate4-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
+            --gate1-2-proof benchmarks/results/nist-public-gate1-2-2026-09-28.json \
+            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-2026-09-28.json \
+            --output /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
 
       - name: Enforce live proof cost budget before any model call
         run: |
           scale_arg=()
           if [ "${{ inputs.run_scale }}" = "true" ]; then
-            scale_arg+=(--run-scale --scale-plan /tmp/contextmesh-live-proof/results/gate4-scale-plan.json)
+            scale_arg+=(--run-scale --scale-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json)
           fi
           python benchmarks/estimate_big_context_live_cost.py \
-            --corpus-manifest /tmp/contextmesh-live-proof/results/corpus-manifest.json \
-            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
-            --tasks /tmp/contextmesh-live-proof/results/task-cases.json \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/corpus-manifest.json \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-nist-proof/results/task-cases.json \
             --context-tokens "${{ inputs.context_tokens }}" \
             --input-cny-per-million "${{ inputs.input_cny_per_million }}" \
             --output-cny-per-million "${{ inputs.output_cny_per_million }}" \
             --max-estimated-cost-cny "${{ inputs.max_estimated_cost_cny }}" \
-            --output /tmp/contextmesh-live-proof/results/cost-estimate.json \
+            --output /tmp/contextmesh-nist-proof/results/cost-estimate.json \
             "${scale_arg[@]}"
 
       - name: Configure authorized live model route
@@ -156,7 +165,7 @@ jobs:
           from contextmesh.models import ModelRoute
           from contextmesh.store import FileContextStore
 
-          store = FileContextStore("/tmp/contextmesh-live-proof/store")
+          store = FileContextStore("/tmp/contextmesh-nist-proof/store")
           route = ModelRoute(
               id="big-context-live",
               label="Big Context Live Proof",
@@ -195,7 +204,7 @@ jobs:
             --base-url "$base_url" \
             --model "$MODEL" \
             --api-key-env "$api_env" \
-            --output /tmp/contextmesh-live-proof/results/provider-smoke.json
+            --output /tmp/contextmesh-nist-proof/results/provider-smoke.json
 
       - name: Smoke-only stop marker
         if: ${{ inputs.smoke_only }}
@@ -220,17 +229,17 @@ jobs:
             extra+=(--drift-reference /tmp/contextmesh-reference/live-proof.snapshot.json)
           fi
           python benchmarks/big_context_proof.py nist-public-big-context-v1 \
-            --store /tmp/contextmesh-live-proof/store \
+            --store /tmp/contextmesh-nist-proof/store \
             --route-id big-context-live \
-            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
-            --tasks /tmp/contextmesh-live-proof/results/task-cases.json \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-nist-proof/results/task-cases.json \
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --workers "${{ inputs.workers }}" \
             --skip-scale \
             --run-id "github-${{ github.run_id }}" \
             --model-version "${{ inputs.model }}" \
-            --output /tmp/contextmesh-live-proof/results/live-proof.json \
-            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json \
+            --output /tmp/contextmesh-nist-proof/results/live-proof.json \
+            --snapshot-output /tmp/contextmesh-nist-proof/results/live-proof.snapshot.json \
             "${extra[@]}"
 
       - name: Run Gate 3 + Gate 4 scale proof
@@ -241,31 +250,31 @@ jobs:
             extra+=(--drift-reference /tmp/contextmesh-reference/live-proof.snapshot.json --require-all-gates)
           fi
           python benchmarks/big_context_proof.py nist-public-big-context-v1 \
-            --store /tmp/contextmesh-live-proof/store \
+            --store /tmp/contextmesh-nist-proof/store \
             --route-id big-context-live \
-            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
-            --tasks /tmp/contextmesh-live-proof/results/task-cases.json \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-nist-proof/results/task-cases.json \
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --workers "${{ inputs.workers }}" \
             --ratios "1,2,5,10,20" \
-            --scale-plan /tmp/contextmesh-live-proof/results/gate4-scale-plan.json \
+            --scale-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
             --task-sample-size 0 \
             --run-id "github-${{ github.run_id }}" \
             --model-version "${{ inputs.model }}" \
-            --output /tmp/contextmesh-live-proof/results/live-proof.json \
-            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json \
+            --output /tmp/contextmesh-nist-proof/results/live-proof.json \
+            --snapshot-output /tmp/contextmesh-nist-proof/results/live-proof.snapshot.json \
             "${extra[@]}"
 
       - name: Show live proof result
         if: always()
         run: |
-          cat /tmp/contextmesh-live-proof/results/live-proof.json 2>/dev/null || true
+          cat /tmp/contextmesh-nist-proof/results/live-proof.json 2>/dev/null || true
 
       - name: Upload live proof artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: big-context-live-proof-${{ github.run_id }}
-          path: /tmp/contextmesh-live-proof/results/
+          path: /tmp/contextmesh-nist-proof/results/
           if-no-files-found: warn
           retention-days: 90
