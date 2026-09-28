@@ -14,17 +14,32 @@ on:
       model:
         description: 'Model name'
         required: true
-        default: 'qwen3-vl-plus'
+        default: 'qwen3-vl-8b-instruct'
         type: string
       context_tokens:
         description: 'Declared model context tokens'
         required: true
-        default: '128000'
+        default: '131072'
         type: string
       workers:
         description: 'Parallel block inspections'
         required: true
         default: '6'
+        type: string
+      input_cny_per_million:
+        description: 'Input price for cost gate (CNY / 1M tokens); override for selected provider/model'
+        required: true
+        default: '0.5'
+        type: string
+      output_cny_per_million:
+        description: 'Output price for cost gate (CNY / 1M tokens); override for selected provider/model'
+        required: true
+        default: '2'
+        type: string
+      max_estimated_cost_cny:
+        description: 'Abort before live calls if conservative estimate exceeds this CNY budget'
+        required: true
+        default: '80'
         type: string
       run_scale:
         description: 'Run Gate 4 after Gate 3 passes (material extra API cost)'
@@ -66,6 +81,23 @@ jobs:
             --output-dir /tmp/contextmesh-live-proof/results \
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --min-corpus-ratio 5
+
+      - name: Enforce live proof cost budget before any model call
+        run: |
+          scale_arg=()
+          if [ "${{ inputs.run_scale }}" = "true" ]; then
+            scale_arg+=(--run-scale)
+          fi
+          python benchmarks/estimate_big_context_live_cost.py \
+            --corpus-manifest /tmp/contextmesh-live-proof/results/corpus-manifest.json \
+            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-live-proof/results/task-cases.json \
+            --context-tokens "${{ inputs.context_tokens }}" \
+            --input-cny-per-million "${{ inputs.input_cny_per_million }}" \
+            --output-cny-per-million "${{ inputs.output_cny_per_million }}" \
+            --max-estimated-cost-cny "${{ inputs.max_estimated_cost_cny }}" \
+            --output /tmp/contextmesh-live-proof/results/cost-estimate.json \
+            "${scale_arg[@]}"
 
       - name: Configure authorized live model route
         env:
