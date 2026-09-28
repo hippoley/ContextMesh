@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from contextmesh.big_context_proof import (
     CorpusPosition,
     Gate1CorpusSpec,
