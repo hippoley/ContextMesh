@@ -105,7 +105,7 @@ The real public corpus is **29.6212×** the 131,072-token live-route context win
 
 [Real Gate 1–2 evidence](docs/reality/Big-Context-NIST-Gate1-2-2026-09-28.md) · [machine-readable result](benchmarks/results/nist-public-gate1-2-2026-09-28.json) · [CI run](https://github.com/hippoley/ContextMesh/actions/runs/36373761033)
 
-[Gate 4 PREPARED evidence](docs/reality/Big-Context-NIST-Gate4-Preflight-2026-09-28.md) · [machine-readable scale plan summary](benchmarks/results/nist-public-gate4-preflight-2026-09-28.json) · [preflight run](https://github.com/hippoley/ContextMesh/actions/runs/36390126287)
+[Gate 4 PREPARED evidence](docs/reality/Big-Context-NIST-Gate4-Preflight-2026-09-28.md) · [machine-readable scale plan summary](benchmarks/results/nist-public-gate4-preflight-2026-09-28.json) · [preflight run](https://github.com/hippoley/ContextMesh/actions/runs/36390126287) · [live Gate 4 tracker](https://github.com/hippoley/ContextMesh/issues/8)
 
 [Read the five-gate contract](docs/BIG_CONTEXT_PROOF.md) · [Run the proof](benchmarks/big_context_proof.py) · [Needle schema](benchmarks/big-context/needle-matrix.example.json) · [Task schema](benchmarks/big-context/task-cases.example.json)
 
