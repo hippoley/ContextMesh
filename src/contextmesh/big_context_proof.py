@@ -13,10 +13,16 @@ from typing import Any, Callable, Iterable, Protocol
 
 from pydantic import BaseModel, Field
 
-from .models import ContextBlock, CorpusManifest, ModelRoute, Modality, UsageMetrics
+from .evidence import extract_evidence_atoms
+from .models import ContextBlock, CorpusManifest, EvaluationState, Evidence, ModelRoute, Modality, UsageMetrics
 from .reader import CorpusReader
 from .runtime import ProgressiveEvaluator
-from .semantics import ExecutionContract
+from .semantics import (
+    ExecutionContract,
+    build_decision_bundle,
+    reduce_semantic_units,
+    semantic_units_from_evidence,
+)
 from .store import FileContextStore
 from .token_budget import TextTokenBudget
 
@@ -903,6 +909,239 @@ def _usage_for(judge: ProofJudge) -> UsageMetrics:
         return judge.usage_snapshot()
     except Exception:
         return UsageMetrics(route_id=getattr(judge, "route_id", None))
+
+
+def _add_usage(target: UsageMetrics, source: UsageMetrics) -> None:
+    target.requests += source.requests
+    target.prompt_tokens += source.prompt_tokens
+    target.completion_tokens += source.completion_tokens
+    target.cached_prompt_tokens += source.cached_prompt_tokens
+    target.latency_seconds += source.latency_seconds
+    target.estimated_cost_usd += source.estimated_cost_usd
+    if target.route_id is None:
+        target.route_id = source.route_id
+
+
+def _div_usage(source: UsageMetrics, divisor: int) -> UsageMetrics:
+    divisor = max(1, divisor)
+    return UsageMetrics(
+        requests=int(round(source.requests / divisor)),
+        prompt_tokens=int(round(source.prompt_tokens / divisor)),
+        completion_tokens=int(round(source.completion_tokens / divisor)),
+        cached_prompt_tokens=int(round(source.cached_prompt_tokens / divisor)),
+        latency_seconds=source.latency_seconds / divisor,
+        estimated_cost_usd=source.estimated_cost_usd / divisor,
+        route_id=source.route_id,
+    )
+
+
+def run_batched_full_coverage_task_baseline(
+    store: FileContextStore,
+    corpus_id: str,
+    judge_factory: Callable[[], ProofJudge],
+    cases: Iterable[TaskCase],
+    *,
+    max_workers: int = 4,
+    retry_attempts: int = 2,
+) -> BaselineSummary:
+    """Evaluate many tasks with one full-corpus evidence traversal.
+
+    Model-facing block inspection receives only task IDs, questions and candidate
+    answers. Expected score ranges and tags remain benchmark-side ground truth.
+    Each task is finalized separately from its own typed evidence/DecisionBundle.
+    """
+    items = list(cases)
+    manifest = store.get_manifest(corpus_id)
+    blocks = [store.get_block(corpus_id, bid) for bid in manifest.coverage_ids()]
+    if not items:
+        return _summarize_baseline("contextmesh-full-coverage", [])
+
+    probe = judge_factory()
+    if not callable(getattr(probe, "inspect_task_batch", None)):
+        raise TypeError("judge does not support inspect_task_batch")
+
+    payloads = [
+        {
+            "id": case.id,
+            "question": case.question,
+            "candidate_answer": case.candidate_answer,
+        }
+        for case in items
+    ]
+    matches_by_task: dict[str, list[tuple[ContextBlock, str]]] = {
+        case.id: [] for case in items
+    }
+    failures: dict[str, str] = {}
+    unsupported: set[str] = set()
+    traversal_usage = UsageMetrics(route_id=getattr(probe, "route_id", None))
+    traversal_started = time.perf_counter()
+
+    def inspect_one(block: ContextBlock):
+        judge = judge_factory()
+        if not judge.can_inspect(block):
+            return block, None, "unsupported", _usage_for(judge)
+        last_error = None
+        for attempt in range(1, max(1, retry_attempts) + 1):
+            try:
+                matches = judge.inspect_task_batch(block, payloads)
+                return block, matches, None, _usage_for(judge)
+            except Exception as exc:
+                last_error = exc
+                if attempt < retry_attempts:
+                    time.sleep(min(2.0, 0.25 * attempt))
+        return block, None, str(last_error), _usage_for(judge)
+
+    with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+        futures = [pool.submit(inspect_one, block) for block in blocks]
+        for future in as_completed(futures):
+            block, matches, error, usage = future.result()
+            _add_usage(traversal_usage, usage)
+            if error == "unsupported":
+                unsupported.add(block.id)
+                continue
+            if error:
+                failures[block.id] = error
+                continue
+            for task_id, note in (matches or {}).items():
+                if task_id in matches_by_task:
+                    matches_by_task[task_id].append((block, note))
+
+    traversal_elapsed = time.perf_counter() - traversal_started
+    inspected = len(blocks) - len(unsupported) - len(failures)
+    coverage = inspected / len(blocks) if blocks else 1.0
+    shared_usage = _div_usage(traversal_usage, len(items))
+    shared_latency = traversal_elapsed / max(1, len(items))
+    rows: list[BaselineTaskResult] = []
+
+    if unsupported or failures:
+        reason = (
+            f"full-coverage batched task traversal incomplete: "
+            f"unsupported={len(unsupported)}, failures={len(failures)}"
+        )
+        for case in items:
+            rows.append(
+                BaselineTaskResult(
+                    baseline="contextmesh-full-coverage",
+                    task_id=case.id,
+                    blocked=True,
+                    latency_seconds=shared_latency,
+                    selected_blocks=inspected,
+                    coverage=coverage,
+                    estimated_cost_usd=shared_usage.estimated_cost_usd,
+                    prompt_tokens=shared_usage.prompt_tokens,
+                    completion_tokens=shared_usage.completion_tokens,
+                    error=reason,
+                    tags=list(case.tags),
+                )
+            )
+        return _summarize_baseline("contextmesh-full-coverage", rows)
+
+    contract = ExecutionContract.full_coverage(manifest.coverage_ids())
+    for case in items:
+        evidence: list[Evidence] = []
+        notes: list[str] = []
+        for block, note in matches_by_task.get(case.id, []):
+            notes.append(note)
+            evidence.append(
+                Evidence(
+                    block_id=block.id,
+                    note=note,
+                    source=block.source,
+                    modality=block.modality,
+                    atoms=extract_evidence_atoms(block, note),
+                )
+            )
+
+        units = semantic_units_from_evidence(evidence)
+        reduced, receipt, validation = reduce_semantic_units(units)
+        final_judge = judge_factory()
+        started = time.perf_counter()
+
+        if not validation.ok:
+            rows.append(
+                BaselineTaskResult(
+                    baseline="contextmesh-full-coverage",
+                    task_id=case.id,
+                    blocked=True,
+                    latency_seconds=shared_latency,
+                    selected_blocks=len(blocks),
+                    coverage=1.0,
+                    estimated_cost_usd=shared_usage.estimated_cost_usd,
+                    prompt_tokens=shared_usage.prompt_tokens,
+                    completion_tokens=shared_usage.completion_tokens,
+                    error="typed monotonic reduction violated: " + "; ".join(validation.errors),
+                    tags=list(case.tags),
+                )
+            )
+            continue
+
+        state = EvaluationState(
+            corpus_id=corpus_id,
+            question=case.question,
+            answer=case.candidate_answer,
+            visited=set(manifest.coverage_ids()),
+            evidence=evidence,
+            working_notes=notes,
+            semantic_units=[unit.model_dump(mode="json") for unit in reduced],
+            reduction_receipts=(
+                [receipt.model_dump(mode="json")] if receipt.merged_from else []
+            ),
+            decision_bundle=build_decision_bundle(reduced).model_dump(mode="json"),
+            execution_contract=contract.model_dump(mode="json"),
+        )
+
+        try:
+            preflight = getattr(final_judge, "preflight_finalize", None)
+            blocker = preflight(state) if callable(preflight) else None
+            if blocker:
+                raise RuntimeError(blocker)
+            score, _ = final_judge.finalize(state)
+            final_usage = _usage_for(final_judge)
+            rows.append(
+                BaselineTaskResult(
+                    baseline="contextmesh-full-coverage",
+                    task_id=case.id,
+                    score=float(score),
+                    correct=_score_is_correct(case, float(score)),
+                    blocked=False,
+                    latency_seconds=shared_latency + (time.perf_counter() - started),
+                    selected_blocks=len(blocks),
+                    coverage=1.0,
+                    estimated_cost_usd=(
+                        shared_usage.estimated_cost_usd
+                        + final_usage.estimated_cost_usd
+                    ),
+                    prompt_tokens=shared_usage.prompt_tokens + final_usage.prompt_tokens,
+                    completion_tokens=(
+                        shared_usage.completion_tokens + final_usage.completion_tokens
+                    ),
+                    tags=list(case.tags),
+                )
+            )
+        except Exception as exc:
+            final_usage = _usage_for(final_judge)
+            rows.append(
+                BaselineTaskResult(
+                    baseline="contextmesh-full-coverage",
+                    task_id=case.id,
+                    blocked=True,
+                    latency_seconds=shared_latency + (time.perf_counter() - started),
+                    selected_blocks=len(blocks),
+                    coverage=1.0,
+                    estimated_cost_usd=(
+                        shared_usage.estimated_cost_usd
+                        + final_usage.estimated_cost_usd
+                    ),
+                    prompt_tokens=shared_usage.prompt_tokens + final_usage.prompt_tokens,
+                    completion_tokens=(
+                        shared_usage.completion_tokens + final_usage.completion_tokens
+                    ),
+                    error=str(exc),
+                    tags=list(case.tags),
+                )
+            )
+
+    return _summarize_baseline("contextmesh-full-coverage", rows)
 
 
 def run_task_baselines(
