@@ -1764,6 +1764,11 @@ class Gate4ScalePlanReport(BaseModel):
     corpus_id: str
     model_context_tokens: int
     needle_cases: int
+    selected_case_ids: list[str]
+    selected_kind_counts: dict[str, int]
+    selected_modality_counts: dict[str, int]
+    anchor_budget_ratio: float
+    anchor_budget_tokens: int
     anchor_block_ids: list[str]
     anchor_fingerprint: str
     points: list[Gate4ScalePlanPoint]
@@ -1870,6 +1875,17 @@ def plan_gate4_scale(
         corpus_id=corpus_id,
         model_context_tokens=spec.model_context_tokens,
         needle_cases=len(needles),
+        selected_case_ids=[case.id for case in needles],
+        selected_kind_counts=dict(
+            sorted(Counter(case.kind.value for case in needles).items())
+        ),
+        selected_modality_counts=dict(
+            sorted(Counter(case.modality.value for case in needles).items())
+        ),
+        anchor_budget_ratio=spec.anchor_budget_ratio,
+        anchor_budget_tokens=int(
+            spec.model_context_tokens * spec.anchor_budget_ratio
+        ),
         anchor_block_ids=anchor_order,
         anchor_fingerprint=anchor_fingerprint,
         points=points,
