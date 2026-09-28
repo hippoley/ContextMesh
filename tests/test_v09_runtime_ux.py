@@ -12,11 +12,11 @@ from contextmesh.store import FileContextStore
 
 
 class RecordingJudge(OpenAICompatibleJudge):
-    def __init__(self):
+    def __init__(self, max_context_tokens=2048):
         super().__init__(
             model="fake",
             base_url="http://unused",
-            max_context_tokens=2048,
+            max_context_tokens=max_context_tokens,
             reserve_output_tokens=256,
             capabilities=["text", "table"],
         )
@@ -57,7 +57,7 @@ def test_evaluation_can_cancel_and_resume_checkpoint(tmp_path: Path):
     store.set_job_flag("corp_cancel", "job_cancel", cancel_requested=True)
     result = ProgressiveEvaluator(
         store,
-        RecordingJudge(),
+        RecordingJudge(max_context_tokens=8192),
         cancellation_check=store.job_cancel_requested,
     ).evaluate("corp_cancel", "alpha?", "answer", job_id="job_cancel")
     assert result.complete is False
@@ -68,7 +68,7 @@ def test_evaluation_can_cancel_and_resume_checkpoint(tmp_path: Path):
     store.clear_job_flags("corp_cancel", "job_cancel")
     resumed = ProgressiveEvaluator(
         store,
-        RecordingJudge(),
+        RecordingJudge(max_context_tokens=8192),
         cancellation_check=store.job_cancel_requested,
     ).evaluate("corp_cancel", "alpha?", "answer", job_id="job_cancel", resume=True)
     assert resumed.complete is True
