@@ -97,7 +97,7 @@ def test_gate2_matrix_requires_kind_and_position_coverage():
                 match_terms=[f"marker-{i}"],
                 corpus_position=corpus_positions[i % len(corpus_positions)],
                 local_position=local_positions[(i // len(corpus_positions)) % len(local_positions)],
-                modality=Modality.TEXT,
+                modality=[Modality.TEXT, Modality.TABLE, Modality.IMAGE][i % 3],
             )
         )
 
