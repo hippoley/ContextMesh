@@ -76,16 +76,25 @@
     "cases": 33
   },
   "gate3": {
-    "status": "not-run",
-    "reason": "requires an authorized live multimodal model route"
+    "status": "blocked",
+    "reason": "No authorized live model provider credential is configured in repository Actions secrets.",
+    "readiness_run": {
+      "id": 36374543342,
+      "url": "https://github.com/hippoley/ContextMesh/actions/runs/36374543342",
+      "dashscope_secret_configured": false,
+      "openai_secret_configured": false,
+      "provider_calls_made": 0,
+      "model_tokens_billed": 0
+    },
+    "next_required_action": "Configure repository Actions secret DASHSCOPE_API_KEY (preferred) or OPENAI_API_KEY, then dispatch Big Context Live Proof."
   },
   "gate4": {
     "status": "not-run",
-    "reason": "requires Gate 3 live evidence fidelity before scale execution"
+    "reason": "Requires Gate 3 live evidence fidelity before scale execution."
   },
   "gate5": {
     "status": "not-run",
-    "reason": "requires a repeated live run against a stored reference snapshot"
+    "reason": "Requires a repeated live run against a stored reference snapshot."
   },
   "sources": [
     {
