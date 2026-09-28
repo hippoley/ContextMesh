@@ -76,6 +76,53 @@ jobs:
           echo "candidate-step-outcome=${{ steps.gate4_v2.outcome }}"
           cat /tmp/contextmesh-nist-proof/results/gate4-v2-candidate.json 2>/dev/null || true
 
+      - name: Build bounded-table NIST proof v2 candidate
+        id: proof_v2
+        continue-on-error: true
+        run: |
+          python benchmarks/build_public_nist_proof.py \
+            --workdir /tmp/contextmesh-nist-proof \
+            --output-dir /tmp/contextmesh-nist-proof/results/v2 \
+            --model-context-tokens 131072 \
+            --min-corpus-ratio 5 \
+            --corpus-id nist-public-big-context-v2 \
+            --max-table-block-chars 12000 \
+            --reuse-downloads
+
+      - name: Plan strict Gate 4 over bounded-table proof v2
+        id: gate4_v2_bounded
+        if: always()
+        continue-on-error: true
+        run: |
+          if [ ! -f /tmp/contextmesh-nist-proof/results/v2/needle-matrix.json ]; then
+            echo "v2 needle matrix missing; bounded-table proof build did not complete"
+            exit 2
+          fi
+          python benchmarks/plan_gate4_scale.py nist-public-big-context-v2 \
+            --store /tmp/contextmesh-nist-proof/store \
+            --needles /tmp/contextmesh-nist-proof/results/v2/needle-matrix.json \
+            --model-context-tokens 131072 \
+            --ratios "1,2,5,10,20" \
+            --needle-sample-size 12 \
+            --required-max-ratio 20 \
+            --require-cross-file \
+            --require-all-local-positions \
+            --output /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json
+
+      - name: Show bounded-table v2 before-after
+        if: always()
+        run: |
+          echo '--- v1 block size audit ---'
+          cat /tmp/contextmesh-nist-proof/results/block-size-audit.json 2>/dev/null || true
+          echo '--- v2 block size audit ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/block-size-audit.json 2>/dev/null || true
+          echo '--- v2 Gate 1 ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/gate1.json 2>/dev/null || true
+          echo '--- v2 Gate 2 ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/gate2.json 2>/dev/null || true
+          echo '--- v2 strict Gate 4 ---'
+          cat /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json 2>/dev/null || true
+
       - name: Verify current rebuild matches frozen public proof
         run: |
           python benchmarks/verify_frozen_public_proof.py \
