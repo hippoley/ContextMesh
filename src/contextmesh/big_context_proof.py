@@ -1509,7 +1509,22 @@ def _anchor_blocks(
     corpus_id: str,
     cases: list[NeedleCase],
 ) -> set[str]:
+    """Return the smallest frozen evidence set required by the selected needles.
+
+    Modern proof cases freeze exact target_block_ids. Falling back to whole assets
+    exists only for older matrices that predate coverage-unit ground truth.
+    """
     manifest = store.get_manifest(corpus_id)
+    known = set(manifest.coverage_ids())
+    exact = {
+        block_id
+        for case in cases
+        for block_id in case.target_block_ids
+        if block_id in known
+    }
+    if exact:
+        return exact
+
     targets = {
         Path(asset).name
         for case in cases
@@ -1539,8 +1554,19 @@ def _plan_scale_projection(
     target_tokens: int,
 ) -> tuple[list[str], int, list[str]]:
     manifest = store.get_manifest(corpus_id)
-    ordered = manifest.coverage_ids()
+    coverage_order = manifest.coverage_ids()
     anchors = _anchor_blocks(store, corpus_id, cases)
+    # Keep anchor placement deterministic, then add distractors in a stable
+    # hash order. This avoids turning smaller scale points into "mostly early
+    # corpus" samples while preserving nested projections as ratio grows.
+    anchor_order = [block_id for block_id in coverage_order if block_id in anchors]
+    distractor_order = sorted(
+        (block_id for block_id in coverage_order if block_id not in anchors),
+        key=lambda block_id: hashlib.sha256(
+            f"{corpus_id}:{block_id}".encode("utf-8")
+        ).hexdigest(),
+    )
+    ordered = anchor_order + distractor_order
     selected: list[str] = []
     selected_set: set[str] = set()
     total = 0
