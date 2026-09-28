@@ -101,7 +101,7 @@ Gate 4  1× → 20× fixed-needle scale curve                      NOT RUN
 Gate 5  repeated-run drift                                     NOT RUN
 ```
 
-The real public corpus is **29.6212×** the 131,072-token live-route context window and contains **1,841 required coverage units** (936 text, 899 image, 6 table). Gates 1–2 are backed by a successful GitHub Actions run and a committed source-hash/result record. This does not upgrade the overall large-context claim: Gates 3–5 still have to pass. The proposed first Gate 3 route is `qwen3-vl-8b-instruct`; its conservative no-call budget preflight is **¥47.42** under an **¥80** ceiling. **Live readiness:** the latest zero-call Actions probe found neither `DASHSCOPE_API_KEY` nor `OPENAI_API_KEY` configured, so no paid run has started.
+The real public corpus is **29.6212×** the 131,072-token live-route context window and contains **1,841 required coverage units** (936 text, 899 image, 6 table). Gates 1–2 are backed by a successful GitHub Actions run and a committed source-hash/result record. This does not upgrade the overall large-context claim: Gates 3–5 still have to pass. The proposed first Gate 3 route is `qwen3-vl-8b-instruct`; its conservative no-call budget preflight is **¥47.42** under an **¥80** ceiling. **Live readiness:** the latest zero-call Actions probe found neither `DASHSCOPE_API_KEY` nor `OPENAI_API_KEY` configured, so no paid run has started. Track the first paid live run in [Issue #7](https://github.com/hippoley/ContextMesh/issues/7).
 
 [Real Gate 1–2 evidence](docs/reality/Big-Context-NIST-Gate1-2-2026-09-28.md) · [machine-readable result](benchmarks/results/nist-public-gate1-2-2026-09-28.json) · [CI run](https://github.com/hippoley/ContextMesh/actions/runs/36373761033)
 
