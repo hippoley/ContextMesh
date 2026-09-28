@@ -61,6 +61,21 @@ on:
         required: false
         default: ''
         type: string
+      promotion_max_cost_ratio:
+        description: 'Reject promotion if candidate/reference cost ratio exceeds this'
+        required: true
+        default: '1.25'
+        type: string
+      promotion_max_latency_ratio:
+        description: 'Reject promotion if candidate/reference latency ratio exceeds this'
+        required: true
+        default: '1.25'
+        type: string
+      promotion_max_scale20_recall_drop:
+        description: 'Reject promotion if 20x ContextMesh recall drops by more than this fraction'
+        required: true
+        default: '0.05'
+        type: string
 
 permissions:
   contents: read
@@ -284,6 +299,22 @@ jobs:
           elif [ -n "${{ inputs.reference_run_id }}" ]; then
             printf '# Gate 5 Drift Diff\n\nStatus: **NOT COMPARABLE**\n\nReference or candidate proof artifact unavailable.\n' \
               > /tmp/contextmesh-nist-proof/results/gate5-drift-diff.md
+          fi
+
+      - name: Decide candidate promotion
+        if: always()
+        run: |
+          if [ -f /tmp/contextmesh-nist-proof/results/gate5-drift-diff.json ]; then
+            python benchmarks/decide_big_context_promotion.py \
+              --drift-diff /tmp/contextmesh-nist-proof/results/gate5-drift-diff.json \
+              --json /tmp/contextmesh-nist-proof/results/promotion-decision.json \
+              --markdown /tmp/contextmesh-nist-proof/results/promotion-decision.md \
+              --max-cost-ratio "${{ inputs.promotion_max_cost_ratio }}" \
+              --max-latency-ratio "${{ inputs.promotion_max_latency_ratio }}" \
+              --max-scale20-recall-drop "${{ inputs.promotion_max_scale20_recall_drop }}"
+          elif [ -n "${{ inputs.reference_run_id }}" ]; then
+            printf '# Promotion Decision\n\nDecision: **HOLD**\n\n- comparable Gate 5 drift artifact unavailable\n' \
+              > /tmp/contextmesh-nist-proof/results/promotion-decision.md
           fi
 
       - name: Render Gate 4 curve artifacts
