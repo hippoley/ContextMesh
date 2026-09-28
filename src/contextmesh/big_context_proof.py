@@ -1750,7 +1750,28 @@ def _select_gate4_scale_panel(
         spec.require_cross_file_scale_case
         and NeedleKind.CROSS_FILE not in kinds
     ):
-        blockers.append("scale-panel-cross-file:missing")
+        cross_candidates = [
+            case for case in candidates if case.kind == NeedleKind.CROSS_FILE
+        ]
+        if cross_candidates:
+            ranked_cross = sorted(
+                (
+                    (
+                        anchor_tokens(anchor_map[case.id]),
+                        case.id,
+                    )
+                    for case in cross_candidates
+                ),
+                key=lambda item: (item[0], item[1]),
+            )
+            cheapest_tokens, cheapest_case = ranked_cross[0]
+            blockers.append(
+                "scale-panel-cross-file:missing:"
+                f"cheapest={cheapest_case},anchor_tokens={cheapest_tokens},"
+                f"budget={budget}"
+            )
+        else:
+            blockers.append("scale-panel-cross-file:missing:no-candidates")
     used = anchor_tokens(anchors)
     if used > budget:
         blockers.append(
