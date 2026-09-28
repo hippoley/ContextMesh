@@ -90,6 +90,21 @@ Gate 5  Drift                repeat-run model/prompt/chunk/reducer stability
 
 A first live run can pass Gates 1–4 and still **does not** set `claim_proven=true`; Gate 5 requires a stored reference and a repeated run.
 
+**Current public proof status (2026-09-28):**
+
+```text
+Gate 0  synthetic execution mechanics                         PASS
+Gate 1  real NIST corpus · 12 files · 3.88M est. tokens       PASS
+Gate 2  132 frozen cases · 11 kinds · text/table/image         PASS
+Gate 3  live multimodal evidence + task fidelity               NOT RUN
+Gate 4  1× → 20× fixed-needle scale curve                      NOT RUN
+Gate 5  repeated-run drift                                     NOT RUN
+```
+
+The real public corpus is **30.3321×** a 128K reference context window and contains **1,841 required coverage units** (936 text, 899 image, 6 table). Gates 1–2 are backed by a successful GitHub Actions run and a committed source-hash/result record. This does not upgrade the overall large-context claim: Gates 3–5 still have to pass.
+
+[Real Gate 1–2 evidence](docs/reality/Big-Context-NIST-Gate1-2-2026-09-28.md) · [machine-readable result](benchmarks/results/nist-public-gate1-2-2026-09-28.json) · [CI run](https://github.com/hippoley/ContextMesh/actions/runs/36372832730)
+
 [Read the five-gate contract](docs/BIG_CONTEXT_PROOF.md) · [Run the proof](benchmarks/big_context_proof.py) · [Needle schema](benchmarks/big-context/needle-matrix.example.json) · [Task schema](benchmarks/big-context/task-cases.example.json)
 
 ## Interactive Reality Lab
