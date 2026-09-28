@@ -22,7 +22,7 @@ def main() -> int:
     ap.add_argument("--needles", type=Path, required=True)
     ap.add_argument("--model-context-tokens", type=int, required=True)
     ap.add_argument("--ratios", default="1,2,5,10,20")
-    ap.add_argument("--needle-sample-size", type=int, default=24)
+    ap.add_argument("--needle-sample-size", type=int, default=12)
     ap.add_argument("--required-max-ratio", type=float, default=20.0)
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
