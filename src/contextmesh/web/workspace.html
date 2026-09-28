@@ -118,10 +118,26 @@
         </aside>
       </section>
 
-      <section class="calibration-strip">
-        <div><p class="eyebrow">Release gate</p><h2>Score-preservation calibration</h2><p>For corpora that fit a direct request, compare direct full-context scoring against the progressive runtime before changing chunking, prompts, reducers or models.</p></div>
-        <button id="benchmarkBtn" class="btn secondary">Compare direct vs progressive</button>
-        <div id="benchmarkResult" class="benchmark-result empty-state">No benchmark run yet.</div>
+      <section class="calibration-strip proof-calibration">
+        <div>
+          <p class="eyebrow">Release gates</p>
+          <h2>Calibration + Big Context Proof</h2>
+          <p>Small-context calibration checks direct-vs-progressive score drift. Big Context Proof is stricter: 10–30 real files, a deep ground-truth needle matrix, live-model evidence/task baselines, scale curves, then repeated-run drift.</p>
+        </div>
+        <div class="proof-actions">
+          <button id="benchmarkBtn" class="btn secondary">Small-context calibration</button>
+          <button id="bigContextReadinessBtn" class="btn secondary">Check Gate 1 readiness</button>
+        </div>
+        <div class="proof-results">
+          <div id="benchmarkResult" class="benchmark-result empty-state">No calibration run yet.</div>
+          <div id="bigContextReadinessResult" class="proof-gates">
+            <div class="proof-gate pending"><b>1</b><span>Corpus Reality</span><strong>not checked</strong></div>
+            <div class="proof-gate pending"><b>2</b><span>Needle Matrix</span><strong>requires artifact</strong></div>
+            <div class="proof-gate pending"><b>3</b><span>Live Fidelity</span><strong>requires live run</strong></div>
+            <div class="proof-gate pending"><b>4</b><span>Scale Curve</span><strong>requires Gate 3</strong></div>
+            <div class="proof-gate pending"><b>5</b><span>Drift</span><strong>requires repeat run</strong></div>
+          </div>
+        </div>
       </section>
     </main>
   </div>
