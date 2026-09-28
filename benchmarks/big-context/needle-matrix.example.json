@@ -1,0 +1,124 @@
+{
+  "note": "Schema example only. This file is intentionally too small to pass Gate 2.",
+  "cases": [
+    {
+      "id": "exact-001",
+      "kind": "exact",
+      "question": "What exact emergency override code appears in the policy?",
+      "target_assets": [
+        "policy.pdf"
+      ],
+      "expected_present": true,
+      "expected_answer": "EMERGENCY_OVERRIDE_731",
+      "match_terms": [
+        "EMERGENCY_OVERRIDE_731"
+      ],
+      "corpus_position": "early",
+      "local_position": "middle",
+      "modality": "text",
+      "tags": [
+        "policy"
+      ]
+    },
+    {
+      "id": "exception-001",
+      "kind": "exception",
+      "question": "What exception changes the normal termination rule?",
+      "target_assets": [
+        "amendment.docx"
+      ],
+      "expected_present": true,
+      "expected_answer": "Section 17.4 requires sixty days notice.",
+      "match_terms": [
+        "Section 17.4",
+        "sixty days"
+      ],
+      "match_all_terms": true,
+      "corpus_position": "middle",
+      "local_position": "tail",
+      "modality": "text",
+      "tags": [
+        "exception",
+        "authority"
+      ]
+    },
+    {
+      "id": "cross-file-001",
+      "kind": "cross-file",
+      "question": "Combine the master agreement and amendment: what notice period controls?",
+      "target_assets": [
+        "master-agreement.pdf",
+        "amendment.docx"
+      ],
+      "expected_present": true,
+      "expected_answer": "Sixty days.",
+      "match_terms": [
+        "thirty days",
+        "sixty days"
+      ],
+      "required_asset_hits": 2,
+      "corpus_position": "late",
+      "local_position": "middle",
+      "modality": "text",
+      "tags": [
+        "cross-file",
+        "authority"
+      ]
+    },
+    {
+      "id": "table-001",
+      "kind": "table-cell",
+      "question": "What limit is listed for the premium tier?",
+      "target_assets": [
+        "limits.xlsx"
+      ],
+      "expected_present": true,
+      "expected_answer": "250",
+      "match_terms": [
+        "250"
+      ],
+      "corpus_position": "middle",
+      "local_position": "head",
+      "modality": "table",
+      "tags": [
+        "table"
+      ]
+    },
+    {
+      "id": "image-001",
+      "kind": "image-text",
+      "question": "What marker is printed in the scanned approval stamp?",
+      "target_assets": [
+        "scan.pdf"
+      ],
+      "expected_present": true,
+      "expected_answer": "APPROVED-908",
+      "match_terms": [
+        "APPROVED-908"
+      ],
+      "corpus_position": "late",
+      "local_position": "middle",
+      "modality": "image",
+      "tags": [
+        "vision"
+      ]
+    },
+    {
+      "id": "negative-001",
+      "kind": "negative",
+      "question": "Does the corpus contain marker NEVER_EXISTS_404?",
+      "target_assets": [],
+      "expected_present": false,
+      "expected_answer": "No.",
+      "match_terms": [
+        "NEVER_EXISTS_404"
+      ],
+      "corpus_position": "early",
+      "local_position": "head",
+      "modality": "text",
+      "tags": [
+        "negative"
+      ]
+    }
+  ]
+}
