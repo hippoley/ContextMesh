@@ -12,7 +12,7 @@ from typing import Any, Callable, Iterable, Protocol
 
 from pydantic import BaseModel, Field
 
-from .models import ContextBlock, CorpusManifest, Modality, UsageMetrics
+from .models import ContextBlock, CorpusManifest, ModelRoute, Modality, UsageMetrics
 from .reader import CorpusReader
 from .runtime import ProgressiveEvaluator
 from .semantics import ExecutionContract
@@ -1433,4 +1433,150 @@ def evaluate_gate5_drift(
         reference=reference,
         deltas=deltas,
         blockers=all_blockers,
+    )
+
+
+
+def load_task_cases(path: str | Path) -> list[TaskCase]:
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        raw = raw.get("cases", [])
+    return [TaskCase.model_validate(item) for item in raw]
+
+
+def snapshot_from_gate3(
+    gate3: Gate3Report,
+    route: ModelRoute,
+    *,
+    run_id: str,
+    model_version: str | None = None,
+    prompt_version: str | None = None,
+    chunk_policy: str | None = None,
+    reducer_policy: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> ProofRunSnapshot:
+    contextmesh = next(
+        baseline
+        for baseline in gate3.baselines
+        if baseline.baseline == "contextmesh-full-coverage"
+    )
+    return ProofRunSnapshot(
+        run_id=run_id,
+        route_id=route.id,
+        model=route.model,
+        model_version=model_version,
+        prompt_version=prompt_version,
+        chunk_policy=chunk_policy,
+        reducer_policy=reducer_policy,
+        evidence_recall=gate3.needle.evidence_recall,
+        task_accuracy=contextmesh.task_accuracy,
+        authority_accuracy=contextmesh.accuracy_by_tag.get("authority"),
+        negative_accuracy=gate3.needle.negative_accuracy,
+        estimated_cost_usd=contextmesh.estimated_cost_usd,
+        latency_seconds=contextmesh.latency_seconds,
+        metadata=metadata or {},
+    )
+
+
+class BigContextProofReport(BaseModel):
+    schema_version: int = 1
+    corpus_id: str
+    route_id: str
+    run_id: str
+    gate1: Gate1CorpusReport
+    gate2: Gate2NeedleMatrixReport
+    gate3: Gate3Report | None = None
+    gate4: Gate4Report | None = None
+    gate5: Gate5Report | None = None
+    snapshot: ProofRunSnapshot | None = None
+    claim_proven: bool = False
+    blockers: list[str] = Field(default_factory=list)
+
+    def gate_summary(self) -> list[ProofGate]:
+        out = [self.gate1.as_gate(), self.gate2.as_gate()]
+        if self.gate3 is None:
+            out.append(
+                ProofGate(
+                    gate=3,
+                    name="Evidence + Task + Baseline",
+                    status=GateStatus.NOT_RUN,
+                    blockers=["prerequisite gate failed or live run not executed"],
+                )
+            )
+        else:
+            out.append(self.gate3.as_gate())
+        if self.gate4 is None:
+            out.append(
+                ProofGate(
+                    gate=4,
+                    name="Scale Curve",
+                    status=GateStatus.NOT_RUN,
+                    blockers=["Gate 3 must pass before scale execution"],
+                )
+            )
+        else:
+            out.append(self.gate4.as_gate())
+        if self.gate5 is None:
+            out.append(
+                ProofGate(
+                    gate=5,
+                    name="Drift",
+                    status=GateStatus.NOT_RUN,
+                    blockers=["requires a repeated run against a stored reference snapshot"],
+                )
+            )
+        else:
+            out.append(self.gate5.as_gate())
+        return out
+
+
+def assemble_big_context_proof(
+    *,
+    corpus_id: str,
+    route_id: str,
+    run_id: str,
+    gate1: Gate1CorpusReport,
+    gate2: Gate2NeedleMatrixReport,
+    gate3: Gate3Report | None,
+    gate4: Gate4Report | None,
+    gate5: Gate5Report | None,
+    snapshot: ProofRunSnapshot | None,
+) -> BigContextProofReport:
+    gates = [
+        gate1.status == GateStatus.PASS,
+        gate2.status == GateStatus.PASS,
+        gate3 is not None and gate3.status == GateStatus.PASS,
+        gate4 is not None and gate4.status == GateStatus.PASS,
+        gate5 is not None and gate5.status == GateStatus.PASS,
+    ]
+    blockers: list[str] = []
+    if gate1.status != GateStatus.PASS:
+        blockers.extend(f"gate1:{x}" for x in gate1.blockers)
+    if gate2.status != GateStatus.PASS:
+        blockers.extend(f"gate2:{x}" for x in gate2.blockers)
+    if gate3 is None:
+        blockers.append("gate3:not-run")
+    elif gate3.status != GateStatus.PASS:
+        blockers.extend(f"gate3:{x}" for x in gate3.blockers)
+    if gate4 is None:
+        blockers.append("gate4:not-run")
+    elif gate4.status != GateStatus.PASS:
+        blockers.extend(f"gate4:{x}" for x in gate4.blockers)
+    if gate5 is None:
+        blockers.append("gate5:not-run")
+    elif gate5.status != GateStatus.PASS:
+        blockers.extend(f"gate5:{x}" for x in gate5.blockers)
+
+    return BigContextProofReport(
+        corpus_id=corpus_id,
+        route_id=route_id,
+        run_id=run_id,
+        gate1=gate1,
+        gate2=gate2,
+        gate3=gate3,
+        gate4=gate4,
+        gate5=gate5,
+        snapshot=snapshot,
+        claim_proven=all(gates),
+        blockers=blockers,
     )
