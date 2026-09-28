@@ -1,0 +1,57 @@
+name: Big Context Public Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'benchmarks/build_public_nist_proof.py'
+      - 'benchmarks/big-context/nist-public-corpus.json'
+      - 'src/contextmesh/big_context_proof.py'
+      - 'src/contextmesh/ingest.py'
+      - 'src/contextmesh/rich_ingest.py'
+      - '.github/workflows/big-context-public-proof.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-proof-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ContextMesh proof dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,rich]'
+
+      - name: Build public NIST corpus and Gate 1-2 proof
+        run: |
+          python benchmarks/build_public_nist_proof.py \
+            --workdir /tmp/contextmesh-nist-proof \
+            --output-dir /tmp/contextmesh-nist-proof/results \
+            --model-context-tokens 128000 \
+            --min-corpus-ratio 5
+
+      - name: Show proof summaries
+        if: always()
+        run: |
+          echo '--- Gate 1 ---'
+          cat /tmp/contextmesh-nist-proof/results/gate1.json 2>/dev/null || true
+          echo '--- Gate 2 ---'
+          cat /tmp/contextmesh-nist-proof/results/gate2.json 2>/dev/null || true
+
+      - name: Upload public proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: big-context-public-nist-preflight
+          path: /tmp/contextmesh-nist-proof/results/
+          if-no-files-found: warn
+          retention-days: 30
