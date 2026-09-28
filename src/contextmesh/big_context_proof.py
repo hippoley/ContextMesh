@@ -1454,9 +1454,12 @@ class Gate4Spec(BaseModel):
     max_recall_drop: float = 0.05
     required_max_ratio: float = 20.0
     anchor_budget_ratio: float = 0.50
-    min_scale_kinds: int = 5
+    min_scale_kinds: int = 6
     min_scale_modalities: int = 2
     require_negative_scale_case: bool = True
+    max_scale_cases_per_kind: int = 2
+    max_negative_scale_cases: int = 1
+    require_all_corpus_positions: bool = True
 
 
 class Gate4Report(BaseModel):
@@ -1559,6 +1562,8 @@ def _select_gate4_scale_panel(
     anchors: set[str] = set()
     kinds: set[NeedleKind] = set()
     modalities: set[Modality] = set()
+    corpus_positions: set[CorpusPosition] = set()
+    kind_counts: Counter[NeedleKind] = Counter()
 
     def anchor_tokens(ids: set[str]) -> int:
         return sum(token_cache.get(block_id, 0) for block_id in ids)
@@ -1570,9 +1575,20 @@ def _select_gate4_scale_panel(
             spec.require_negative_scale_case
             and NeedleKind.NEGATIVE not in kinds
         )
-        ranked: list[tuple[tuple[int, int, int, int, str], NeedleCase, set[str]]] = []
+        need_positions = (
+            spec.require_all_corpus_positions
+            and len(corpus_positions) < len(CorpusPosition)
+        )
+        ranked: list[tuple[tuple[int, int, int, int, int, str], NeedleCase, set[str]]] = []
         for case in candidates:
             if case.id in selected_ids:
+                continue
+            if kind_counts[case.kind] >= spec.max_scale_cases_per_kind:
+                continue
+            if (
+                case.kind == NeedleKind.NEGATIVE
+                and kind_counts[NeedleKind.NEGATIVE] >= spec.max_negative_scale_cases
+            ):
                 continue
             proposed = anchors | anchor_map[case.id]
             proposed_tokens = anchor_tokens(proposed)
@@ -1585,12 +1601,16 @@ def _select_gate4_scale_panel(
             adds_modality = int(
                 need_modality and case.modality not in modalities
             )
+            adds_position = int(
+                need_positions and case.corpus_position not in corpus_positions
+            )
             incremental = proposed_tokens - anchor_tokens(anchors)
             ranked.append(
                 (
                     (
                         -adds_negative,
-                        -(adds_kind + adds_modality),
+                        -(adds_kind + adds_modality + adds_position),
+                        kind_counts[case.kind],
                         incremental,
                         proposed_tokens,
                         case.id,
@@ -1609,6 +1629,8 @@ def _select_gate4_scale_panel(
         anchors = proposed
         kinds.add(chosen.kind)
         modalities.add(chosen.modality)
+        corpus_positions.add(chosen.corpus_position)
+        kind_counts[chosen.kind] += 1
 
     blockers: list[str] = []
     if len(selected) < min(spec.needle_sample_size, len(cases)):
@@ -1630,6 +1652,16 @@ def _select_gate4_scale_panel(
         and NeedleKind.NEGATIVE not in kinds
     ):
         blockers.append("scale-panel-negative:missing")
+    if (
+        spec.require_all_corpus_positions
+        and len(corpus_positions) < len(CorpusPosition)
+    ):
+        missing = sorted(
+            position.value
+            for position in CorpusPosition
+            if position not in corpus_positions
+        )
+        blockers.append("scale-panel-corpus-positions:missing=" + ",".join(missing))
     used = anchor_tokens(anchors)
     if used > budget:
         blockers.append(
@@ -1767,6 +1799,8 @@ class Gate4ScalePlanReport(BaseModel):
     selected_case_ids: list[str]
     selected_kind_counts: dict[str, int]
     selected_modality_counts: dict[str, int]
+    selected_corpus_position_counts: dict[str, int]
+    selected_local_position_counts: dict[str, int]
     anchor_budget_ratio: float
     anchor_budget_tokens: int
     anchor_block_ids: list[str]
@@ -1881,6 +1915,12 @@ def plan_gate4_scale(
         ),
         selected_modality_counts=dict(
             sorted(Counter(case.modality.value for case in needles).items())
+        ),
+        selected_corpus_position_counts=dict(
+            sorted(Counter(case.corpus_position.value for case in needles).items())
+        ),
+        selected_local_position_counts=dict(
+            sorted(Counter(case.local_position.value for case in needles).items())
         ),
         anchor_budget_ratio=spec.anchor_budget_ratio,
         anchor_budget_tokens=int(
