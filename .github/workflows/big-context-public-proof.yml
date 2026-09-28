@@ -7,6 +7,7 @@ on:
     paths:
       - 'benchmarks/build_public_nist_proof.py'
       - 'benchmarks/estimate_big_context_live_cost.py'
+      - 'benchmarks/plan_gate4_scale.py'
       - 'benchmarks/big-context/nist-public-corpus.json'
       - 'src/contextmesh/big_context_proof.py'
       - 'src/contextmesh/ingest.py'
@@ -40,6 +41,17 @@ jobs:
             --model-context-tokens 131072 \
             --min-corpus-ratio 5
 
+      - name: Freeze Gate 4 nested scale projections (no model calls)
+        run: |
+          python benchmarks/plan_gate4_scale.py nist-public-big-context-v1 \
+            --store /tmp/contextmesh-nist-proof/store \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --model-context-tokens 131072 \
+            --ratios "1,2,5,10,20" \
+            --needle-sample-size 24 \
+            --required-max-ratio 20 \
+            --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
+
       - name: Estimate first live proof cost with Qwen3-VL-8B public pricing
         run: |
           python benchmarks/estimate_big_context_live_cost.py \
@@ -52,6 +64,19 @@ jobs:
             --max-estimated-cost-cny 80 \
             --output /tmp/contextmesh-nist-proof/results/live-cost-estimate-qwen3-vl-8b.json
 
+      - name: Estimate Gate 3 + Gate 4 live cost envelope
+        run: |
+          python benchmarks/estimate_big_context_live_cost.py \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/corpus-manifest.json \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-nist-proof/results/task-cases.json \
+            --context-tokens 131072 \
+            --input-cny-per-million 0.5 \
+            --output-cny-per-million 2 \
+            --max-estimated-cost-cny 300 \
+            --run-scale \
+            --output /tmp/contextmesh-nist-proof/results/live-cost-estimate-gate3-plus-gate4.json
+
       - name: Show proof summaries
         if: always()
         run: |
@@ -59,6 +84,10 @@ jobs:
           cat /tmp/contextmesh-nist-proof/results/gate1.json 2>/dev/null || true
           echo '--- Gate 2 ---'
           cat /tmp/contextmesh-nist-proof/results/gate2.json 2>/dev/null || true
+          echo '--- Gate 4 scale plan ---'
+          cat /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json 2>/dev/null || true
+          echo '--- Gate 3 + Gate 4 cost envelope ---'
+          cat /tmp/contextmesh-nist-proof/results/live-cost-estimate-gate3-plus-gate4.json 2>/dev/null || true
 
       - name: Upload public proof artifacts
         if: always()
