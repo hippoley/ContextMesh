@@ -1447,12 +1447,16 @@ class ScalePointResult(BaseModel):
 class Gate4Spec(BaseModel):
     ratios: list[float] = Field(default_factory=lambda: [1, 2, 5, 10, 20])
     model_context_tokens: int
-    needle_sample_size: int = 24
+    needle_sample_size: int = 12
     task_sample_size: int = 12
     min_evidence_recall: float = 0.90
     min_task_accuracy: float = 0.90
     max_recall_drop: float = 0.05
     required_max_ratio: float = 20.0
+    anchor_budget_ratio: float = 0.50
+    min_scale_kinds: int = 5
+    min_scale_modalities: int = 2
+    require_negative_scale_case: bool = True
 
 
 class Gate4Report(BaseModel):
@@ -1502,6 +1506,136 @@ def _stratified_needles(
         if not progressed:
             break
     return out
+
+
+def _case_anchor_blocks(
+    store: FileContextStore,
+    corpus_id: str,
+    case: NeedleCase,
+) -> set[str]:
+    manifest = store.get_manifest(corpus_id)
+    known = set(manifest.coverage_ids())
+    exact = {block_id for block_id in case.target_block_ids if block_id in known}
+    if exact:
+        return exact
+    if not case.target_assets:
+        return set()
+    targets = {Path(asset).name for asset in case.target_assets}
+    return {
+        block_id
+        for block_id in manifest.coverage_ids()
+        if Path(store.get_block(corpus_id, block_id).source.path).name in targets
+    }
+
+
+def _select_gate4_scale_panel(
+    store: FileContextStore,
+    corpus_id: str,
+    cases: list[NeedleCase],
+    spec: Gate4Spec,
+) -> tuple[list[NeedleCase], list[str]]:
+    """Select a small, diverse fixed panel whose anchors fit comfortably in 1x.
+
+    Gate 3 owns broad 100+ case fidelity. Gate 4 isolates scale sensitivity, so
+    its panel must leave real room for distractors even at the 1x point.
+    """
+    budget = max(1, int(spec.model_context_tokens * spec.anchor_budget_ratio))
+    candidates = sorted(cases, key=lambda case: case.id)
+    anchor_map = {
+        case.id: _case_anchor_blocks(store, corpus_id, case)
+        for case in candidates
+    }
+    token_cache = {
+        block_id: _block_token_estimate(store.get_block(corpus_id, block_id))
+        for block_id in {
+            block_id
+            for anchors in anchor_map.values()
+            for block_id in anchors
+        }
+    }
+
+    selected: list[NeedleCase] = []
+    selected_ids: set[str] = set()
+    anchors: set[str] = set()
+    kinds: set[NeedleKind] = set()
+    modalities: set[Modality] = set()
+
+    def anchor_tokens(ids: set[str]) -> int:
+        return sum(token_cache.get(block_id, 0) for block_id in ids)
+
+    while len(selected) < min(spec.needle_sample_size, len(candidates)):
+        need_kind = len(kinds) < spec.min_scale_kinds
+        need_modality = len(modalities) < spec.min_scale_modalities
+        need_negative = (
+            spec.require_negative_scale_case
+            and NeedleKind.NEGATIVE not in kinds
+        )
+        ranked: list[tuple[tuple[int, int, int, int, str], NeedleCase, set[str]]] = []
+        for case in candidates:
+            if case.id in selected_ids:
+                continue
+            proposed = anchors | anchor_map[case.id]
+            proposed_tokens = anchor_tokens(proposed)
+            if proposed_tokens > budget:
+                continue
+            adds_negative = int(
+                need_negative and case.kind == NeedleKind.NEGATIVE
+            )
+            adds_kind = int(need_kind and case.kind not in kinds)
+            adds_modality = int(
+                need_modality and case.modality not in modalities
+            )
+            incremental = proposed_tokens - anchor_tokens(anchors)
+            ranked.append(
+                (
+                    (
+                        -adds_negative,
+                        -(adds_kind + adds_modality),
+                        incremental,
+                        proposed_tokens,
+                        case.id,
+                    ),
+                    case,
+                    proposed,
+                )
+            )
+
+        if not ranked:
+            break
+        ranked.sort(key=lambda item: item[0])
+        _, chosen, proposed = ranked[0]
+        selected.append(chosen)
+        selected_ids.add(chosen.id)
+        anchors = proposed
+        kinds.add(chosen.kind)
+        modalities.add(chosen.modality)
+
+    blockers: list[str] = []
+    if len(selected) < min(spec.needle_sample_size, len(cases)):
+        blockers.append(
+            f"scale-panel-size:need={min(spec.needle_sample_size, len(cases))},"
+            f"got={len(selected)}"
+        )
+    if len(kinds) < spec.min_scale_kinds:
+        blockers.append(
+            f"scale-panel-kinds:need>={spec.min_scale_kinds},got={len(kinds)}"
+        )
+    if len(modalities) < spec.min_scale_modalities:
+        blockers.append(
+            f"scale-panel-modalities:need>={spec.min_scale_modalities},"
+            f"got={len(modalities)}"
+        )
+    if (
+        spec.require_negative_scale_case
+        and NeedleKind.NEGATIVE not in kinds
+    ):
+        blockers.append("scale-panel-negative:missing")
+    used = anchor_tokens(anchors)
+    if used > budget:
+        blockers.append(
+            f"scale-panel-anchor-budget:need<={budget},got={used}"
+        )
+    return selected, blockers
 
 
 def _anchor_blocks(
@@ -1649,7 +1783,12 @@ def plan_gate4_scale(
     This function makes no model call and therefore cannot pass Gate 4. It only
     proves that the scale experiment itself is well-formed before money is spent.
     """
-    needles = _stratified_needles(list(needle_cases), spec.needle_sample_size)
+    needles, panel_blockers = _select_gate4_scale_panel(
+        store,
+        corpus_id,
+        list(needle_cases),
+        spec,
+    )
     anchors = _anchor_blocks(store, corpus_id, needles)
     anchor_order = [
         block_id
@@ -1665,7 +1804,7 @@ def plan_gate4_scale(
     ).hexdigest()
 
     points: list[Gate4ScalePlanPoint] = []
-    overall_blockers: list[str] = []
+    overall_blockers: list[str] = list(panel_blockers)
     previous: set[str] = set()
 
     for ratio in spec.ratios:
@@ -1817,7 +1956,16 @@ def run_scale_curve(
 ) -> Gate4Report:
     needles_all = list(needle_cases)
     tasks_all = list(task_cases)
-    needles = _stratified_needles(needles_all, spec.needle_sample_size)
+    needles, panel_blockers = _select_gate4_scale_panel(
+        store,
+        corpus_id,
+        needles_all,
+        spec,
+    )
+    if panel_blockers:
+        raise ValueError(
+            "Gate 4 scale panel is not valid: " + "; ".join(panel_blockers)
+        )
     tasks = sorted(tasks_all, key=lambda x: x.id)[: spec.task_sample_size]
     points: list[ScalePointResult] = []
 
