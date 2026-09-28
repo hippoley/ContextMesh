@@ -9,6 +9,8 @@ on:
       - '.github/workflows/big-context-live-proof.yml'
       - 'benchmarks/estimate_big_context_live_cost.py'
       - 'benchmarks/build_public_nist_proof.py'
+      - 'benchmarks/smoke_live_provider.py'
+      - 'src/contextmesh/provider_smoke.py'
 
 permissions:
   contents: read
@@ -34,7 +36,9 @@ jobs:
             benchmarks/build_public_nist_proof.py \
             benchmarks/big_context_proof.py \
             benchmarks/estimate_big_context_live_cost.py \
+            benchmarks/smoke_live_provider.py \
             src/contextmesh/big_context_proof.py \
+            src/contextmesh/provider_smoke.py \
             src/contextmesh/judges.py
           test -f benchmarks/big-context/nist-public-corpus.json
           test -f .github/workflows/big-context-live-proof.yml
