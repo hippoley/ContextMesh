@@ -1,0 +1,161 @@
+name: Big Context Live Proof
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Live provider route'
+        required: true
+        default: 'dashscope'
+        type: choice
+        options:
+          - dashscope
+          - openai
+      model:
+        description: 'Model name'
+        required: true
+        default: 'qwen3-vl-plus'
+        type: string
+      context_tokens:
+        description: 'Declared model context tokens'
+        required: true
+        default: '128000'
+        type: string
+      workers:
+        description: 'Parallel block inspections'
+        required: true
+        default: '6'
+        type: string
+      run_scale:
+        description: 'Run Gate 4 after Gate 3 passes (material extra API cost)'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  live-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install proof dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,rich]'
+
+      - name: Rebuild public NIST corpus and frozen Gate 1-2 artifacts
+        run: |
+          python benchmarks/build_public_nist_proof.py \
+            --workdir /tmp/contextmesh-live-proof \
+            --output-dir /tmp/contextmesh-live-proof/results \
+            --model-context-tokens "${{ inputs.context_tokens }}" \
+            --min-corpus-ratio 5
+
+      - name: Configure authorized live model route
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+          CONTEXT_TOKENS: ${{ inputs.context_tokens }}
+          WORKERS: ${{ inputs.workers }}
+        run: |
+          if [ "$PROVIDER" = "dashscope" ]; then
+            if [ -z "$DASHSCOPE_API_KEY" ]; then
+              echo "::error::DASHSCOPE_API_KEY repository secret is required for the live proof."
+              exit 2
+            fi
+            export PROOF_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
+            export PROOF_API_ENV="DASHSCOPE_API_KEY"
+          elif [ "$PROVIDER" = "openai" ]; then
+            if [ -z "$OPENAI_API_KEY" ]; then
+              echo "::error::OPENAI_API_KEY repository secret is required for the live proof."
+              exit 2
+            fi
+            export PROOF_BASE_URL="https://api.openai.com/v1"
+            export PROOF_API_ENV="OPENAI_API_KEY"
+          else
+            echo "::error::unsupported provider: $PROVIDER"
+            exit 2
+          fi
+
+          python - <<'PY'
+          import os
+          from contextmesh.models import ModelRoute
+          from contextmesh.store import FileContextStore
+
+          store = FileContextStore("/tmp/contextmesh-live-proof/store")
+          route = ModelRoute(
+              id="big-context-live",
+              label="Big Context Live Proof",
+              provider=os.environ["PROVIDER"],
+              base_url=os.environ["PROOF_BASE_URL"],
+              model=os.environ["MODEL"],
+              api_key_env=os.environ["PROOF_API_ENV"],
+              enabled=True,
+              max_context_tokens=int(os.environ["CONTEXT_TOKENS"]),
+              token_budget_safety_factor=0.90,
+              chars_per_token_estimate=1.0,
+              capabilities=["text", "table", "vision"],
+              max_parallel_requests=int(os.environ["WORKERS"]),
+              request_timeout_seconds=180.0,
+              deployment="cloud",
+          )
+          store.upsert_model_route(route)
+          print(route.model_dump_json(indent=2))
+          PY
+
+      - name: Run Gate 3 live proof
+        if: ${{ !inputs.run_scale }}
+        run: |
+          python benchmarks/big_context_proof.py nist-public-big-context-v1 \
+            --store /tmp/contextmesh-live-proof/store \
+            --route-id big-context-live \
+            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-live-proof/results/task-cases.json \
+            --model-context-tokens "${{ inputs.context_tokens }}" \
+            --workers "${{ inputs.workers }}" \
+            --skip-scale \
+            --run-id "github-${{ github.run_id }}" \
+            --model-version "${{ inputs.model }}" \
+            --output /tmp/contextmesh-live-proof/results/live-proof.json \
+            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json
+
+      - name: Run Gate 3 + Gate 4 scale proof
+        if: ${{ inputs.run_scale }}
+        run: |
+          python benchmarks/big_context_proof.py nist-public-big-context-v1 \
+            --store /tmp/contextmesh-live-proof/store \
+            --route-id big-context-live \
+            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
+            --tasks /tmp/contextmesh-live-proof/results/task-cases.json \
+            --model-context-tokens "${{ inputs.context_tokens }}" \
+            --workers "${{ inputs.workers }}" \
+            --ratios "1,2,5,10,20" \
+            --run-id "github-${{ github.run_id }}" \
+            --model-version "${{ inputs.model }}" \
+            --output /tmp/contextmesh-live-proof/results/live-proof.json \
+            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json
+
+      - name: Show live proof result
+        if: always()
+        run: |
+          cat /tmp/contextmesh-live-proof/results/live-proof.json 2>/dev/null || true
+
+      - name: Upload live proof artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: big-context-live-proof-${{ github.run_id }}
+          path: /tmp/contextmesh-live-proof/results/
+          if-no-files-found: warn
+          retention-days: 90
