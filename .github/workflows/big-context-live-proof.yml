@@ -114,6 +114,9 @@ jobs:
             --gate4-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
             --gate1-2-proof benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json \
             --gate4-preflight benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/corpus-manifest.json \
+            --needle-matrix /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --task-cases /tmp/contextmesh-nist-proof/results/task-cases.json \
             --output /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
 
       - name: Enforce live proof cost budget before any model call
