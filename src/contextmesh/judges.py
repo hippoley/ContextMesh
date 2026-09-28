@@ -465,7 +465,7 @@ class OpenAICompatibleJudge:
         if available is None:
             return None
 
-        bundle_token_budget = max(512, available // 2)
+        bundle_token_budget = max(128, available)
         bundle = DecisionBundle.model_validate(state.decision_bundle)
         rendered_full = render_decision_bundle_checked(bundle, max_chars=100_000_000)
         required_tokens = self.token_budget.count(rendered_full.text)
@@ -493,31 +493,61 @@ class OpenAICompatibleJudge:
             state.question,
             state.answer,
         )
-        if available is not None:
-            note_tokens = sum(self.token_budget.count(x) + 1 for x in notes)
-            if note_tokens > max(512, available // 3):
-                notes = [self.reduce_notes(state.question, state.answer, notes, 99)]
-        joined = "\n".join(notes)
-
-        # Legacy typed evidence is a cross-check only. Keep its textual render
-        # conservative; the final request gate remains authoritative.
-        typed_budget_chars = 16_000 if available is not None else 32_000
-        typed = render_typed_evidence(state.evidence, max_chars=typed_budget_chars)
-
         if state.decision_bundle is not None:
             bundle = DecisionBundle.model_validate(state.decision_bundle)
             rendered_bundle = render_decision_bundle_checked(bundle, max_chars=100_000_000)
-            if available is not None:
-                bundle_tokens = self.token_budget.count(rendered_bundle.text)
-                if bundle_tokens > max(512, available // 2):
-                    raise RuntimeError(
-                        "refusing to judge an incomplete token-budgeted DecisionBundle: "
-                        f"required_tokens={bundle_tokens} "
-                        f"bundle_token_budget={max(512, available // 2)}"
-                    )
             decision_state = rendered_bundle.text
+            bundle_tokens = self.token_budget.count(decision_state)
+            if available is not None and bundle_tokens > max(128, available):
+                raise RuntimeError(
+                    "refusing to judge an incomplete token-budgeted DecisionBundle: "
+                    f"required_tokens={bundle_tokens} bundle_token_budget={available}"
+                )
         else:
             decision_state = "(no structured DecisionBundle available)"
+            bundle_tokens = self.token_budget.count(decision_state)
+
+        # DecisionBundle is the fact-preservation channel. Explanatory notes and the
+        # legacy typed render are best-effort: they may be omitted under pressure, but
+        # the complete DecisionBundle may not be truncated.
+        if available is None:
+            joined = "\n".join(notes)
+            typed = render_typed_evidence(state.evidence, max_chars=32_000)
+        else:
+            remaining = max(0, available - bundle_tokens)
+            joined = "\n".join(notes)
+            note_tokens = self.token_budget.count(joined)
+            note_budget = max(0, remaining // 2)
+            if note_tokens > note_budget:
+                if note_budget >= 128 and notes:
+                    reduced_note = self.reduce_notes(
+                        state.question,
+                        state.answer,
+                        notes,
+                        99,
+                    )
+                    if self.token_budget.count(reduced_note) <= note_budget:
+                        joined = reduced_note
+                    else:
+                        joined = "(explanatory reduction omitted: DecisionBundle prioritized)"
+                else:
+                    joined = "(explanatory reduction omitted: DecisionBundle prioritized)"
+
+            remaining_after_notes = max(
+                0,
+                remaining - self.token_budget.count(joined),
+            )
+            if remaining_after_notes >= 256:
+                # The renderer is char-bounded, then the final request token gate is
+                # authoritative. One char/token is intentionally conservative here.
+                typed = render_typed_evidence(
+                    state.evidence,
+                    max_chars=min(16_000, remaining_after_notes),
+                )
+                if self.token_budget.count(typed) > remaining_after_notes:
+                    typed = "(legacy typed evidence omitted: DecisionBundle prioritized)"
+            else:
+                typed = "(legacy typed evidence omitted: DecisionBundle prioritized)"
 
         prompt = (
             "Produce strict JSON {score:number,rationale:string}. Score the candidate answer against the question. "
