@@ -1606,6 +1606,139 @@ def _plan_scale_projection(
     return selected, total, blockers
 
 
+
+
+class Gate4ScalePlanPoint(BaseModel):
+    requested_ratio: float
+    target_tokens: int
+    actual_ratio: float
+    estimated_tokens: int
+    selected_blocks: int
+    selected_assets: int
+    modality_counts: dict[str, int]
+    anchor_blocks: int
+    anchor_tokens: int
+    anchor_preserved: bool
+    nested_with_previous: bool
+    projection_fingerprint: str
+    block_ids: list[str]
+    blockers: list[str] = Field(default_factory=list)
+
+
+class Gate4ScalePlanReport(BaseModel):
+    schema_version: int = 1
+    corpus_id: str
+    model_context_tokens: int
+    needle_cases: int
+    anchor_block_ids: list[str]
+    anchor_fingerprint: str
+    points: list[Gate4ScalePlanPoint]
+    ready_for_live_gate4: bool
+    live_gate4_status: GateStatus = GateStatus.NOT_RUN
+    blockers: list[str] = Field(default_factory=list)
+
+
+def plan_gate4_scale(
+    store: FileContextStore,
+    corpus_id: str,
+    needle_cases: Iterable[NeedleCase],
+    spec: Gate4Spec,
+) -> Gate4ScalePlanReport:
+    """Freeze the nested corpus projections used by the live Gate 4 curve.
+
+    This function makes no model call and therefore cannot pass Gate 4. It only
+    proves that the scale experiment itself is well-formed before money is spent.
+    """
+    needles = _stratified_needles(list(needle_cases), spec.needle_sample_size)
+    anchors = _anchor_blocks(store, corpus_id, needles)
+    anchor_order = [
+        block_id
+        for block_id in store.get_manifest(corpus_id).coverage_ids()
+        if block_id in anchors
+    ]
+    anchor_tokens = sum(
+        _block_token_estimate(store.get_block(corpus_id, block_id))
+        for block_id in anchor_order
+    )
+    anchor_fingerprint = hashlib.sha256(
+        "\n".join(anchor_order).encode("utf-8")
+    ).hexdigest()
+
+    points: list[Gate4ScalePlanPoint] = []
+    overall_blockers: list[str] = []
+    previous: set[str] = set()
+
+    for ratio in spec.ratios:
+        target_tokens = int(spec.model_context_tokens * ratio)
+        block_ids, estimated_tokens, plan_blockers = _plan_scale_projection(
+            store,
+            corpus_id,
+            needles,
+            target_tokens=target_tokens,
+        )
+        selected = set(block_ids)
+        anchor_preserved = anchors.issubset(selected)
+        nested = previous.issubset(selected) if previous else True
+
+        if not anchor_preserved:
+            plan_blockers.append("anchor-preservation:false")
+        if not nested:
+            plan_blockers.append("nested-projection:false")
+
+        asset_names: set[str] = set()
+        modalities: Counter[str] = Counter()
+        for block_id in block_ids:
+            block = store.get_block(corpus_id, block_id)
+            asset_names.add(Path(block.source.path).name)
+            modalities[block.modality.value] += 1
+
+        fingerprint = hashlib.sha256(
+            "\n".join(block_ids).encode("utf-8")
+        ).hexdigest()
+        point = Gate4ScalePlanPoint(
+            requested_ratio=ratio,
+            target_tokens=target_tokens,
+            actual_ratio=(
+                estimated_tokens / spec.model_context_tokens
+                if spec.model_context_tokens
+                else 0.0
+            ),
+            estimated_tokens=estimated_tokens,
+            selected_blocks=len(block_ids),
+            selected_assets=len(asset_names),
+            modality_counts=dict(sorted(modalities.items())),
+            anchor_blocks=len(anchor_order),
+            anchor_tokens=anchor_tokens,
+            anchor_preserved=anchor_preserved,
+            nested_with_previous=nested,
+            projection_fingerprint=fingerprint,
+            block_ids=block_ids,
+            blockers=plan_blockers,
+        )
+        points.append(point)
+        overall_blockers.extend(
+            f"{ratio:g}x:{blocker}" for blocker in plan_blockers
+        )
+        previous = selected
+
+    max_ratio = max((point.actual_ratio for point in points), default=0.0)
+    if max_ratio < spec.required_max_ratio:
+        overall_blockers.append(
+            f"max-ratio:need>={spec.required_max_ratio:g},got={max_ratio:.3f}"
+        )
+
+    return Gate4ScalePlanReport(
+        corpus_id=corpus_id,
+        model_context_tokens=spec.model_context_tokens,
+        needle_cases=len(needles),
+        anchor_block_ids=anchor_order,
+        anchor_fingerprint=anchor_fingerprint,
+        points=points,
+        ready_for_live_gate4=not overall_blockers,
+        blockers=overall_blockers,
+    )
+
+
 def _materialize_projection(
     source: FileContextStore,
     source_corpus_id: str,
