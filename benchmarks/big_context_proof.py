@@ -19,7 +19,7 @@ from contextmesh.big_context_proof import (
     evaluate_gate5_drift,
     load_needle_matrix,
     load_task_cases,
-    run_full_coverage_needles,
+    run_batched_full_coverage_needles,
     run_scale_curve,
     run_task_baselines,
     snapshot_from_gate3,
@@ -117,7 +117,7 @@ def main() -> int:
         def judge_factory():
             return build_judge_from_route(route)
 
-        needle_report = run_full_coverage_needles(
+        needle_report = run_batched_full_coverage_needles(
             store,
             args.corpus_id,
             judge_factory,
