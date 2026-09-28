@@ -7,13 +7,13 @@
   "live_gate4_status": "not-run",
   "prepared": true,
   "workflow_run": {
-    "id": 36393959366,
-    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36393959366",
-    "head_sha": "ed87aba0424d887158cc1f82a534ca18405fa1cf",
+    "id": 36395147919,
+    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36395147919",
+    "head_sha": "2a9af56d0078e98e48228e5cefbc858271fe26c1",
     "conclusion": "success",
-    "artifact_id": 10956909741,
+    "artifact_id": 10958350568,
     "artifact_name": "big-context-public-nist-preflight",
-    "artifact_zip_sha256": "e47bd9bd7eca8e5507c95de0da9a31bdbece814cbbd056041175d1d95581ad1f"
+    "artifact_zip_sha256": "909bda0123a6776ead4ded011abde6db7e727d4a1e6108610cf8032b1fd7ed86"
   },
   "prerequisites": {
     "gate1": "pass",
@@ -162,5 +162,13 @@
   "blockers_to_live_gate4": [
     "Gate 3 has not passed because an authorized provider credential has not been proven ready.",
     "No live-model evidence-recall curve has been executed for the frozen v2 projections."
-  ]
+  ],
+  "cost_envelope": {
+    "gate3_only_estimated_cny": 48.46,
+    "gate3_plus_gate4_estimated_cny": 60.61,
+    "safety_factor": 1.35,
+    "gate4_scale_input_estimate": 15480154,
+    "gate4_scale_output_estimate": 627200,
+    "provider_calls_made_by_preflight": 0
+  }
 }
