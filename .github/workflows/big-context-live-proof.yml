@@ -272,6 +272,19 @@ jobs:
             --snapshot-output /tmp/contextmesh-nist-proof/results/live-proof.snapshot.json \
             "${extra[@]}"
 
+      - name: Render Gate 4 curve artifacts
+        if: always()
+        run: |
+          if [ -f /tmp/contextmesh-nist-proof/results/live-proof.json ]; then
+            python benchmarks/render_gate4_scale_curve.py \
+              --proof /tmp/contextmesh-nist-proof/results/live-proof.json \
+              --csv /tmp/contextmesh-nist-proof/results/gate4-scale-curve.csv \
+              --markdown /tmp/contextmesh-nist-proof/results/gate4-scale-curve.md
+          else
+            printf '# Gate 4 Scale Curve\n\nStatus: **NOT RUN**\n' \
+              > /tmp/contextmesh-nist-proof/results/gate4-scale-curve.md
+          fi
+
       - name: Summarize live run artifact
         if: always()
         run: |
