@@ -1551,3 +1551,56 @@ def test_gate4_records_lexical_evidence_recall_separately_from_task_accuracy(tmp
     assert point.baseline_evidence_recall["lexical-top-5"] == 0.0
     assert point.baseline_evidence_recall["lexical-top-20"] == 0.0
     assert point.baseline_task_accuracy == {}
+
+
+def test_direct_full_context_overflow_is_blocked_before_provider_call(tmp_path: Path, monkeypatch):
+    from contextmesh.big_context_proof import TaskCase, run_task_baselines
+    from contextmesh.judges import OpenAICompatibleJudge
+
+    p = tmp_path / "too-large.txt"
+    p.write_text("oversized evidence " * 1200, encoding="utf-8")
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths([p], store, "direct-overflow", window_chars=120000, overlap_chars=0)
+
+    provider_calls = []
+    def never_network(*args, **kwargs):
+        provider_calls.append((args, kwargs))
+        raise AssertionError("oversized direct-full-context must be blocked before network I/O")
+    monkeypatch.setattr("urllib.request.urlopen", never_network)
+
+    def judge_factory():
+        return OpenAICompatibleJudge(
+            model="test-model",
+            base_url="https://provider.invalid/v1",
+            api_key="secret",
+            route_id="direct-overflow",
+            max_context_tokens=512,
+            reserve_output_tokens=256,
+            token_budget_safety_factor=0.9,
+            chars_per_token_estimate=1.0,
+        )
+
+    summaries = run_task_baselines(
+        store,
+        manifest.corpus_id,
+        judge_factory,
+        [TaskCase(
+            id="direct-overflow-task",
+            question="Is the candidate supported?",
+            candidate_answer="candidate",
+            expected_min_score=90,
+        )],
+        lexical_top_ks=(),
+        include_full_coverage=False,
+        include_direct=True,
+    )
+
+    assert provider_calls == []
+    assert len(summaries) == 1
+    direct = summaries[0]
+    assert direct.baseline == "direct-full-context"
+    assert direct.blocked_tasks == 1
+    assert direct.completed_tasks == 0
+    assert direct.results[0].blocked is True
+    assert "token budget" in (direct.results[0].error or "").lower()
+    assert direct.estimated_cost_usd == 0.0
