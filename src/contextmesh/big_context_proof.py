@@ -1813,6 +1813,7 @@ def run_scale_curve(
     spec: Gate4Spec,
     *,
     max_workers: int = 4,
+    frozen_plan: Gate4ScalePlanReport | None = None,
 ) -> Gate4Report:
     needles_all = list(needle_cases)
     tasks_all = list(task_cases)
@@ -1820,14 +1821,52 @@ def run_scale_curve(
     tasks = sorted(tasks_all, key=lambda x: x.id)[: spec.task_sample_size]
     points: list[ScalePointResult] = []
 
+    frozen_by_ratio: dict[float, Gate4ScalePlanPoint] = {}
+    if frozen_plan is not None:
+        if frozen_plan.corpus_id != corpus_id:
+            raise ValueError(
+                f"Gate 4 frozen plan corpus mismatch: "
+                f"{frozen_plan.corpus_id} != {corpus_id}"
+            )
+        if frozen_plan.model_context_tokens != spec.model_context_tokens:
+            raise ValueError(
+                "Gate 4 frozen plan context-window mismatch: "
+                f"{frozen_plan.model_context_tokens} != {spec.model_context_tokens}"
+            )
+        expected_anchors = _anchor_blocks(store, corpus_id, needles)
+        if set(frozen_plan.anchor_block_ids) != expected_anchors:
+            raise ValueError("Gate 4 frozen plan anchor set does not match current matrix")
+        frozen_by_ratio = {
+            float(point.requested_ratio): point for point in frozen_plan.points
+        }
+
     for ratio in spec.ratios:
         target_tokens = int(spec.model_context_tokens * ratio)
-        block_ids, estimated_tokens, plan_blockers = _plan_scale_projection(
-            store,
-            corpus_id,
-            needles,
-            target_tokens=target_tokens,
-        )
+        if frozen_plan is not None:
+            planned = frozen_by_ratio.get(float(ratio))
+            if planned is None:
+                raise ValueError(f"Gate 4 frozen plan missing ratio {ratio:g}x")
+            block_ids = list(planned.block_ids)
+            estimated_tokens = int(planned.estimated_tokens)
+            plan_blockers = list(planned.blockers)
+            fingerprint = hashlib.sha256(
+                "\n".join(block_ids).encode("utf-8")
+            ).hexdigest()
+            if fingerprint != planned.projection_fingerprint:
+                raise ValueError(
+                    f"Gate 4 frozen projection fingerprint mismatch at {ratio:g}x"
+                )
+            if not set(frozen_plan.anchor_block_ids).issubset(set(block_ids)):
+                raise ValueError(
+                    f"Gate 4 frozen projection lost anchor evidence at {ratio:g}x"
+                )
+        else:
+            block_ids, estimated_tokens, plan_blockers = _plan_scale_projection(
+                store,
+                corpus_id,
+                needles,
+                target_tokens=target_tokens,
+            )
         if plan_blockers:
             points.append(
                 ScalePointResult(
@@ -2122,6 +2161,11 @@ def evaluate_gate5_drift(
         blockers=all_blockers,
     )
 
+
+
+def load_gate4_scale_plan(path: str | Path) -> Gate4ScalePlanReport:
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    return Gate4ScalePlanReport.model_validate(raw)
 
 
 def load_task_cases(path: str | Path) -> list[TaskCase]:
