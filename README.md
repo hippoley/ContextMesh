@@ -97,13 +97,15 @@ Gate 0  synthetic execution mechanics                         PASS
 Gate 1  real NIST corpus · 12 files · 3.88M est. tokens       PASS
 Gate 2  132 frozen cases · 11 kinds · text/table/image         PASS
 Gate 3  live multimodal evidence + task fidelity               BLOCKED · credential
-Gate 4  1× → 20× fixed-needle scale curve                      NOT RUN
+Gate 4  1× → 20× frozen nested scale curve                    PREPARED · live NOT RUN
 Gate 5  repeated-run drift                                     NOT RUN
 ```
 
-The real public corpus is **29.6212×** the 131,072-token live-route context window and contains **1,841 required coverage units** (936 text, 899 image, 6 table). Gates 1–2 are backed by a successful GitHub Actions run and a committed source-hash/result record. This does not upgrade the overall large-context claim: Gates 3–5 still have to pass. The proposed first Gate 3 route is `qwen3-vl-8b-instruct`; its conservative no-call budget preflight is **¥47.42** under an **¥80** ceiling. **Live readiness:** the latest zero-call Actions probe found neither `DASHSCOPE_API_KEY` nor `OPENAI_API_KEY` configured, so no paid run has started. Track the first paid live run in [Issue #7](https://github.com/hippoley/ContextMesh/issues/7).
+The real public corpus is **29.6212×** the 131,072-token live-route context window and contains **1,841 required coverage units** (936 text, 899 image, 6 table). Gates 1–2 are backed by a successful GitHub Actions run and a committed source-hash/result record. Gate 4 is now **prepared but not passed**: a balanced 12-case panel is frozen into nested 1×/2×/5×/10×/20× projections with exact anchor and projection fingerprints; the live recall curve has not run. The conservative no-call envelope is **¥47.42 for Gate 3** and **¥57.17 for Gate 3+4**. **Live readiness:** no authorized provider secret is configured, so no paid run has started. Track Gate 3 in [Issue #7](https://github.com/hippoley/ContextMesh/issues/7).
 
 [Real Gate 1–2 evidence](docs/reality/Big-Context-NIST-Gate1-2-2026-09-28.md) · [machine-readable result](benchmarks/results/nist-public-gate1-2-2026-09-28.json) · [CI run](https://github.com/hippoley/ContextMesh/actions/runs/36373761033)
+
+[Gate 4 PREPARED evidence](docs/reality/Big-Context-NIST-Gate4-Preflight-2026-09-28.md) · [machine-readable scale plan summary](benchmarks/results/nist-public-gate4-preflight-2026-09-28.json) · [preflight run](https://github.com/hippoley/ContextMesh/actions/runs/36390126287)
 
 [Read the five-gate contract](docs/BIG_CONTEXT_PROOF.md) · [Run the proof](benchmarks/big_context_proof.py) · [Needle schema](benchmarks/big-context/needle-matrix.example.json) · [Task schema](benchmarks/big-context/task-cases.example.json)
 
