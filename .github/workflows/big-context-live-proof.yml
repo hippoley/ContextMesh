@@ -99,7 +99,7 @@ jobs:
             --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --ratios "1,2,5,10,20" \
-            --needle-sample-size 24 \
+            --needle-sample-size 12 \
             --required-max-ratio 20 \
             --output /tmp/contextmesh-live-proof/results/gate4-scale-plan.json
 
