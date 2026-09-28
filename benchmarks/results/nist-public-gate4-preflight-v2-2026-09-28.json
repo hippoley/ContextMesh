@@ -1,0 +1,166 @@
+{
+  "schema_version": 2,
+  "date": "2026-09-28",
+  "evidence_class": "contextmesh-gate4-preflight-v2-bounded-table",
+  "claim_scope": "Frozen, nested strict Gate 4 scale experiment over bounded-table NIST v2. No live-model recall curve is contained in this artifact; Gate 4 is PREPARED, not PASS.",
+  "repository": "hippoley/ContextMesh",
+  "live_gate4_status": "not-run",
+  "prepared": true,
+  "workflow_run": {
+    "id": 36393959366,
+    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36393959366",
+    "head_sha": "ed87aba0424d887158cc1f82a534ca18405fa1cf",
+    "conclusion": "success",
+    "artifact_id": 10956909741,
+    "artifact_name": "big-context-public-nist-preflight",
+    "artifact_zip_sha256": "e47bd9bd7eca8e5507c95de0da9a31bdbece814cbbd056041175d1d95581ad1f"
+  },
+  "prerequisites": {
+    "gate1": "pass",
+    "gate2": "pass",
+    "gate3": "blocked-provider-credential",
+    "block_size_audit": "pass-no-required-block-over-12000-chars"
+  },
+  "corpus": {
+    "corpus_id": "nist-public-big-context-v2",
+    "model_context_tokens": 131072,
+    "full_corpus_estimated_tokens": 3882513,
+    "full_corpus_to_context_ratio": 29.6212,
+    "required_blocks": 1905
+  },
+  "panel": {
+    "selected_case_ids": [
+      "negative-000",
+      "cross-file-008",
+      "table-002",
+      "image-text-000",
+      "contradiction-003",
+      "exact-003",
+      "number-003",
+      "semantic-003",
+      "supersession-003",
+      "date-003",
+      "exception-003",
+      "exact-011"
+    ],
+    "selected_kind_counts": {
+      "contradiction": 1,
+      "cross-file": 1,
+      "date": 1,
+      "exact": 2,
+      "exception": 1,
+      "image-text": 1,
+      "negative": 1,
+      "number": 1,
+      "semantic-paraphrase": 1,
+      "supersession": 1,
+      "table-cell": 1
+    },
+    "selected_modality_counts": {
+      "image": 1,
+      "table": 1,
+      "text": 10
+    },
+    "selected_corpus_position_counts": {
+      "early": 9,
+      "middle": 2,
+      "late": 1
+    },
+    "selected_local_position_counts": {
+      "head": 1,
+      "middle": 7,
+      "tail": 4
+    },
+    "anchor_budget_ratio": 0.5,
+    "anchor_budget_tokens": 65536,
+    "anchor_tokens": 28589,
+    "anchor_blocks": 6,
+    "anchor_fingerprint": "0bfca9893c23963f516b62021ecec9efecb0c218e40291456c110034e47d2499"
+  },
+  "points": [
+    {
+      "requested_ratio": 1,
+      "actual_ratio": 1.00543212890625,
+      "estimated_tokens": 131784,
+      "selected_blocks": 50,
+      "selected_assets": 11,
+      "modality_counts": {
+        "image": 19,
+        "table": 4,
+        "text": 27
+      },
+      "projection_fingerprint": "2afa4ed8d60f3c32953c0f15fe40a70ea3115694c75b584aa1aa1e1346b1ea8d"
+    },
+    {
+      "requested_ratio": 2,
+      "actual_ratio": 2.0077438354492188,
+      "estimated_tokens": 263159,
+      "selected_blocks": 109,
+      "selected_assets": 12,
+      "modality_counts": {
+        "image": 42,
+        "table": 6,
+        "text": 61
+      },
+      "projection_fingerprint": "f7ea6c42f7d3aeef53c758c2b03a586edb14fc7e60da7767a000cc6015c6b7b1"
+    },
+    {
+      "requested_ratio": 5,
+      "actual_ratio": 5.008445739746094,
+      "estimated_tokens": 656467,
+      "selected_blocks": 311,
+      "selected_assets": 12,
+      "modality_counts": {
+        "image": 132,
+        "table": 10,
+        "text": 169
+      },
+      "projection_fingerprint": "8b55061fe469dc37f7b76be2e32d0d01a9014886222196e8fb0d11d8aa3d2bd7"
+    },
+    {
+      "requested_ratio": 10,
+      "actual_ratio": 10.039764404296875,
+      "estimated_tokens": 1315932,
+      "selected_blocks": 662,
+      "selected_assets": 12,
+      "modality_counts": {
+        "image": 312,
+        "table": 24,
+        "text": 326
+      },
+      "projection_fingerprint": "ed955fa68254a10f18152d68e67cf73a4588870e69e378288d119d07ed9a7bf6"
+    },
+    {
+      "requested_ratio": 20,
+      "actual_ratio": 20.000900268554688,
+      "estimated_tokens": 2621558,
+      "selected_blocks": 1318,
+      "selected_assets": 12,
+      "modality_counts": {
+        "image": 619,
+        "table": 47,
+        "text": 652
+      },
+      "projection_fingerprint": "b7ea4ff0a131925a24597d07ed398371c19b71aff00c7b0e06a0390329e1664d"
+    }
+  ],
+  "invariants": {
+    "anchor_preserved_all_points": true,
+    "nested_projections": true,
+    "stable_hash_distractor_order": true,
+    "frozen_projection_fingerprints": true,
+    "cross_file_case_present": true,
+    "all_local_positions_present": true,
+    "text_table_image_present": true,
+    "model_calls_made_by_preflight": 0
+  },
+  "methodology_delta": {
+    "discovered_failure": "v1 cross-file candidate required 356,659 conservative anchor tokens, exceeding 65,536 anchor budget and the 131,072 route context.",
+    "fix": "bounded table coverage units at <=12,000 chars without changing source files.",
+    "result": "strict v2 panel now includes cross-file-008 and is ready at all 1x/2x/5x/10x/20x points."
+  },
+  "blockers_to_live_gate4": [
+    "Gate 3 has not passed because an authorized provider credential has not been proven ready.",
+    "No live-model evidence-recall curve has been executed for the frozen v2 projections."
+  ]
+}
