@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-28",
+  "workflow_run": {
+    "id": 36374543342,
+    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36374543342",
+    "conclusion": "success"
+  },
+  "provider_calls_made": 0,
+  "model_tokens_billed": 0,
+  "dashscope_secret_configured": false,
+  "openai_secret_configured": false,
+  "preferred_first_route": "qwen3-vl-8b-instruct",
+  "preferred_context_tokens": 131072,
+  "gate3_status": "blocked",
+  "blocker": "provider credential missing",
+  "next_required_action": "Add DASHSCOPE_API_KEY or OPENAI_API_KEY as a GitHub Actions repository secret, then manually dispatch Big Context Live Proof."
+}
