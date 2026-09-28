@@ -41,7 +41,7 @@ def main() -> int:
     ap.add_argument("--safety-factor", type=float, default=1.35)
     ap.add_argument("--run-scale", action="store_true")
     ap.add_argument("--ratios", default="1,2,5,10,20")
-    ap.add_argument("--scale-needle-sample-size", type=int, default=24)
+    ap.add_argument("--scale-needle-sample-size", type=int, default=12)
     ap.add_argument("--output", type=Path)
     args = ap.parse_args()
 
