@@ -1441,7 +1441,57 @@ class ScalePointResult(BaseModel):
     negative_accuracy: float | None = None
     task_accuracy: float | None = None
     baseline_task_accuracy: dict[str, float] = Field(default_factory=dict)
+    recall_by_kind: dict[str, float] = Field(default_factory=dict)
+    recall_by_modality: dict[str, float] = Field(default_factory=dict)
+    recall_by_corpus_position: dict[str, float] = Field(default_factory=dict)
+    recall_by_local_position: dict[str, float] = Field(default_factory=dict)
     blockers: list[str] = Field(default_factory=list)
+
+
+def _gate4_recovery_slices(
+    cases: list[NeedleCase],
+    results: list[NeedleRunResult],
+) -> dict[str, dict[str, float]]:
+    case_by_id = {case.id: case for case in cases}
+
+    def accuracy_for(group: list[NeedleRunResult]) -> float:
+        return (
+            sum(1 for row in group if row.recovered) / len(group)
+            if group
+            else 0.0
+        )
+
+    dimensions: dict[str, dict[str, float]] = {
+        "kind": {},
+        "modality": {},
+        "corpus_position": {},
+        "local_position": {},
+    }
+    for label in sorted({case.kind.value for case in cases}):
+        group = [
+            row for row in results
+            if case_by_id[row.case_id].kind.value == label
+        ]
+        dimensions["kind"][label] = accuracy_for(group)
+    for label in sorted({case.modality.value for case in cases}):
+        group = [
+            row for row in results
+            if case_by_id[row.case_id].modality.value == label
+        ]
+        dimensions["modality"][label] = accuracy_for(group)
+    for label in sorted({case.corpus_position.value for case in cases}):
+        group = [
+            row for row in results
+            if case_by_id[row.case_id].corpus_position.value == label
+        ]
+        dimensions["corpus_position"][label] = accuracy_for(group)
+    for label in sorted({case.local_position.value for case in cases}):
+        group = [
+            row for row in results
+            if case_by_id[row.case_id].local_position.value == label
+        ]
+        dimensions["local_position"][label] = accuracy_for(group)
+    return dimensions
 
 
 class Gate4Spec(BaseModel):
@@ -2159,6 +2209,10 @@ def run_scale_curve(
             )
             by_name = {item.baseline: item for item in baselines}
             cm = by_name.get("contextmesh-full-coverage")
+            recovery_slices = _gate4_recovery_slices(
+                needles,
+                needle_report.results,
+            )
             point_blockers: list[str] = []
             if needle_report.evidence_recall < spec.min_evidence_recall:
                 point_blockers.append(
@@ -2191,6 +2245,10 @@ def run_scale_curve(
                     baseline_task_accuracy={
                         name: row.task_accuracy for name, row in sorted(by_name.items())
                     },
+                    recall_by_kind=recovery_slices["kind"],
+                    recall_by_modality=recovery_slices["modality"],
+                    recall_by_corpus_position=recovery_slices["corpus_position"],
+                    recall_by_local_position=recovery_slices["local_position"],
                     blockers=point_blockers,
                 )
             )
