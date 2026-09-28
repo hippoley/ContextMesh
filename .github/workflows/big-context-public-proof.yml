@@ -99,6 +99,9 @@ jobs:
             --gate4-plan /tmp/contextmesh-nist-proof/results/v2/gate4-scale-plan.json \
             --gate1-2-proof benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json \
             --gate4-preflight benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/v2/corpus-manifest.json \
+            --needle-matrix /tmp/contextmesh-nist-proof/results/v2/needle-matrix.json \
+            --task-cases /tmp/contextmesh-nist-proof/results/v2/task-cases.json \
             --output /tmp/contextmesh-nist-proof/results/v2/frozen-proof-verification.json
 
       - name: Assert bounded-table v2 removed route-sized coverage units
