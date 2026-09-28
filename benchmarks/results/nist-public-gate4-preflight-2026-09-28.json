@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-28",
+  "evidence_class": "contextmesh-gate4-preflight",
+  "claim_scope": "Frozen, nested Gate 4 scale experiment is well-formed and cost-bounded. This artifact does not contain live-model recall results and is not a Gate 4 PASS.",
+  "repository": "hippoley/ContextMesh",
+  "live_gate4_status": "not-run",
+  "prepared": true,
+  "prerequisite_status": {
+    "gate1": "pass",
+    "gate2": "pass",
+    "gate3": "blocked-provider-credential"
+  },
+  "workflow_run": {
+    "id": 36390126287,
+    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36390126287",
+    "head_sha": "60781c6729ecb882ae6aee4fd7bb851b6213314a",
+    "conclusion": "success",
+    "artifact_id": 10955907844,
+    "artifact_name": "big-context-public-nist-preflight",
+    "artifact_zip_sha256": "d75417edf36302b63d8d7d7d90efb9d7858ba0ee5a32b52c52fa8bb4c3f4b510"
+  },
+  "methodology_correction": {
+    "failed_run_id": 36389212996,
+    "failed_run_url": "https://github.com/hippoley/ContextMesh/actions/runs/36389212996",
+    "observed_anchor_tokens": 422455,
+    "observed_anchor_ratio": 3.2230758666992188,
+    "failed_points": [
+      1,
+      2
+    ],
+    "reason": "A 24-case aggregate anchor set was itself larger than 1x/2x. Gate 4 was redesigned to use a bounded diverse frozen panel, while Gate 3 remains the broad 132-case fidelity gate."
+  },
+  "corpus": {
+    "corpus_id": "nist-public-big-context-v1",
+    "model_context_tokens": 131072,
+    "full_corpus_estimated_tokens": 3882513,
+    "full_corpus_to_context_ratio": 29.6212
+  },
+  "panel": {
+    "selected_case_ids": [
+      "negative-000",
+      "image-text-000",
+      "table-001",
+      "exception-012",
+      "date-003",
+      "supersession-009",
+      "number-008",
+      "contradiction-000",
+      "exact-000",
+      "semantic-000",
+      "contradiction-008",
+      "exact-008"
+    ],
+    "selected_kind_counts": {
+      "contradiction": 2,
+      "date": 1,
+      "exact": 2,
+      "exception": 1,
+      "image-text": 1,
+      "negative": 1,
+      "number": 1,
+      "semantic-paraphrase": 1,
+      "supersession": 1,
+      "table-cell": 1
+    },
+    "selected_modality_counts": {
+      "image": 1,
+      "table": 1,
+      "text": 10
+    },
+    "selected_corpus_position_counts": {
+      "early": 3,
+      "middle": 8,
+      "late": 1
+    },
+    "selected_local_position_counts": {
+      "head": 9,
+      "middle": 1,
+      "tail": 2
+    },
+    "anchor_budget_ratio": 0.5,
+    "anchor_budget_tokens": 65536,
+    "anchor_tokens": 25527,
+    "anchor_blocks": 7,
+    "anchor_fingerprint": "fc56c2c289a42e6595152f9c7167bb950e4cb59d1c2f69f6a9d17b2ee1da5e4d"
+  },
+  "points": [
+    {
+      "requested_ratio": 1,
+      "actual_ratio": 1.0094757080078125,
+      "estimated_tokens": 132314,
+      "selected_blocks": 72,
+      "selected_assets": 7,
+      "modality_counts": {
+        "image": 29,
+        "table": 1,
+        "text": 42
+      },
+      "projection_fingerprint": "530792a7576e9c16a369cb5b967a1757af6ee20d1a5c9d1f5155ebf3f0c7888b"
+    },
+    {
+      "requested_ratio": 2,
+      "actual_ratio": 2.0257644653320312,
+      "estimated_tokens": 265521,
+      "selected_blocks": 128,
+      "selected_assets": 10,
+      "modality_counts": {
+        "image": 55,
+        "table": 2,
+        "text": 71
+      },
+      "projection_fingerprint": "672591bf43159ce9180dccb86acdcf785becde8ad6a1848f8638fcfb0d940d63"
+    },
+    {
+      "requested_ratio": 5,
+      "actual_ratio": 5.019111633300781,
+      "estimated_tokens": 657865,
+      "selected_blocks": 148,
+      "selected_assets": 11,
+      "modality_counts": {
+        "image": 63,
+        "table": 3,
+        "text": 82
+      },
+      "projection_fingerprint": "5c527909ba151e7da12702c155d2e4ec5edfad379a54f7f7a0f8531b9a6c5344"
+    },
+    {
+      "requested_ratio": 10,
+      "actual_ratio": 10.020065307617188,
+      "estimated_tokens": 1313350,
+      "selected_blocks": 331,
+      "selected_assets": 12,
+      "modality_counts": {
+        "image": 150,
+        "table": 4,
+        "text": 177
+      },
+      "projection_fingerprint": "e31bfaa15691ff2abe178b8b29dcceb603d3031d60b45e4b63e94c39b710f5a7"
+    },
+    {
+      "requested_ratio": 20,
+      "actual_ratio": 20.027069091796875,
+      "estimated_tokens": 2624988,
+      "selected_blocks": 1082,
+      "selected_assets": 12,
+      "modality_counts": {
+        "image": 524,
+        "table": 4,
+        "text": 554
+      },
+      "projection_fingerprint": "e7620f708c71611c7a887363965e0b57b2443e393ee3476c12fece426513583b"
+    }
+  ],
+  "invariants": {
+    "anchor_preserved_all_points": true,
+    "nested_projections": true,
+    "stable_hash_distractor_order": true,
+    "frozen_projection_fingerprints": true,
+    "model_calls_made_by_preflight": 0
+  },
+  "cost_envelope": {
+    "pricing_model": "qwen3-vl-8b-instruct",
+    "safety_factor": 1.35,
+    "gate3_only_estimated_cost_cny": 47.42,
+    "gate3_plus_gate4_estimated_input_tokens": 106400410,
+    "gate3_plus_gate4_estimated_output_tokens": 1983745,
+    "gate4_scale_input_tokens_component": 12634323,
+    "gate4_scale_output_tokens_component": 450816,
+    "gate3_plus_gate4_estimated_cost_cny": 57.17,
+    "within_preflight_budget": true
+  },
+  "blockers_to_live_gate4": [
+    "Gate 3 has not passed because no authorized provider credential is configured.",
+    "No live-model evidence-recall curve has been executed for the frozen 1x/2x/5x/10x/20x projections."
+  ]
+}
