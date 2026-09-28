@@ -1,0 +1,66 @@
+{
+  "corpus_id": "nist-public-big-context-v1",
+  "provenance": "Public, reproducible corpus assembled from NIST/AIRC official downloads.",
+  "sources": [
+    {
+      "name": "NIST.AI.100-1.pdf",
+      "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf",
+      "family": "pdf"
+    },
+    {
+      "name": "NIST.AI.600-1.pdf",
+      "url": "https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.600-1.pdf",
+      "family": "pdf"
+    },
+    {
+      "name": "NIST.CSWP.29.pdf",
+      "url": "https://nvlpubs.nist.gov/nistpubs/CSWP/NIST.CSWP.29.pdf",
+      "family": "pdf"
+    },
+    {
+      "name": "NIST.SP.800-53r5.pdf",
+      "url": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-53r5.pdf",
+      "family": "pdf"
+    },
+    {
+      "name": "NIST.SP.800-61r2.pdf",
+      "url": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-61r2.pdf",
+      "family": "pdf"
+    },
+    {
+      "name": "NIST.SP.800-218.pdf",
+      "url": "https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-218.pdf",
+      "family": "pdf"
+    },
+    {
+      "name": "AI_RMF_Playbook.pdf",
+      "url": "https://airc.nist.gov/docs/AI_RMF_Playbook.pdf",
+      "family": "pdf"
+    },
+    {
+      "name": "playbook.json",
+      "url": "https://airc.nist.gov/docs/playbook.json",
+      "family": "text"
+    },
+    {
+      "name": "playbook.csv",
+      "url": "https://airc.nist.gov/docs/playbook.csv",
+      "family": "table"
+    },
+    {
+      "name": "playbook.xlsx",
+      "url": "https://airc.nist.gov/docs/playbook.xlsx",
+      "family": "table"
+    },
+    {
+      "name": "NIST_CSF_1.1_Core.xlsx",
+      "url": "https://www.nist.gov/document/2018-04-16frameworkv11core1xlsx",
+      "family": "table"
+    },
+    {
+      "name": "NIST_CSF_2.0_Organizational_Profile_Template.xlsx",
+      "url": "https://www.nist.gov/document/csf-20-organizational-profile-template",
+      "family": "table"
+    }
+  ]
+}
