@@ -13,6 +13,8 @@ on:
       - 'benchmarks/summarize_big_context_live_run.py'
       - 'benchmarks/render_gate4_scale_curve.py'
       - 'benchmarks/render_gate5_drift_diff.py'
+      - 'benchmarks/decide_big_context_promotion.py'
+      - 'tests/test_v17_promotion_contract.py'
       - 'tests/test_v17_gate5_drift_diff.py'
       - 'tests/test_v17_gate4_curve_artifacts.py'
       - 'tests/test_v17_live_run_manifest.py'
@@ -50,6 +52,7 @@ jobs:
             benchmarks/summarize_big_context_live_run.py \
             benchmarks/render_gate4_scale_curve.py \
             benchmarks/render_gate5_drift_diff.py \
+            benchmarks/decide_big_context_promotion.py \
             benchmarks/verify_frozen_public_proof.py \
             src/contextmesh/big_context_proof.py \
             src/contextmesh/provider_smoke.py \
@@ -65,7 +68,8 @@ jobs:
             tests/test_v17_provider_smoke.py \
             tests/test_v17_live_run_manifest.py \
             tests/test_v17_gate4_curve_artifacts.py \
-            tests/test_v17_gate5_drift_diff.py
+            tests/test_v17_gate5_drift_diff.py \
+            tests/test_v17_promotion_contract.py
           test -f benchmarks/big-context/nist-public-corpus.json
           test -f .github/workflows/big-context-live-proof.yml
 
