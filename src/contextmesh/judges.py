@@ -191,6 +191,48 @@ class OpenAICompatibleJudge:
         ])
         return max(0, budget - fixed_tokens)
 
+    def _reduction_note_budget_tokens(
+        self,
+        question: str,
+        answer: str,
+        level: int,
+    ) -> int | None:
+        budget = self.token_budget.input_budget_tokens()
+        if budget is None:
+            return None
+        fixed_prompt = (
+            "Compress these inspection findings into a score-preserving evaluation state. "
+            "Do not discard contradictions, exceptions, dates, numbers, or block identifiers. "
+            "Do not decide the final score yet. Return concise plain text.\n\n"
+            f"QUESTION:\n{question}\n\nANSWER:\n{answer}\n\n"
+            f"REDUCTION LEVEL: {level}\n\nFINDINGS:\n"
+        )
+        fixed_tokens, _ = self.token_budget.count_messages([
+            {"role": "user", "content": fixed_prompt}
+        ])
+        return max(0, budget - fixed_tokens)
+
+    def _final_payload_budget_tokens(
+        self,
+        question: str,
+        answer: str,
+    ) -> int | None:
+        budget = self.token_budget.input_budget_tokens()
+        if budget is None:
+            return None
+        fixed_prompt = (
+            "Produce strict JSON {score:number,rationale:string}. Score the candidate answer "
+            "against the question. Full corpus coverage and runtime execution contracts have "
+            "already been enforced before this call. The DECISION BUNDLE is the primary "
+            "preservation channel.\n\n"
+            f"QUESTION:\n{question}\n\nANSWER:\n{answer}\n\n"
+            "DECISION BUNDLE:\n\nREDUCED INSPECTION STATE:\n\nLEGACY TYPED EVIDENCE:\n"
+        )
+        fixed_tokens, _ = self.token_budget.count_messages([
+            {"role": "user", "content": fixed_prompt}
+        ])
+        return max(0, budget - fixed_tokens)
+
     def token_budget_status(self) -> dict[str, Any]:
         return {
             "mode": self.token_budget.mode,
@@ -374,11 +416,7 @@ class OpenAICompatibleJudge:
         return f"{block.id} route-aware slices={len(findings)}; {combined}", relevant_any
 
     def reduce_notes(self, question: str, answer: str, notes: list[str], level: int) -> str:
-        limit = self._available_source_tokens(
-            question,
-            answer,
-            prompt_overhead_tokens=2600,
-        )
+        limit = self._reduction_note_budget_tokens(question, answer, level)
         total_note_tokens = sum(self.token_budget.count(x) + 1 for x in notes)
         if limit is not None and total_note_tokens > limit:
             groups: list[list[str]] = []
@@ -420,10 +458,9 @@ class OpenAICompatibleJudge:
     def preflight_finalize(self, state: EvaluationState) -> str | None:
         if state.decision_bundle is None:
             return None
-        available = self._available_source_tokens(
+        available = self._final_payload_budget_tokens(
             state.question,
             state.answer,
-            prompt_overhead_tokens=3200,
         )
         if available is None:
             return None
@@ -452,10 +489,9 @@ class OpenAICompatibleJudge:
 
     def finalize(self, state: EvaluationState) -> tuple[float, str]:
         notes = state.model_context_notes()
-        available = self._available_source_tokens(
+        available = self._final_payload_budget_tokens(
             state.question,
             state.answer,
-            prompt_overhead_tokens=3200,
         )
         if available is not None:
             note_tokens = sum(self.token_budget.count(x) + 1 for x in notes)
