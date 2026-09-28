@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from . import __version__
 from .benchmark import ScorePreservationBenchmark
+from .big_context_proof import Gate1CorpusSpec, evaluate_gate1_corpus
 from .events import EventBus
 from .evidence import evidence_kind_counts
 from .explorer import build_explorer_groups
@@ -880,6 +881,53 @@ def evaluate(req: EvaluateRequest):
         raise HTTPException(status_code=404, detail="corpus/job not found") from e
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@app.get("/api/big-context/readiness")
+def big_context_readiness(
+    corpus_id: str,
+    route_id: str,
+    min_assets: int = Query(10, ge=1, le=1000),
+    max_assets: int = Query(30, ge=1, le=1000),
+    min_format_families: int = Query(3, ge=1, le=20),
+    min_corpus_ratio: float = Query(5.0, gt=0),
+):
+    try:
+        manifest = STORE.get_manifest(corpus_id)
+        routes = {route.id: route for route in STORE.list_model_routes() if route.enabled}
+        route = routes.get(route_id)
+        if route is None:
+            raise HTTPException(status_code=404, detail="enabled model route not found")
+        if not route.max_context_tokens:
+            raise HTTPException(
+                status_code=409,
+                detail="route.max_context_tokens is required for Big Context Proof",
+            )
+        gate1 = evaluate_gate1_corpus(
+            manifest,
+            Gate1CorpusSpec(
+                min_assets=min_assets,
+                max_assets=max_assets,
+                min_format_families=min_format_families,
+                min_corpus_to_context_ratio=min_corpus_ratio,
+                model_context_tokens=route.max_context_tokens,
+            ),
+        )
+        return {
+            "corpus_id": corpus_id,
+            "route_id": route_id,
+            "model": route.model,
+            "gate1": gate1,
+            "next_gates": {
+                "gate2": "provide a 100+ case ground-truth needle matrix",
+                "gate3": "run live evidence/task/baseline proof",
+                "gate4": "run fixed-needle distractor scale curve",
+                "gate5": "compare a repeated run against a stored snapshot",
+            },
+            "runner": "benchmarks/big_context_proof.py",
+        }
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="corpus not found") from exc
 
 
 @app.post("/benchmark")
