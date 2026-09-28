@@ -434,6 +434,10 @@ def test_gate4_scale_curve_keeps_anchor_evidence_and_grows_distractors(tmp_path:
     assert all(point.status == "pass" for point in report.points)
     assert all(point.evidence_recall == 1.0 for point in report.points)
     assert all(point.task_accuracy == 1.0 for point in report.points)
+    assert all(point.recall_by_kind["exception"] == 1.0 for point in report.points)
+    assert all(point.recall_by_modality["text"] == 1.0 for point in report.points)
+    assert all(point.recall_by_corpus_position["late"] == 1.0 for point in report.points)
+    assert all(point.recall_by_local_position["middle"] == 1.0 for point in report.points)
     assert report.max_completed_ratio >= 5.0
     assert report.recall_drop == 0.0
     assert report.points[0].selected_blocks < report.points[-1].selected_blocks
