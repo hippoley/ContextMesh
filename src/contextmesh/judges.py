@@ -381,6 +381,85 @@ class OpenAICompatibleJudge:
             content.append(audio_payload)
         return content
 
+    def inspect_question_batch(
+        self,
+        block: ContextBlock,
+        questions: list[dict[str, str]],
+    ) -> dict[str, str]:
+        """Inspect one source block against many benchmark questions.
+
+        Only case IDs and natural-language questions are model-visible. Ground-truth
+        target assets, expected answers, match terms and labels stay in the scorer.
+        The method recursively splits question batches only when the same route token
+        budget says the constructed request would overflow.
+        """
+        if not questions:
+            return {}
+        content: list[dict[str, Any]] = [{
+            "type": "text",
+            "text": (
+                "You are inspecting ONE source block for a benchmark. Evaluate every "
+                "question against only the current source block. Do not infer that other "
+                "blocks are absent. Return strict JSON with one key, matches, whose value "
+                "is an array. Include an item only when this source block contains evidence "
+                "that materially helps answer that question. Each item must contain "
+                "case_id and note. The note must be source-grounded, concise, and preserve "
+                "decisive numbers, dates, exceptions, and qualifiers. Do not repeat the "
+                "question and do not invent missing evidence.\\n\\n"
+                f"QUESTIONS:\\n{json.dumps(questions, ensure_ascii=False)}\\n\\n"
+                f"BLOCK ID: {block.id}\\nMODALITY: {block.modality.value}\\n"
+                f"SOURCE: {block.source.path}\\n"
+                f"LOCATOR: {json.dumps(block.source.locator, ensure_ascii=False)}\\n\\n"
+                f"EXTRACTED/STRUCTURED CONTENT:\\n{block.text or ''}"
+            ),
+        }]
+        image_url = self._direct_image_data_url(block)
+        if image_url:
+            content.append({"type": "image_url", "image_url": {"url": image_url}})
+        if "vision" in self.capabilities:
+            for media_path in block.metadata.get("contextmesh_related_media_paths", [])[:4]:
+                p = Path(str(media_path))
+                if not p.is_file() or p.stat().st_size > self.max_inline_image_bytes:
+                    continue
+                mime, _ = mimetypes.guess_type(p.name)
+                if not mime or not mime.startswith("image/"):
+                    continue
+                raw = base64.b64encode(p.read_bytes()).decode("ascii")
+                content.append(
+                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{raw}"}}
+                )
+        audio_payload = self._direct_audio_payload(block)
+        if audio_payload:
+            content.append(audio_payload)
+
+        try:
+            raw = self._chat([{"role": "user", "content": content}])
+        except TokenBudgetExceeded:
+            if len(questions) <= 1:
+                raise
+            middle = len(questions) // 2
+            left = self.inspect_question_batch(block, questions[:middle])
+            right = self.inspect_question_batch(block, questions[middle:])
+            return {**left, **right}
+
+        obj = _parse_json_object(raw)
+        if obj is None:
+            raise ValueError(
+                f"batch inspection response was not parseable JSON: {raw[:500]}"
+            )
+        allowed = {str(item.get("id")) for item in questions}
+        matches: dict[str, str] = {}
+        for item in obj.get("matches", []) or []:
+            if not isinstance(item, dict):
+                continue
+            case_id = str(item.get("case_id") or "")
+            if case_id not in allowed:
+                continue
+            note = str(item.get("note") or "").strip()
+            if note:
+                matches[case_id] = note
+        return matches
+
     def inspect(self, question: str, answer: str, block: ContextBlock, notes: list[str]) -> tuple[str, bool]:
         available = self._block_source_budget_tokens(question, answer, block)
         parts = (
