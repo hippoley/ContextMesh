@@ -134,3 +134,209 @@ def test_gate2_rejects_a_large_but_shallow_matrix():
     assert "missing-local-position:tail" in report.blockers
     assert "missing-kind:negative" in report.blockers
     assert "missing-kind:cross-file" in report.blockers
+
+
+
+def test_gate3_runs_needles_over_full_corpus_and_scores_same_model_baselines(tmp_path: Path):
+    from contextmesh.big_context_proof import (
+        Gate3Spec,
+        TaskCase,
+        evaluate_gate3,
+        run_full_coverage_needles,
+        run_task_baselines,
+    )
+    from contextmesh.models import UsageMetrics
+
+    paths = []
+    for i in range(12):
+        p = tmp_path / f"doc-{i:02d}.txt"
+        marker = ""
+        if i == 1:
+            marker = " NEEDLE_ALPHA_42 payment deadline is thirty days."
+        if i == 10:
+            marker = " NEEDLE_OMEGA_77 exception requires sixty days notice."
+        p.write_text(("ordinary clause filler " * 80) + marker, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(paths, store, "gate3")
+
+    class DeterministicJudge:
+        route_id = "deterministic-proof"
+
+        def can_inspect(self, block):
+            return True
+
+        def inspect(self, question, answer, block, notes):
+            q = question.lower()
+            text = block.text.lower()
+            relevant = (
+                ("alpha" in q and "needle_alpha_42" in text)
+                or ("omega" in q and "needle_omega_77" in text)
+            )
+            if relevant:
+                return block.text, True
+            return f"{block.id}: inspected; no target fact", False
+
+        def reduce_notes(self, question, answer, notes, level):
+            return f"L{level}: {len(notes)} notes"
+
+        def finalize(self, state):
+            # Candidate answers used by the task suite contain an explicit expected
+            # truth label so the test focuses on baseline orchestration.
+            if "correct-answer" in state.answer:
+                return 95.0, "supported"
+            return 5.0, "unsupported"
+
+        def score_full(self, question, answer, blocks):
+            if "correct-answer" in answer:
+                return 95.0, "supported"
+            return 5.0, "unsupported"
+
+        def usage_snapshot(self):
+            return UsageMetrics(route_id=self.route_id)
+
+    cases = [
+        NeedleCase(
+            id="alpha",
+            kind=NeedleKind.EXACT,
+            question="Find alpha marker",
+            target_assets=["doc-01.txt"],
+            expected_present=True,
+            expected_answer="NEEDLE_ALPHA_42",
+            match_terms=["NEEDLE_ALPHA_42"],
+            corpus_position=CorpusPosition.EARLY,
+            local_position=LocalPosition.MIDDLE,
+        ),
+        NeedleCase(
+            id="omega",
+            kind=NeedleKind.EXCEPTION,
+            question="Find omega exception",
+            target_assets=["doc-10.txt"],
+            expected_present=True,
+            expected_answer="NEEDLE_OMEGA_77",
+            match_terms=["NEEDLE_OMEGA_77", "sixty days"],
+            match_all_terms=True,
+            corpus_position=CorpusPosition.LATE,
+            local_position=LocalPosition.MIDDLE,
+        ),
+        NeedleCase(
+            id="absent",
+            kind=NeedleKind.NEGATIVE,
+            question="Find marker NEVER_EXISTS_999",
+            target_assets=[],
+            expected_present=False,
+            expected_answer="NEVER_EXISTS_999",
+            match_terms=["NEVER_EXISTS_999"],
+            corpus_position=CorpusPosition.MIDDLE,
+            local_position=LocalPosition.HEAD,
+        ),
+    ]
+
+    needle = run_full_coverage_needles(
+        store,
+        manifest.corpus_id,
+        DeterministicJudge,
+        cases,
+        max_workers=3,
+    )
+
+    assert needle.evidence_recall == 1.0
+    assert needle.evidence_term_fidelity == 1.0
+    assert needle.negative_accuracy == 1.0
+    assert needle.unsupported_cases == 0
+    assert all(row.visited_blocks == manifest.required_blocks for row in needle.results)
+    assert all(row.coverage == 1.0 for row in needle.results)
+
+    tasks = [
+        TaskCase(
+            id="supported",
+            question="Is the candidate supported?",
+            candidate_answer="correct-answer",
+            expected_min_score=90,
+        ),
+        TaskCase(
+            id="rejected",
+            question="Is the candidate supported?",
+            candidate_answer="wrong-answer",
+            expected_max_score=10,
+        ),
+    ]
+    baselines = run_task_baselines(
+        store,
+        manifest.corpus_id,
+        DeterministicJudge,
+        tasks,
+        lexical_top_ks=(5, 20),
+    )
+    by_name = {row.baseline: row for row in baselines}
+    assert by_name["contextmesh-full-coverage"].task_accuracy == 1.0
+    assert by_name["direct-full-context"].task_accuracy == 1.0
+    assert by_name["lexical-top-5"].task_accuracy == 1.0
+
+    gate = evaluate_gate3(
+        needle,
+        baselines,
+        Gate3Spec(
+            min_evidence_recall=0.9,
+            min_evidence_term_fidelity=0.9,
+            min_negative_accuracy=0.9,
+            min_task_accuracy=0.9,
+        ),
+    )
+    assert gate.status == "pass"
+
+
+def test_gate3_fails_when_live_recovery_is_weak():
+    from contextmesh.big_context_proof import (
+        BaselineSummary,
+        Gate3Spec,
+        NeedleRecoveryReport,
+        NeedleRunResult,
+        evaluate_gate3,
+    )
+
+    needle = NeedleRecoveryReport(
+        corpus_id="c",
+        total_cases=2,
+        present_cases=2,
+        negative_cases=0,
+        evidence_recall=0.5,
+        evidence_term_fidelity=0.5,
+        negative_accuracy=1.0,
+        unsupported_cases=0,
+        by_kind={"exact": 0.5},
+        by_corpus_position={"early": 0.5},
+        results=[
+            NeedleRunResult(
+                case_id="a",
+                kind=NeedleKind.EXACT,
+                expected_present=True,
+                recovered=True,
+                term_recall=1.0,
+            ),
+            NeedleRunResult(
+                case_id="b",
+                kind=NeedleKind.EXACT,
+                expected_present=True,
+                recovered=False,
+                term_recall=0.0,
+            ),
+        ],
+    )
+    baseline = BaselineSummary(
+        baseline="contextmesh-full-coverage",
+        total_tasks=1,
+        completed_tasks=1,
+        blocked_tasks=0,
+        task_accuracy=1.0,
+        latency_seconds=0,
+        estimated_cost_usd=0,
+        prompt_tokens=0,
+        completion_tokens=0,
+        results=[],
+    )
+
+    gate = evaluate_gate3(needle, [baseline], Gate3Spec())
+    assert gate.status == "fail"
+    assert any(x.startswith("evidence-recall:") for x in gate.blockers)
