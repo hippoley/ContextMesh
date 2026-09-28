@@ -107,7 +107,7 @@ jobs:
         run: |
           scale_arg=()
           if [ "${{ inputs.run_scale }}" = "true" ]; then
-            scale_arg+=(--run-scale)
+            scale_arg+=(--run-scale --scale-plan /tmp/contextmesh-live-proof/results/gate4-scale-plan.json)
           fi
           python benchmarks/estimate_big_context_live_cost.py \
             --corpus-manifest /tmp/contextmesh-live-proof/results/corpus-manifest.json \
