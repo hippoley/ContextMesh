@@ -272,9 +272,27 @@ jobs:
             --snapshot-output /tmp/contextmesh-nist-proof/results/live-proof.snapshot.json \
             "${extra[@]}"
 
+      - name: Summarize live run artifact
+        if: always()
+        run: |
+          mkdir -p /tmp/contextmesh-nist-proof/results
+          python benchmarks/summarize_big_context_live_run.py \
+            --result-dir /tmp/contextmesh-nist-proof/results \
+            --output /tmp/contextmesh-nist-proof/results/live-run-manifest.json \
+            --run-id "${{ github.run_id }}" \
+            --git-sha "${{ github.sha }}" \
+            --provider "${{ inputs.provider }}" \
+            --model "${{ inputs.model }}" \
+            --context-tokens "${{ inputs.context_tokens }}" \
+            --workers "${{ inputs.workers }}" \
+            --smoke-only "${{ inputs.smoke_only }}" \
+            --run-scale "${{ inputs.run_scale }}" \
+            --reference-run-id "${{ inputs.reference_run_id }}"
+
       - name: Show live proof result
         if: always()
         run: |
+          cat /tmp/contextmesh-nist-proof/results/live-run-manifest.json 2>/dev/null || true
           cat /tmp/contextmesh-nist-proof/results/live-proof.json 2>/dev/null || true
 
       - name: Upload live proof artifacts
