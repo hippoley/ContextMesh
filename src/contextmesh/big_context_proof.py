@@ -488,7 +488,7 @@ def run_full_coverage_needles(
             execution = evaluator.evaluate(
                 corpus_id,
                 case.question,
-                case.expected_answer or "",
+                "",
                 contract=contract,
             )
             recovered, term_recall, matched_terms, matched_assets = (
