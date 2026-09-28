@@ -108,9 +108,26 @@ Task cases can carry tags such as `authority`, `modality`, or `contradiction`; t
 
 ## Gate 4 — Scale Curve
 
-A valid scale curve keeps the decisive evidence fixed and grows distractors around it.
+Gate 4 has **two distinct states before a live result exists**:
 
-It does **not** simply take the first 10%, 20%, 50% of a corpus, because that can remove the needle and turn scale into a different task.
+```text
+NOT PREPARED
+    ↓
+PREPARED
+  frozen panel
+  exact anchor set
+  nested 1x/2x/5x/10x/20x projections
+  stable projection fingerprints
+  no model calls
+    ↓
+PASS or FAIL
+  same frozen projections
+  live model evidence-recall curve
+```
+
+**PREPARED is not PASS.** It proves the experiment is well formed; it does not prove model fidelity.
+
+A valid scale curve keeps the decisive evidence fixed and grows distractors around it. It does **not** simply take the first 10%, 20%, 50% of a corpus, because that can remove the needle and turn scale into a different task.
 
 Default requested points:
 
@@ -124,20 +141,63 @@ Default requested points:
 
 relative to the configured model context window.
 
-Coverage units remain whole. A point may therefore execute at 2.1x rather than silently slicing a required block to manufacture exactly 2.0x.
+Modern proof matrices freeze exact `target_block_ids`. Gate 4 therefore anchors the **smallest decisive coverage units**, not whole source files. Older matrices without block-level ground truth may fall back to asset-level anchors.
 
-The gate records:
+Distractors are added in a stable SHA-256 order rather than source order, so small scale points do not become accidental "early-corpus" samples. Every larger projection must be a strict superset of the previous one.
 
-- requested ratio;
-- actual ratio;
+Coverage units remain whole. A point may therefore execute at 2.01x rather than silently slicing a required block to manufacture exactly 2.00x.
+
+Before a live Gate 4 call, ContextMesh freezes:
+
+- selected case IDs and kind/modality/position coverage;
+- exact anchor block IDs and anchor fingerprint;
+- block IDs for every scale point;
+- actual ratio, selected assets, and modality counts;
+- one SHA-256 projection fingerprint per point.
+
+A live Gate 4 run can consume this frozen plan. Corpus mismatch, context-window mismatch, anchor drift, a missing ratio, or a projection fingerprint change is rejected **before model calls**.
+
+The live gate records:
+
+- requested and actual ratio;
 - selected blocks/assets;
 - evidence recall;
-- term fidelity;
+- evidence term fidelity;
 - negative accuracy;
-- task accuracy;
-- each baseline’s task accuracy.
+- optional task accuracy/baselines;
+- cost and latency.
 
 Default release policy requires the curve to reach at least 20x and ContextMesh evidence recall to drop by no more than 5 percentage points from the first completed point.
+
+### Public NIST v2 preflight
+
+The first strict public Gate 4 preflight exposed a real methodology failure instead of passing immediately.
+
+In v1, a cross-file case pulled a table coverage unit large enough that the decisive anchor set reached **356,659 conservative tokens**, already larger than both the 65,536-token anchor budget and the 131,072-token live model context. That made a meaningful 1x point impossible.
+
+The fix did **not** change source documents or delete the cross-file case. The ingest contract was tightened so table coverage units are bounded at **<=12,000 characters**, then the same 12-source NIST/AIRC corpus was re-ingested as `nist-public-big-context-v2`.
+
+The frozen v2 preflight now has:
+
+```text
+panel               12 cases
+anchor blocks        6
+anchor tokens       28,589
+
+requested    actual        blocks
+1x           1.0054x          50
+2x           2.0077x         109
+5x           5.0084x         311
+10x         10.0398x         662
+20x         20.0009x       1,318
+```
+
+Every point preserves all anchors, is nested inside the next point, and has a committed projection fingerprint. The preflight made **0 provider calls**. The live recall curve remains unrun until Gate 3 passes and an authorized provider credential is available.
+
+Evidence:
+
+- `docs/reality/Big-Context-NIST-Gate4-Preflight-v2-2026-09-28.md`
+- `benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json`
 
 ## Gate 5 — Drift
 
