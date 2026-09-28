@@ -92,6 +92,17 @@ jobs:
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --min-corpus-ratio 5
 
+      - name: Freeze Gate 4 scale plan before any provider call
+        run: |
+          python benchmarks/plan_gate4_scale.py nist-public-big-context-v1 \
+            --store /tmp/contextmesh-live-proof/store \
+            --needles /tmp/contextmesh-live-proof/results/needle-matrix.json \
+            --model-context-tokens "${{ inputs.context_tokens }}" \
+            --ratios "1,2,5,10,20" \
+            --needle-sample-size 24 \
+            --required-max-ratio 20 \
+            --output /tmp/contextmesh-live-proof/results/gate4-scale-plan.json
+
       - name: Enforce live proof cost budget before any model call
         run: |
           scale_arg=()
@@ -237,6 +248,7 @@ jobs:
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --workers "${{ inputs.workers }}" \
             --ratios "1,2,5,10,20" \
+            --scale-plan /tmp/contextmesh-live-proof/results/gate4-scale-plan.json \
             --task-sample-size 0 \
             --run-id "github-${{ github.run_id }}" \
             --model-version "${{ inputs.model }}" \
