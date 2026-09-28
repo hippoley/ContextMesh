@@ -159,12 +159,27 @@ It does **not** establish the product claim:
 That claim still requires:
 
 ```text
-Gate 3  live multimodal evidence recall + task accuracy + baselines
+Gate 3  live multimodal evidence recall + task accuracy + baselines — BLOCKED: provider credential missing
 Gate 4  fixed-needle scale curve
 Gate 5  repeated-run drift
 ```
 
 The repository should continue to report the large-context task-success claim as **not yet proven** until those gates pass.
+
+## Live readiness
+
+A separate zero-provider-call workflow checked whether the repository can actually start Gate 3.
+
+```text
+workflow run               36374543342
+DASHSCOPE_API_KEY          not configured
+OPENAI_API_KEY             not configured
+provider calls made        0
+model tokens billed        0
+Gate 3                     BLOCKED
+```
+
+This is an execution dependency rather than an algorithmic pass. The live workflow already enforces the cost ceiling before any provider call. Once an authorized provider secret exists, Gate 3 can be dispatched without another code change.
 
 ## Reproduce
 
