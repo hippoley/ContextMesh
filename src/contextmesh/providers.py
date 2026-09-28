@@ -93,6 +93,7 @@ class AnthropicJudge(OpenAICompatibleJudge):
     """Anthropic Messages adapter while preserving ContextMesh's judge contract."""
 
     def _chat(self, messages: list[dict[str, Any]]) -> str:
+        self.token_budget.assert_messages(messages)
         blocks: list[dict[str, Any]] = []
         for msg in messages:
             content = msg.get("content")
@@ -140,6 +141,7 @@ class GeminiJudge(OpenAICompatibleJudge):
     """
 
     def _chat(self, messages: list[dict[str, Any]]) -> str:
+        self.token_budget.assert_messages(messages)
         parts: list[dict[str, Any]] = []
         for msg in messages:
             content = msg.get("content")
@@ -220,6 +222,9 @@ def build_judge_from_route(route: ModelRoute) -> OpenAICompatibleJudge:
         output_cost_per_million=route.output_cost_per_million,
         capabilities=route.capabilities,
         max_context_tokens=route.max_context_tokens,
+        tokenizer_spec=route.tokenizer_spec,
+        token_budget_safety_factor=route.token_budget_safety_factor,
+        chars_per_token_estimate=route.chars_per_token_estimate,
         request_timeout_seconds=route.request_timeout_seconds,
     )
     provider = (route.provider or "openai-compatible").lower()
