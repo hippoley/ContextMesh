@@ -1028,11 +1028,11 @@ def _plan_scale_projection(
             continue
         block = store.get_block(corpus_id, block_id)
         cost = _block_token_estimate(block)
-        if selected and total + cost > target_tokens:
-            continue
         selected.append(block_id)
         selected_set.add(block_id)
         total += cost
+        # Coverage units stay whole. The last block may overshoot the requested
+        # ratio; actual_ratio records what was really executed.
         if total >= target_tokens:
             break
 
