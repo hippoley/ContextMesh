@@ -1,0 +1,88 @@
+name: Big Context Live Readiness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/big-context-live-readiness.yml'
+      - '.github/workflows/big-context-live-proof.yml'
+      - 'benchmarks/estimate_big_context_live_cost.py'
+      - 'benchmarks/build_public_nist_proof.py'
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DASHSCOPE_API_KEY: ${{ secrets.DASHSCOPE_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check proof entrypoints without making provider calls
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            benchmarks/build_public_nist_proof.py \
+            benchmarks/big_context_proof.py \
+            benchmarks/estimate_big_context_live_cost.py \
+            src/contextmesh/big_context_proof.py \
+            src/contextmesh/judges.py
+          test -f benchmarks/big-context/nist-public-corpus.json
+          test -f .github/workflows/big-context-live-proof.yml
+
+      - name: Check authorized provider secret presence
+        id: secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          dashscope=false
+          openai=false
+          if [ -n "${DASHSCOPE_API_KEY:-}" ]; then dashscope=true; fi
+          if [ -n "${OPENAI_API_KEY:-}" ]; then openai=true; fi
+
+          {
+            echo "dashscope_configured=$dashscope"
+            echo "openai_configured=$openai"
+          } >> "$GITHUB_OUTPUT"
+
+          cat > live-readiness.json <<EOF
+          {
+            "schema_version": 1,
+            "provider_calls_made": 0,
+            "model_tokens_billed": 0,
+            "dashscope_secret_configured": $dashscope,
+            "openai_secret_configured": $openai,
+            "preferred_first_route": "qwen3-vl-8b-instruct",
+            "preferred_context_tokens": 131072,
+            "paid_live_run_triggered": false
+          }
+          EOF
+
+          echo "DashScope secret configured: $dashscope"
+          echo "OpenAI secret configured: $openai"
+          echo "No provider call was made."
+
+      - name: Readiness conclusion
+        run: |
+          cat live-readiness.json
+          if [ "${{ steps.secrets.outputs.dashscope_configured }}" != "true" ]; then
+            echo "::warning::DASHSCOPE_API_KEY is not configured; Gate 3 cannot start on the preferred route yet."
+          else
+            echo "Preferred DashScope route is credential-ready. This workflow still makes no model call."
+          fi
+
+      - name: Upload readiness artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: big-context-live-readiness
+          path: live-readiness.json
+          retention-days: 30
