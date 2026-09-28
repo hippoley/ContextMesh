@@ -782,3 +782,81 @@ def test_batched_live_needles_scan_each_block_once_and_hide_ground_truth(tmp_pat
     assert report.negative_accuracy == 1.0
     assert report.unsupported_cases == 0
     assert all(row.coverage == 1.0 for row in report.results)
+
+
+
+def test_recovery_requires_exact_target_block_when_ground_truth_freezes_one(tmp_path: Path):
+    from contextmesh.big_context_proof import run_batched_full_coverage_needles
+    from contextmesh.models import UsageMetrics
+
+    p = tmp_path / "same-asset.txt"
+    p.write_text(
+        ("first section filler " * 80)
+        + "\nTARGET_PHRASE_7788 true evidence\n"
+        + ("middle filler " * 100)
+        + "\nTARGET_PHRASE_7788 repeated elsewhere\n",
+        encoding="utf-8",
+    )
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        [p],
+        store,
+        "exact-block",
+        window_chars=1800,
+        overlap_chars=0,
+    )
+    blocks = [store.get_block(manifest.corpus_id, bid) for bid in manifest.coverage_ids()]
+    matching = [b for b in blocks if "TARGET_PHRASE_7788" in b.text]
+    assert len(matching) >= 2
+    true_block, wrong_block = matching[0], matching[-1]
+    assert true_block.id != wrong_block.id
+
+    class WrongPageJudge:
+        route_id = "wrong-page"
+
+        def can_inspect(self, block):
+            return True
+
+        def inspect_question_batch(self, block, questions):
+            if block.id == wrong_block.id:
+                return {"needle": "TARGET_PHRASE_7788 repeated elsewhere"}
+            return {}
+
+        def inspect(self, question, answer, block, notes):
+            raise AssertionError("batched path expected")
+
+        def reduce_notes(self, question, answer, notes, level):
+            return "unused"
+
+        def finalize(self, state):
+            return 100.0, "unused"
+
+        def score_full(self, question, answer, blocks):
+            return 100.0, "unused"
+
+        def usage_snapshot(self):
+            return UsageMetrics(route_id=self.route_id)
+
+    case = NeedleCase(
+        id="needle",
+        kind=NeedleKind.EXACT,
+        question="Find the target phrase.",
+        target_assets=[p.name],
+        target_block_ids=[true_block.id],
+        expected_present=True,
+        match_terms=["TARGET_PHRASE_7788"],
+        corpus_position=CorpusPosition.MIDDLE,
+        local_position=LocalPosition.MIDDLE,
+    )
+
+    report = run_batched_full_coverage_needles(
+        store,
+        manifest.corpus_id,
+        WrongPageJudge,
+        [case],
+        max_workers=2,
+    )
+
+    assert report.evidence_recall == 0.0
+    assert report.results[0].recovered is False
+    assert report.results[0].matched_assets == []
