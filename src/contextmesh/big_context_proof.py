@@ -570,6 +570,7 @@ class BaselineTaskResult(BaseModel):
     prompt_tokens: int = 0
     completion_tokens: int = 0
     error: str | None = None
+    tags: list[str] = Field(default_factory=list)
 
 
 class BaselineSummary(BaseModel):
@@ -582,6 +583,7 @@ class BaselineSummary(BaseModel):
     estimated_cost_usd: float
     prompt_tokens: int
     completion_tokens: int
+    accuracy_by_tag: dict[str, float] = Field(default_factory=dict)
     results: list[BaselineTaskResult]
 
 
@@ -600,6 +602,14 @@ def _summarize_baseline(
     results: list[BaselineTaskResult],
 ) -> BaselineSummary:
     completed = [x for x in results if not x.blocked and x.score is not None]
+    tags = sorted({tag for row in completed for tag in row.tags})
+    accuracy_by_tag: dict[str, float] = {}
+    for tag in tags:
+        group = [row for row in completed if tag in row.tags]
+        if group:
+            accuracy_by_tag[tag] = (
+                sum(1 for row in group if row.correct) / len(group)
+            )
     return BaselineSummary(
         baseline=baseline,
         total_tasks=len(results),
@@ -614,6 +624,7 @@ def _summarize_baseline(
         estimated_cost_usd=sum(x.estimated_cost_usd for x in results),
         prompt_tokens=sum(x.prompt_tokens for x in results),
         completion_tokens=sum(x.completion_tokens for x in results),
+        accuracy_by_tag=dict(sorted(accuracy_by_tag.items())),
         results=results,
     )
 
@@ -671,6 +682,7 @@ def run_task_baselines(
                         estimated_cost_usd=usage.estimated_cost_usd,
                         prompt_tokens=usage.prompt_tokens,
                         completion_tokens=usage.completion_tokens,
+                        tags=list(case.tags),
                     )
                 )
             except Exception as exc:
@@ -682,6 +694,7 @@ def run_task_baselines(
                         latency_seconds=time.perf_counter() - started,
                         selected_blocks=len(blocks),
                         error=str(exc),
+                        tags=list(case.tags),
                     )
                 )
         summaries.append(_summarize_baseline(f"lexical-top-{top_k}", rows))
@@ -720,6 +733,7 @@ def run_task_baselines(
                         estimated_cost_usd=result.usage.estimated_cost_usd,
                         prompt_tokens=result.usage.prompt_tokens,
                         completion_tokens=result.usage.completion_tokens,
+                        tags=list(case.tags),
                         error=(
                             "; ".join(result.finalization_blockers)
                             if result.finalization_blockers
@@ -735,6 +749,7 @@ def run_task_baselines(
                         blocked=True,
                         latency_seconds=time.perf_counter() - started,
                         error=str(exc),
+                        tags=list(case.tags),
                     )
                 )
         summaries.append(
@@ -766,6 +781,7 @@ def run_task_baselines(
                         estimated_cost_usd=usage.estimated_cost_usd,
                         prompt_tokens=usage.prompt_tokens,
                         completion_tokens=usage.completion_tokens,
+                        tags=list(case.tags),
                     )
                 )
             except Exception as exc:
@@ -778,6 +794,7 @@ def run_task_baselines(
                         selected_blocks=len(blocks),
                         coverage=1.0,
                         error=str(exc),
+                        tags=list(case.tags),
                     )
                 )
         summaries.append(_summarize_baseline("direct-full-context", rows))
