@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-28",
+  "evidence_class": "contextmesh-public-proof-gate1-2",
+  "claim_scope": "Real public corpus qualification and frozen multimodal ground-truth matrix only. Gates 3-5 are not proven by this artifact.",
+  "repository": "hippoley/ContextMesh",
+  "head_sha": "ae0be9f6129a034009740f28bb623b7abe63810a",
+  "workflow_run": {
+    "id": 36372832730,
+    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36372832730",
+    "conclusion": "success",
+    "artifact_id": 10949746651,
+    "artifact_name": "big-context-public-nist-preflight",
+    "artifact_zip_sha256": "392764f6d8814dbdde4e8f402f0be0edcbd80737b453f46acd5e08266ccd6901"
+  },
+  "gate1": {
+    "status": "pass",
+    "corpus_id": "nist-public-big-context-v1",
+    "assets": 12,
+    "total_bytes": 17010982,
+    "total_chars": 3882513,
+    "estimated_tokens": 3882513,
+    "model_context_tokens": 128000,
+    "corpus_to_context_ratio": 30.3321,
+    "required_blocks": 1841,
+    "modalities": {
+      "image": 899,
+      "table": 6,
+      "text": 936
+    },
+    "format_families": {
+      "pdf": 7,
+      "table": 4,
+      "text": 1
+    },
+    "source_hash_coverage": 1,
+    "ingest_coverage": 1,
+    "semantic_coverage": 1,
+    "coverage_ready": true,
+    "blockers": []
+  },
+  "gate2": {
+    "status": "pass",
+    "total_cases": 132,
+    "kind_counts": {
+      "contradiction": 10,
+      "cross-file": 10,
+      "date": 10,
+      "exact": 15,
+      "exception": 15,
+      "image-text": 12,
+      "negative": 10,
+      "number": 10,
+      "semantic-paraphrase": 15,
+      "supersession": 10,
+      "table-cell": 15
+    },
+    "corpus_position_counts": {
+      "early": 55,
+      "middle": 59,
+      "late": 18
+    },
+    "local_position_counts": {
+      "head": 65,
+      "middle": 27,
+      "tail": 40
+    },
+    "modality_counts": {
+      "image": 12,
+      "table": 15,
+      "text": 105
+    },
+    "blockers": []
+  },
+  "task_set": {
+    "cases": 33
+  },
+  "gate3": {
+    "status": "not-run",
+    "reason": "requires an authorized live multimodal model route"
+  },
+  "gate4": {
+    "status": "not-run",
+    "reason": "requires Gate 3 live evidence fidelity before scale execution"
+  },
+  "gate5": {
+    "status": "not-run",
+    "reason": "requires a repeated live run against a stored reference snapshot"
+  },
+  "sources": [
+    {
+      "name": "NIST.AI.100-1.pdf",
+      "size_bytes": 1946127,
+      "sha256": "7576edb531d9848825814ee88e28b1795d3a84b435b4b797d3670eafdc4a89f1"
+    },
+    {
+      "name": "NIST.AI.600-1.pdf",
+      "size_bytes": 1174643,
+      "sha256": "6e73620ab6b64e90ef2c04bf0e0d6246185a2f4b1b13cab0df494496cff89b6a"
+    },
+    {
+      "name": "NIST.CSWP.29.pdf",
+      "size_bytes": 1518858,
+      "sha256": "3c31f46fee98cac0c4323453e5109291a213b4de7fef8c058af9bf67f717433c"
+    },
+    {
+      "name": "NIST.SP.800-53r5.pdf",
+      "size_bytes": 6073678,
+      "sha256": "fc63bcd61715d0181dd8e85998b1e6201ae3515fc6626102101cab1841e11ec6"
+    },
+    {
+      "name": "NIST.SP.800-61r2.pdf",
+      "size_bytes": 1744473,
+      "sha256": "b1c5ead0632dcfb979c59d8c462b094ad2465ddaf62d5c246289d6d9b4419df1"
+    },
+    {
+      "name": "NIST.SP.800-218.pdf",
+      "size_bytes": 739891,
+      "sha256": "617746e553a9e2da49bfbd4eef0dfc3094758a39b869314e4173ac36605cde22"
+    },
+    {
+      "name": "AI_RMF_Playbook.pdf",
+      "size_bytes": 2882270,
+      "sha256": "65d6101d806502875aadb0fd19a75c3a9cc9a5e9461129e9398a39192d8202d2"
+    },
+    {
+      "name": "playbook.json",
+      "size_bytes": 413720,
+      "sha256": "aecbee3d3c8820816d295b11d10fb61324b17c25c2ff39ee95e2aa5654555bba"
+    },
+    {
+      "name": "playbook.csv",
+      "size_bytes": 356966,
+      "sha256": "3cee552201b18192e042fb94b72fe8da9395c91d36877ac7d9afb9cccb352b3a"
+    },
+    {
+      "name": "playbook.xlsx",
+      "size_bytes": 93934,
+      "sha256": "2a7446ac248f4f211078514eb8fcbb1a168e907968db464f23607f063546de5b"
+    },
+    {
+      "name": "NIST_CSF_1.1_Core.xlsx",
+      "size_bytes": 36146,
+      "sha256": "45ab282f6033d538cb84fdabe9068e497e52dee1a0e1e0208ddafea210244303"
+    },
+    {
+      "name": "NIST_CSF_2.0_Organizational_Profile_Template.xlsx",
+      "size_bytes": 30276,
+      "sha256": "ee38049cbad684967ffcc830f2986cdcb1b054fb29a77e1d47491607682ce38d"
+    }
+  ]
+}
