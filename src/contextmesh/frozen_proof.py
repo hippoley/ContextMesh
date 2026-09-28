@@ -1,10 +1,27 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 from typing import Any
 
 
 class FrozenProofMismatch(RuntimeError):
     pass
+
+
+def _canonical_sha256(value: Any) -> str:
+    raw = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _ordered_sha256(values: list[str]) -> str:
+    return hashlib.sha256("\n".join(values).encode("utf-8")).hexdigest()
 
 
 def verify_frozen_public_proof(
@@ -13,6 +30,9 @@ def verify_frozen_public_proof(
     gate4_plan: dict[str, Any],
     gate12_proof: dict[str, Any],
     gate4_preflight: dict[str, Any],
+    corpus_manifest: dict[str, Any] | None = None,
+    needle_matrix: dict[str, Any] | None = None,
+    task_cases: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
 
@@ -36,6 +56,65 @@ def verify_frozen_public_proof(
             "source-sha-set-mismatch:"
             f"missing={missing},extra={extra},changed={changed}"
         )
+
+    frozen_fingerprints = gate12_proof.get("frozen_fingerprints") or {}
+    fingerprint_checks: dict[str, dict[str, Any]] = {}
+
+    expected_coverage = frozen_fingerprints.get("coverage_fingerprint")
+    if expected_coverage:
+        if corpus_manifest is None:
+            errors.append("coverage-fingerprint-input-missing")
+        else:
+            actual_coverage = _ordered_sha256(
+                [str(x) for x in corpus_manifest.get("required_block_ids", [])]
+            )
+            matches = actual_coverage == str(expected_coverage)
+            fingerprint_checks["coverage"] = {
+                "expected": str(expected_coverage),
+                "actual": actual_coverage,
+                "matches": matches,
+            }
+            if not matches:
+                errors.append(
+                    "coverage-fingerprint-mismatch:"
+                    f"expected={expected_coverage},actual={actual_coverage}"
+                )
+
+    expected_needles = frozen_fingerprints.get("needle_matrix_fingerprint")
+    if expected_needles:
+        if needle_matrix is None:
+            errors.append("needle-matrix-fingerprint-input-missing")
+        else:
+            actual_needles = _canonical_sha256(needle_matrix.get("cases", []))
+            matches = actual_needles == str(expected_needles)
+            fingerprint_checks["needle_matrix"] = {
+                "expected": str(expected_needles),
+                "actual": actual_needles,
+                "matches": matches,
+            }
+            if not matches:
+                errors.append(
+                    "needle-matrix-fingerprint-mismatch:"
+                    f"expected={expected_needles},actual={actual_needles}"
+                )
+
+    expected_tasks = frozen_fingerprints.get("task_set_fingerprint")
+    if expected_tasks:
+        if task_cases is None:
+            errors.append("task-set-fingerprint-input-missing")
+        else:
+            actual_tasks = _canonical_sha256(task_cases.get("cases", []))
+            matches = actual_tasks == str(expected_tasks)
+            fingerprint_checks["task_set"] = {
+                "expected": str(expected_tasks),
+                "actual": actual_tasks,
+                "matches": matches,
+            }
+            if not matches:
+                errors.append(
+                    "task-set-fingerprint-mismatch:"
+                    f"expected={expected_tasks},actual={actual_tasks}"
+                )
 
     expected_context = int(gate4_preflight["corpus"]["model_context_tokens"])
     actual_context = int(gate4_plan.get("model_context_tokens") or 0)
@@ -122,6 +201,7 @@ def verify_frozen_public_proof(
         "selected_case_ids": actual_cases,
         "anchor_fingerprint": actual_anchor,
         "point_checks": point_checks,
+        "fingerprint_checks": fingerprint_checks,
         "errors": errors,
         "provider_calls_made": 0,
     }
