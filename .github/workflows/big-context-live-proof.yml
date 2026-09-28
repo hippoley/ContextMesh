@@ -84,23 +84,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[dev,rich]'
 
-      - name: Rebuild public NIST corpus and frozen Gate 1-2 artifacts
+      - name: Rebuild bounded-table NIST v2 corpus and Gate 1-2 artifacts
         run: |
           python benchmarks/build_public_nist_proof.py \
             --workdir /tmp/contextmesh-nist-proof \
             --output-dir /tmp/contextmesh-nist-proof/results \
             --model-context-tokens "${{ inputs.context_tokens }}" \
-            --min-corpus-ratio 5
+            --min-corpus-ratio 5 \
+            --corpus-id nist-public-big-context-v2 \
+            --max-table-block-chars 12000
 
       - name: Freeze Gate 4 scale plan before any provider call
         run: |
-          python benchmarks/plan_gate4_scale.py nist-public-big-context-v1 \
+          python benchmarks/plan_gate4_scale.py nist-public-big-context-v2 \
             --store /tmp/contextmesh-nist-proof/store \
             --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --ratios "1,2,5,10,20" \
             --needle-sample-size 12 \
             --required-max-ratio 20 \
+            --require-cross-file \
+            --require-all-local-positions \
             --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
 
       - name: Verify rebuilt corpus and Gate 4 plan against committed frozen evidence
@@ -108,8 +112,8 @@ jobs:
           python benchmarks/verify_frozen_public_proof.py \
             --download-manifest /tmp/contextmesh-nist-proof/results/download-manifest.json \
             --gate4-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
-            --gate1-2-proof benchmarks/results/nist-public-gate1-2-2026-09-28.json \
-            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-2026-09-28.json \
+            --gate1-2-proof benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json \
+            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json \
             --output /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
 
       - name: Enforce live proof cost budget before any model call
@@ -228,7 +232,7 @@ jobs:
           if [ -f /tmp/contextmesh-reference/live-proof.snapshot.json ]; then
             extra+=(--drift-reference /tmp/contextmesh-reference/live-proof.snapshot.json)
           fi
-          python benchmarks/big_context_proof.py nist-public-big-context-v1 \
+          python benchmarks/big_context_proof.py nist-public-big-context-v2 \
             --store /tmp/contextmesh-nist-proof/store \
             --route-id big-context-live \
             --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
@@ -249,7 +253,7 @@ jobs:
           if [ -f /tmp/contextmesh-reference/live-proof.snapshot.json ]; then
             extra+=(--drift-reference /tmp/contextmesh-reference/live-proof.snapshot.json --require-all-gates)
           fi
-          python benchmarks/big_context_proof.py nist-public-big-context-v1 \
+          python benchmarks/big_context_proof.py nist-public-big-context-v2 \
             --store /tmp/contextmesh-nist-proof/store \
             --route-id big-context-live \
             --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
