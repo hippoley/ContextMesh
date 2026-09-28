@@ -690,3 +690,95 @@ def test_snapshot_preserves_authority_submetric_for_drift():
     assert snapshot.authority_accuracy == 0.75
     assert snapshot.evidence_recall == 0.95
     assert snapshot.task_accuracy == 0.9
+
+
+
+def test_batched_live_needles_scan_each_block_once_and_hide_ground_truth(tmp_path: Path):
+    from contextmesh.big_context_proof import run_batched_full_coverage_needles
+
+    paths = []
+    for i in range(3):
+        p = tmp_path / f"batch-{i}.txt"
+        marker = " ALPHA_SOURCE_FACT" if i == 1 else ""
+        p.write_text(("ordinary filler " * 80) + marker, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(paths, store, "batch-proof", window_chars=5000, overlap_chars=0)
+
+    calls = []
+
+    class BatchJudge:
+        route_id = "batch-proof"
+
+        def can_inspect(self, block):
+            return True
+
+        def inspect_question_batch(self, block, questions):
+            # Only public query fields may cross the model boundary.
+            assert all(set(item) == {"id", "question"} for item in questions)
+            rendered = str(questions)
+            assert "SECRET_EXPECTED_ANSWER" not in rendered
+            assert "batch-1.txt" not in rendered
+            calls.append(block.id)
+            matches = {}
+            for item in questions:
+                if item["id"] == "alpha" and "ALPHA_SOURCE_FACT" in block.text:
+                    matches[item["id"]] = "The source contains the alpha fact."
+            return matches
+
+        def inspect(self, question, answer, block, notes):
+            raise AssertionError("slow per-case path must not be used")
+
+        def reduce_notes(self, question, answer, notes, level):
+            return "unused"
+
+        def finalize(self, state):
+            return 100.0, "unused"
+
+        def score_full(self, question, answer, blocks):
+            return 100.0, "unused"
+
+        def usage_snapshot(self):
+            from contextmesh.models import UsageMetrics
+            return UsageMetrics(route_id=self.route_id)
+
+    cases = [
+        NeedleCase(
+            id="alpha",
+            kind=NeedleKind.EXACT,
+            question="Which source contains the alpha fact?",
+            target_assets=["batch-1.txt"],
+            expected_present=True,
+            expected_answer="SECRET_EXPECTED_ANSWER",
+            match_terms=["ALPHA_SOURCE_FACT"],
+            corpus_position=CorpusPosition.MIDDLE,
+            local_position=LocalPosition.MIDDLE,
+        ),
+        NeedleCase(
+            id="absent",
+            kind=NeedleKind.NEGATIVE,
+            question="Does any source contain NEVER_BATCH_404?",
+            target_assets=[],
+            expected_present=False,
+            expected_answer="No",
+            match_terms=["NEVER_BATCH_404"],
+            corpus_position=CorpusPosition.LATE,
+            local_position=LocalPosition.TAIL,
+        ),
+    ]
+
+    report = run_batched_full_coverage_needles(
+        store,
+        manifest.corpus_id,
+        BatchJudge,
+        cases,
+        max_workers=2,
+    )
+
+    assert len(calls) == manifest.required_blocks
+    assert set(calls) == set(manifest.coverage_ids())
+    assert report.evidence_recall == 1.0
+    assert report.negative_accuracy == 1.0
+    assert report.unsupported_cases == 0
+    assert all(row.coverage == 1.0 for row in report.results)
