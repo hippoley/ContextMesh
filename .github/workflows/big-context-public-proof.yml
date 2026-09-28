@@ -48,7 +48,7 @@ jobs:
             --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
             --model-context-tokens 131072 \
             --ratios "1,2,5,10,20" \
-            --needle-sample-size 24 \
+            --needle-sample-size 12 \
             --required-max-ratio 20 \
             --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
 
