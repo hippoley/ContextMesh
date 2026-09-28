@@ -31,6 +31,11 @@ on:
         required: true
         default: false
         type: boolean
+      reference_run_id:
+        description: 'Optional prior live-proof workflow run ID for Gate 5 drift'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -114,9 +119,22 @@ jobs:
           print(route.model_dump_json(indent=2))
           PY
 
+      - name: Download Gate 5 reference snapshot
+        if: ${{ inputs.reference_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.reference_run_id }}
+          name: big-context-live-proof-${{ inputs.reference_run_id }}
+          path: /tmp/contextmesh-reference
+
       - name: Run Gate 3 live proof
         if: ${{ !inputs.run_scale }}
         run: |
+          extra=()
+          if [ -f /tmp/contextmesh-reference/live-proof.snapshot.json ]; then
+            extra+=(--drift-reference /tmp/contextmesh-reference/live-proof.snapshot.json)
+          fi
           python benchmarks/big_context_proof.py nist-public-big-context-v1 \
             --store /tmp/contextmesh-live-proof/store \
             --route-id big-context-live \
@@ -128,11 +146,16 @@ jobs:
             --run-id "github-${{ github.run_id }}" \
             --model-version "${{ inputs.model }}" \
             --output /tmp/contextmesh-live-proof/results/live-proof.json \
-            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json
+            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json \
+            "${extra[@]}"
 
       - name: Run Gate 3 + Gate 4 scale proof
         if: ${{ inputs.run_scale }}
         run: |
+          extra=()
+          if [ -f /tmp/contextmesh-reference/live-proof.snapshot.json ]; then
+            extra+=(--drift-reference /tmp/contextmesh-reference/live-proof.snapshot.json --require-all-gates)
+          fi
           python benchmarks/big_context_proof.py nist-public-big-context-v1 \
             --store /tmp/contextmesh-live-proof/store \
             --route-id big-context-live \
@@ -145,7 +168,8 @@ jobs:
             --run-id "github-${{ github.run_id }}" \
             --model-version "${{ inputs.model }}" \
             --output /tmp/contextmesh-live-proof/results/live-proof.json \
-            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json
+            --snapshot-output /tmp/contextmesh-live-proof/results/live-proof.snapshot.json \
+            "${extra[@]}"
 
       - name: Show live proof result
         if: always()
