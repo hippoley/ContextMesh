@@ -272,6 +272,20 @@ jobs:
             --snapshot-output /tmp/contextmesh-nist-proof/results/live-proof.snapshot.json \
             "${extra[@]}"
 
+      - name: Render Gate 5 drift diff artifacts
+        if: always()
+        run: |
+          if [ -f /tmp/contextmesh-reference/live-proof.json ] && [ -f /tmp/contextmesh-nist-proof/results/live-proof.json ]; then
+            python benchmarks/render_gate5_drift_diff.py \
+              --reference-proof /tmp/contextmesh-reference/live-proof.json \
+              --candidate-proof /tmp/contextmesh-nist-proof/results/live-proof.json \
+              --json /tmp/contextmesh-nist-proof/results/gate5-drift-diff.json \
+              --markdown /tmp/contextmesh-nist-proof/results/gate5-drift-diff.md
+          elif [ -n "${{ inputs.reference_run_id }}" ]; then
+            printf '# Gate 5 Drift Diff\n\nStatus: **NOT COMPARABLE**\n\nReference or candidate proof artifact unavailable.\n' \
+              > /tmp/contextmesh-nist-proof/results/gate5-drift-diff.md
+          fi
+
       - name: Render Gate 4 curve artifacts
         if: always()
         run: |
