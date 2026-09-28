@@ -75,6 +75,7 @@ jobs:
             --output-cny-per-million 2 \
             --max-estimated-cost-cny 300 \
             --run-scale \
+            --scale-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
             --output /tmp/contextmesh-nist-proof/results/live-cost-estimate-gate3-plus-gate4.json
 
       - name: Show proof summaries
