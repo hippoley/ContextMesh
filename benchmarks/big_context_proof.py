@@ -17,6 +17,7 @@ from contextmesh.big_context_proof import (
     evaluate_gate1_corpus,
     evaluate_gate3,
     evaluate_gate5_drift,
+    load_gate4_scale_plan,
     load_needle_matrix,
     load_task_cases,
     run_batched_full_coverage_needles,
@@ -53,6 +54,7 @@ def main() -> int:
     ap.add_argument("--drift-reference", type=Path)
     ap.add_argument("--model-context-tokens", type=int)
     ap.add_argument("--ratios", default="1,2,5,10,20")
+    ap.add_argument("--scale-plan", type=Path)
     ap.add_argument("--min-assets", type=int, default=10)
     ap.add_argument("--max-assets", type=int, default=30)
     ap.add_argument("--min-format-families", type=int, default=3)
@@ -155,6 +157,11 @@ def main() -> int:
                 for value in args.ratios.split(",")
                 if value.strip()
             ]
+            frozen_plan = (
+                load_gate4_scale_plan(args.scale_plan)
+                if args.scale_plan
+                else None
+            )
             gate4 = run_scale_curve(
                 store,
                 args.corpus_id,
@@ -169,6 +176,7 @@ def main() -> int:
                     required_max_ratio=max(ratios) if ratios else 20.0,
                 ),
                 max_workers=args.workers,
+                frozen_plan=frozen_plan,
             )
 
         if args.drift_reference and snapshot is not None:
