@@ -1343,3 +1343,125 @@ def test_gate4_v2_panel_can_require_cross_file_and_all_local_positions(tmp_path:
     assert set(report.selected_corpus_position_counts) == {"early", "middle", "late"}
     assert all(point.anchor_preserved for point in report.points)
     assert all(point.nested_with_previous for point in report.points)
+
+
+
+def test_gate4_live_curve_positive_and_negative_controls_share_one_frozen_plan(tmp_path: Path):
+    from contextmesh.big_context_proof import (
+        Gate4Spec,
+        plan_gate4_scale,
+        run_scale_curve,
+    )
+    from contextmesh.models import UsageMetrics
+
+    paths = []
+    for i in range(15):
+        p = tmp_path / f"curve-{i:02d}.txt"
+        marker = " CURVE_DECISIVE_4242" if i == 7 else ""
+        p.write_text(("scale distractor evidence " * 220) + marker, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        paths,
+        store,
+        "gate4-live-controls",
+        window_chars=1000,
+        overlap_chars=0,
+    )
+    target = next(
+        store.get_block(manifest.corpus_id, block_id)
+        for block_id in manifest.coverage_ids()
+        if "CURVE_DECISIVE_4242" in store.get_block(manifest.corpus_id, block_id).text
+    )
+    needle = NeedleCase(
+        id="curve-control",
+        kind=NeedleKind.EXACT,
+        question="Find the decisive curve evidence.",
+        target_assets=[Path(target.source.path).name],
+        target_block_ids=[target.id],
+        expected_present=True,
+        match_terms=["CURVE_DECISIVE_4242"],
+        corpus_position=CorpusPosition.MIDDLE,
+        local_position=LocalPosition.MIDDLE,
+    )
+    spec = Gate4Spec(
+        ratios=[1, 2, 5, 10, 20],
+        model_context_tokens=3000,
+        needle_sample_size=1,
+        task_sample_size=0,
+        min_evidence_recall=0.90,
+        max_recall_drop=0.05,
+        required_max_ratio=20,
+        anchor_budget_ratio=0.5,
+        min_scale_kinds=1,
+        min_scale_modalities=1,
+        require_negative_scale_case=False,
+        require_all_corpus_positions=False,
+        require_all_local_positions=False,
+        require_cross_file_scale_case=False,
+    )
+    plan = plan_gate4_scale(store, manifest.corpus_id, [needle], spec)
+    assert plan.ready_for_live_gate4 is True
+
+    class StableJudge:
+        route_id = "stable"
+
+        def can_inspect(self, block):
+            return True
+
+        def inspect_question_batch(self, block, questions):
+            if "CURVE_DECISIVE_4242" in block.text:
+                return {"curve-control": "CURVE_DECISIVE_4242 is present."}
+            return {}
+
+        def inspect(self, question, answer, block, notes):
+            raise AssertionError("batched path expected")
+
+        def score_full(self, question, answer, blocks):
+            raise AssertionError("no task baseline expected")
+
+        def usage_snapshot(self):
+            return UsageMetrics(route_id=self.route_id)
+
+    stable = run_scale_curve(
+        store,
+        manifest.corpus_id,
+        StableJudge,
+        [needle],
+        [],
+        spec,
+        frozen_plan=plan,
+    )
+    assert stable.status == "pass"
+    assert stable.max_completed_ratio >= 20
+    assert stable.recall_drop == 0.0
+    assert all(point.evidence_recall == 1.0 for point in stable.points)
+
+    class DegradingJudge(StableJudge):
+        route_id = "degrading"
+
+        def inspect_question_batch(self, block, questions):
+            # Projected corpus IDs encode the requested scale point. Simulate a
+            # model that loses the decisive evidence only as distractors grow.
+            if "scale_10" in block.corpus_id or "scale_20" in block.corpus_id:
+                return {}
+            return super().inspect_question_batch(block, questions)
+
+    degraded = run_scale_curve(
+        store,
+        manifest.corpus_id,
+        DegradingJudge,
+        [needle],
+        [],
+        spec,
+        frozen_plan=plan,
+    )
+    assert degraded.status == "fail"
+    assert degraded.points[0].evidence_recall == 1.0
+    assert degraded.points[-1].evidence_recall == 0.0
+    assert degraded.recall_drop == 1.0
+    blockers = " ".join(degraded.blockers)
+    assert "scale-point-failed:10x" in blockers
+    assert "scale-point-failed:20x" in blockers
+    assert "recall-drop:" in blockers
