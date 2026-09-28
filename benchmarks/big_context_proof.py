@@ -168,6 +168,7 @@ def main() -> int:
                     task_sample_size=args.task_sample_size,
                     required_max_ratio=max(ratios) if ratios else 20.0,
                 ),
+                max_workers=args.workers,
             )
 
         if args.drift_reference and snapshot is not None:
