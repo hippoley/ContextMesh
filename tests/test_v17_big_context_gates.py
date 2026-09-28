@@ -1197,3 +1197,145 @@ def test_gate4_live_rejects_tampered_frozen_projection_before_model_calls(tmp_pa
         )
 
     assert calls == []
+
+
+
+def test_gate4_v2_panel_can_require_cross_file_and_all_local_positions(tmp_path: Path):
+    from contextmesh.big_context_proof import Gate4Spec, plan_gate4_scale
+
+    paths = []
+    for i in range(6):
+        p = tmp_path / f"v2-{i}.txt"
+        p.write_text(
+            (f"file {i} ordinary evidence " * 120)
+            + f"\nANCHOR_{i}_HEAD\n"
+            + ("middle evidence " * 140)
+            + f"\nANCHOR_{i}_MIDDLE\n"
+            + ("tail evidence " * 140)
+            + f"\nANCHOR_{i}_TAIL\n",
+            encoding="utf-8",
+        )
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(
+        paths,
+        store,
+        "gate4-v2-panel",
+        window_chars=2200,
+        overlap_chars=0,
+    )
+
+    def block_with(marker: str):
+        return next(
+            store.get_block(manifest.corpus_id, block_id)
+            for block_id in manifest.coverage_ids()
+            if marker in store.get_block(manifest.corpus_id, block_id).text
+        )
+
+    head = block_with("ANCHOR_0_HEAD")
+    middle = block_with("ANCHOR_2_MIDDLE")
+    tail = block_with("ANCHOR_5_TAIL")
+    cross_a = block_with("ANCHOR_1_MIDDLE")
+    cross_b = block_with("ANCHOR_4_MIDDLE")
+
+    cases = [
+        NeedleCase(
+            id="negative-v2",
+            kind=NeedleKind.NEGATIVE,
+            question="Does NEVER_V2_404 exist?",
+            target_assets=[],
+            target_block_ids=[],
+            expected_present=False,
+            match_terms=["NEVER_V2_404"],
+            corpus_position=CorpusPosition.EARLY,
+            local_position=LocalPosition.HEAD,
+        ),
+        NeedleCase(
+            id="head-v2",
+            kind=NeedleKind.EXACT,
+            question="Find head evidence",
+            target_assets=[Path(head.source.path).name],
+            target_block_ids=[head.id],
+            expected_present=True,
+            match_terms=["ANCHOR_0_HEAD"],
+            corpus_position=CorpusPosition.EARLY,
+            local_position=LocalPosition.HEAD,
+        ),
+        NeedleCase(
+            id="middle-v2",
+            kind=NeedleKind.EXCEPTION,
+            question="Find middle evidence",
+            target_assets=[Path(middle.source.path).name],
+            target_block_ids=[middle.id],
+            expected_present=True,
+            match_terms=["ANCHOR_2_MIDDLE"],
+            corpus_position=CorpusPosition.MIDDLE,
+            local_position=LocalPosition.MIDDLE,
+        ),
+        NeedleCase(
+            id="tail-v2",
+            kind=NeedleKind.DATE,
+            question="Find tail evidence",
+            target_assets=[Path(tail.source.path).name],
+            target_block_ids=[tail.id],
+            expected_present=True,
+            match_terms=["ANCHOR_5_TAIL"],
+            corpus_position=CorpusPosition.LATE,
+            local_position=LocalPosition.TAIL,
+        ),
+        NeedleCase(
+            id="cross-v2",
+            kind=NeedleKind.CROSS_FILE,
+            question="Combine evidence across files",
+            target_assets=[
+                Path(cross_a.source.path).name,
+                Path(cross_b.source.path).name,
+            ],
+            target_block_ids=[cross_a.id, cross_b.id],
+            expected_present=True,
+            match_terms=["ANCHOR_1_MIDDLE", "ANCHOR_4_MIDDLE"],
+            required_asset_hits=2,
+            corpus_position=CorpusPosition.MIDDLE,
+            local_position=LocalPosition.MIDDLE,
+        ),
+        NeedleCase(
+            id="semantic-v2",
+            kind=NeedleKind.SEMANTIC_PARAPHRASE,
+            question="Find semantic evidence",
+            target_assets=[Path(middle.source.path).name],
+            target_block_ids=[middle.id],
+            expected_present=True,
+            match_terms=["ANCHOR_2_MIDDLE"],
+            corpus_position=CorpusPosition.MIDDLE,
+            local_position=LocalPosition.MIDDLE,
+        ),
+    ]
+
+    report = plan_gate4_scale(
+        store,
+        manifest.corpus_id,
+        cases,
+        Gate4Spec(
+            ratios=[1, 2],
+            model_context_tokens=14000,
+            needle_sample_size=6,
+            task_sample_size=0,
+            required_max_ratio=2,
+            anchor_budget_ratio=0.8,
+            min_scale_kinds=5,
+            min_scale_modalities=1,
+            require_negative_scale_case=True,
+            max_scale_cases_per_kind=2,
+            require_all_corpus_positions=True,
+            require_all_local_positions=True,
+            require_cross_file_scale_case=True,
+        ),
+    )
+
+    assert report.ready_for_live_gate4 is True
+    assert "cross-v2" in report.selected_case_ids
+    assert set(report.selected_local_position_counts) == {"head", "middle", "tail"}
+    assert set(report.selected_corpus_position_counts) == {"early", "middle", "late"}
+    assert all(point.anchor_preserved for point in report.points)
+    assert all(point.nested_with_previous for point in report.points)
