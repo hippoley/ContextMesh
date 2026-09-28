@@ -2,10 +2,10 @@
 
 **Date:** 2026-09-28  
 **Evidence class:** real public corpus / reproducible proof preflight  
-**Workflow run:** https://github.com/hippoley/ContextMesh/actions/runs/36372832730  
-**Head:** `ae0be9f6129a034009740f28bb623b7abe63810a`  
-**Artifact:** `big-context-public-nist-preflight` · ID `10949746651`  
-**Artifact ZIP SHA-256:** `392764f6d8814dbdde4e8f402f0be0edcbd80737b453f46acd5e08266ccd6901`
+**Workflow run:** https://github.com/hippoley/ContextMesh/actions/runs/36373761033  
+**Head:** `d158cb0dea241e6fc0aed97f984eb77e1ca36758`  
+**Artifact:** `big-context-public-nist-preflight` · ID `10949814209`  
+**Artifact ZIP SHA-256:** `40b2c1cce7fea75f5de3fea3146f4486574d67b60d9733a97b2c29ec7c4dde72`
 
 This is the first ContextMesh Big Context Proof result that uses a real, publicly reproducible multi-file corpus rather than the synthetic Gate 0 execution contract.
 
@@ -21,8 +21,8 @@ The workflow downloaded 12 public NIST/AIRC source files at run time. No benchma
 12 assets
 17,010,982 source bytes
 3,882,513 conservative estimated tokens
-128,000-token reference model window
-30.3321× corpus / model-context ratio
+131,072-token live-route context window
+29.6212× corpus / model-context ratio
 ```
 
 Format families:
@@ -54,11 +54,11 @@ source hash coverage   100%
 ingest coverage        100%
 semantic coverage      100%
 required blocks        1,841
-corpus/context ratio   30.3321×
+corpus/context ratio   29.6212×
 blockers               none
 ```
 
-A 30× corpus/context ratio here means **external corpus size**, not native single-forward-pass attention.
+A ~29.6× corpus/context ratio here means **external corpus size**, not native single-forward-pass attention.
 
 ## Frozen benchmark matrix
 
@@ -128,9 +128,29 @@ task-cases.json
 
 The generated task set contains 33 candidate-answer tasks for Gate 3.
 
+
+## Live cost preflight
+
+The same successful public workflow also ran a **no-model-call cost preflight** for the first proposed live route:
+
+```text
+route                       qwen3-vl-8b-instruct
+declared context            131,072 tokens
+estimated input             89,344,074 tokens
+estimated output             1,375,143 tokens
+public Beijing input price   ¥0.5 / 1M tokens
+public Beijing output price  ¥2 / 1M tokens
+35% safety-factor estimate   ¥47.42
+configured budget ceiling    ¥80.00
+cost gate                    PASS
+```
+
+This is deliberately **not Gate 3**. It only establishes that the proposed first live fidelity run is bounded before any model call is made. Current model limits and list pricing are taken from Alibaba Cloud's official Model Studio page for `qwen3-vl-8b-instruct`.
+
+
 ## What this result proves
 
-It establishes that ContextMesh can reproducibly ingest and address a real 12-file, 30.3321×-over-context corpus with source integrity and a sufficiently broad, exact-unit-grounded benchmark matrix.
+It establishes that ContextMesh can reproducibly ingest and address a real 12-file, 29.6212×-over-context corpus with source integrity and a sufficiently broad, exact-unit-grounded benchmark matrix.
 
 It does **not** establish the product claim:
 
