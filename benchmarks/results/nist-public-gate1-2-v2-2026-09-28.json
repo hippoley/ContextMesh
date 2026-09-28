@@ -185,5 +185,15 @@
   },
   "gate5": {
     "status": "not-run"
+  },
+  "frozen_fingerprints": {
+    "coverage_fingerprint": "8bf0937e25cf0359c1108a44766723e9ec509a4a18bff2a956382fefa2cc1963",
+    "needle_matrix_fingerprint": "828a2f6efbfacb5d8af6c722c510a5282047ec4fa1f1836d2799e3366c69bdc5",
+    "task_set_fingerprint": "2e49ed8c7b26a565e8da1c04edd03c1f5efab564cb4383a964718a767a50169f",
+    "fingerprint_contract": {
+      "coverage": "sha256(newline-joined required_block_ids in manifest order)",
+      "needle_matrix": "sha256(canonical JSON of cases; sorted keys, compact separators, UTF-8)",
+      "task_set": "sha256(canonical JSON of cases; sorted keys, compact separators, UTF-8)"
+    }
   }
 }
