@@ -48,6 +48,169 @@ def _windows(text: str, size: int = 12000, overlap: int = 800) -> Iterable[tuple
         start = max(start + 1, end - overlap)
 
 
+def _bounded_table_segments(
+    text: str,
+    max_chars: int,
+) -> list[tuple[int, int, int, int, str]]:
+    """Split table text without losing bytes, preferring row/newline boundaries.
+
+    Returns (char_start, char_end, line_start, line_end, segment). A single
+    pathological row longer than max_chars is hard-split so no resulting table
+    coverage unit can exceed the configured bound.
+    """
+    if max_chars <= 0 or len(text) <= max_chars:
+        line_count = max(1, text.count("\n") + 1)
+        return [(0, len(text), 1, line_count, text)]
+
+    segments: list[tuple[int, int, int, int, str]] = []
+    lines = text.splitlines(keepends=True)
+    offset = 0
+    line_no = 1
+    buf: list[str] = []
+    buf_chars = 0
+    buf_start = 0
+    buf_line_start = 1
+    buf_line_end = 0
+
+    def flush() -> None:
+        nonlocal buf, buf_chars, buf_start, buf_line_start, buf_line_end
+        if not buf:
+            return
+        chunk = "".join(buf)
+        segments.append(
+            (
+                buf_start,
+                buf_start + len(chunk),
+                buf_line_start,
+                max(buf_line_start, buf_line_end),
+                chunk,
+            )
+        )
+        buf = []
+        buf_chars = 0
+
+    for line in lines:
+        line_len = len(line)
+        if line_len > max_chars:
+            flush()
+            local = 0
+            while local < line_len:
+                piece = line[local : local + max_chars]
+                segments.append(
+                    (
+                        offset + local,
+                        offset + local + len(piece),
+                        line_no,
+                        line_no,
+                        piece,
+                    )
+                )
+                local += len(piece)
+            offset += line_len
+            line_no += line.count("\n")
+            continue
+
+        if buf and buf_chars + line_len > max_chars:
+            flush()
+            buf_start = offset
+            buf_line_start = line_no
+
+        if not buf:
+            buf_start = offset
+            buf_line_start = line_no
+        buf.append(line)
+        buf_chars += line_len
+        buf_line_end = line_no + max(0, line.count("\n") - 1)
+        offset += line_len
+        line_no += line.count("\n")
+
+    flush()
+
+    # splitlines(keepends=True) returns [] for empty text; preserve the contract.
+    if not segments and text:
+        return [(0, len(text), 1, 1, text)]
+    return segments
+
+
+def _bound_table_leafs(
+    leafs: list[ContextBlock],
+    max_chars: int | None,
+) -> tuple[list[ContextBlock], dict[str, list[str]], int]:
+    if not max_chars or max_chars <= 0:
+        return leafs, {}, 0
+
+    out: list[ContextBlock] = []
+    replacements: dict[str, list[str]] = {}
+    split_blocks = 0
+
+    for block in leafs:
+        if (
+            block.modality != Modality.TABLE
+            or not block.processable
+            or block.semantic_status == SemanticStatus.UNRESOLVED
+            or len(block.text or "") <= max_chars
+        ):
+            out.append(block)
+            continue
+
+        segments = _bounded_table_segments(block.text or "", max_chars)
+        ids: list[str] = []
+        split_blocks += 1
+        for index, (start, end, line_start, line_end, chunk) in enumerate(segments):
+            locator = dict(block.source.locator)
+            locator.update(
+                {
+                    "table_segment": index,
+                    "table_char_start": start,
+                    "table_char_end": end,
+                    "table_line_start": line_start,
+                    "table_line_end": line_end,
+                }
+            )
+            segment_id = _stable_id(
+                block.id,
+                "bounded-table",
+                str(index),
+                str(start),
+                str(end),
+            )
+            ids.append(segment_id)
+            out.append(
+                block.model_copy(
+                    update={
+                        "id": segment_id,
+                        "text": chunk,
+                        "source": block.source.model_copy(update={"locator": locator}),
+                        "children_ids": [],
+                        "prev_id": None,
+                        "next_id": None,
+                        "metadata": {
+                            **block.metadata,
+                            "bounded_from_block_id": block.id,
+                            "bounded_table_chars": max_chars,
+                            "bounded_table_segment": index,
+                        },
+                    }
+                )
+            )
+        replacements[block.id] = ids
+
+    return out, replacements, split_blocks
+
+
+def _rewrite_structural_children(
+    structural: list[ContextBlock],
+    replacements: dict[str, list[str]],
+) -> None:
+    if not replacements:
+        return
+    for block in structural:
+        children: list[str] = []
+        for child_id in block.children_ids:
+            children.extend(replacements.get(child_id, [child_id]))
+        block.children_ids = children
+
+
 def _modality_for_path(path: Path) -> Modality:
     ext = path.suffix.lower()
     if ext == ".csv" or ext in {".xls", ".xlsx", ".ods"}:
@@ -418,6 +581,7 @@ def ingest_paths(
     window_chars: int = 12000,
     overlap_chars: int = 800,
     progress_callback: Callable[[dict], None] | None = None,
+    max_table_block_chars: int | None = None,
 ) -> CorpusManifest:
     """Ingest files into a model-agnostic, addressable corpus.
 
@@ -515,6 +679,14 @@ def ingest_paths(
                         f"Unsupported {ext or 'file'} without Docling installed: {path.name}. "
                         "Install contextmesh[docling] for rich documents/media."
                     )
+
+            leafs, table_replacements, split_table_blocks = _bound_table_leafs(
+                leafs,
+                max_table_block_chars,
+            )
+            _rewrite_structural_children(structural, table_replacements)
+            if split_table_blocks:
+                parser_name += "+bounded-table"
 
             # Never count an unresolved placeholder as a coverage unit. PARTIAL blocks
             # may be processed for the information they do contain, but the manifest
