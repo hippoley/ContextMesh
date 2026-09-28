@@ -46,6 +46,11 @@ on:
         required: true
         default: '80'
         type: string
+      smoke_only:
+        description: 'Run only the 2-call text + vision provider smoke, then stop'
+        required: true
+        default: true
+        type: boolean
       run_scale:
         description: 'Run Gate 4 after Gate 3 passes (material extra API cost)'
         required: true
@@ -161,8 +166,34 @@ jobs:
           print(route.model_dump_json(indent=2))
           PY
 
+      - name: Run 2-call text + vision provider smoke
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          MODEL: ${{ inputs.model }}
+          DASHSCOPE_BASE_URL: ${{ inputs.dashscope_base_url }}
+        run: |
+          if [ "$PROVIDER" = "dashscope" ]; then
+            base_url="$DASHSCOPE_BASE_URL"
+            api_env="DASHSCOPE_API_KEY"
+          else
+            base_url="https://api.openai.com/v1"
+            api_env="OPENAI_API_KEY"
+          fi
+
+          python benchmarks/smoke_live_provider.py \
+            --base-url "$base_url" \
+            --model "$MODEL" \
+            --api-key-env "$api_env" \
+            --output /tmp/contextmesh-live-proof/results/provider-smoke.json
+
+      - name: Smoke-only stop marker
+        if: ${{ inputs.smoke_only }}
+        run: |
+          echo "PROVIDER_SMOKE_ONLY_COMPLETE"
+          echo "The full Gate 3 proof was intentionally not started."
+
       - name: Download Gate 5 reference snapshot
-        if: ${{ inputs.reference_run_id != '' }}
+        if: ${{ !inputs.smoke_only && inputs.reference_run_id != '' }}
         uses: actions/download-artifact@v4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -171,7 +202,7 @@ jobs:
           path: /tmp/contextmesh-reference
 
       - name: Run Gate 3 live proof
-        if: ${{ !inputs.run_scale }}
+        if: ${{ !inputs.smoke_only && !inputs.run_scale }}
         run: |
           extra=()
           if [ -f /tmp/contextmesh-reference/live-proof.snapshot.json ]; then
@@ -192,7 +223,7 @@ jobs:
             "${extra[@]}"
 
       - name: Run Gate 3 + Gate 4 scale proof
-        if: ${{ inputs.run_scale }}
+        if: ${{ !inputs.smoke_only && inputs.run_scale }}
         run: |
           extra=()
           if [ -f /tmp/contextmesh-reference/live-proof.snapshot.json ]; then
