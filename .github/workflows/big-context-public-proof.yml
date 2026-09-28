@@ -8,6 +8,9 @@ on:
       - 'benchmarks/build_public_nist_proof.py'
       - 'benchmarks/estimate_big_context_live_cost.py'
       - 'benchmarks/plan_gate4_scale.py'
+      - 'benchmarks/verify_frozen_public_proof.py'
+      - 'benchmarks/results/nist-public-gate1-2-2026-09-28.json'
+      - 'benchmarks/results/nist-public-gate4-preflight-2026-09-28.json'
       - 'benchmarks/big-context/nist-public-corpus.json'
       - 'src/contextmesh/big_context_proof.py'
       - 'src/contextmesh/ingest.py'
@@ -51,6 +54,15 @@ jobs:
             --needle-sample-size 12 \
             --required-max-ratio 20 \
             --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
+
+      - name: Verify current rebuild matches frozen public proof
+        run: |
+          python benchmarks/verify_frozen_public_proof.py \
+            --download-manifest /tmp/contextmesh-nist-proof/results/download-manifest.json \
+            --gate4-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
+            --gate1-2-proof benchmarks/results/nist-public-gate1-2-2026-09-28.json \
+            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-2026-09-28.json \
+            --output /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
 
       - name: Estimate first live proof cost with Qwen3-VL-8B public pricing
         run: |
