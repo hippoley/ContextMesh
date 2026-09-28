@@ -26,6 +26,9 @@ def main() -> int:
     ap.add_argument("--gate4-plan", type=Path, required=True)
     ap.add_argument("--gate1-2-proof", type=Path, required=True)
     ap.add_argument("--gate4-preflight", type=Path, required=True)
+    ap.add_argument("--corpus-manifest", type=Path)
+    ap.add_argument("--needle-matrix", type=Path)
+    ap.add_argument("--task-cases", type=Path)
     ap.add_argument("--output", type=Path, required=True)
     args = ap.parse_args()
 
@@ -35,6 +38,21 @@ def main() -> int:
             gate4_plan=_load(args.gate4_plan),
             gate12_proof=_load(args.gate1_2_proof),
             gate4_preflight=_load(args.gate4_preflight),
+            corpus_manifest=(
+                _load(args.corpus_manifest)
+                if args.corpus_manifest
+                else None
+            ),
+            needle_matrix=(
+                _load(args.needle_matrix)
+                if args.needle_matrix
+                else None
+            ),
+            task_cases=(
+                _load(args.task_cases)
+                if args.task_cases
+                else None
+            ),
         )
     except FrozenProofMismatch as exc:
         args.output.parent.mkdir(parents=True, exist_ok=True)
