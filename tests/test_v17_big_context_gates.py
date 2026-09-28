@@ -580,3 +580,113 @@ def test_gate5_blocks_recall_task_and_authority_regressions():
     assert "task-accuracy-drop" in blockers
     assert "authority-accuracy-drop" in blockers
     assert "negative-accuracy-drop" in blockers
+
+
+
+def test_big_context_readiness_api_uses_real_route_context_window(tmp_path: Path, monkeypatch):
+    import contextmesh.api as api_module
+    from contextmesh.models import ModelRoute
+
+    paths = []
+    for i in range(10):
+        p = tmp_path / f"api-proof-{i}.txt"
+        p.write_text("large proof source " * 400, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(paths, store, "api-proof")
+    store.upsert_model_route(
+        ModelRoute(
+            id="proof-route",
+            label="Proof route",
+            base_url="http://unused",
+            model="proof-model",
+            max_context_tokens=1000,
+        )
+    )
+    monkeypatch.setattr(api_module, "STORE", store)
+
+    result = api_module.big_context_readiness(
+        manifest.corpus_id,
+        "proof-route",
+        min_assets=10,
+        max_assets=30,
+        min_format_families=1,
+        min_corpus_ratio=5.0,
+    )
+
+    assert result["gate1"].status == "pass"
+    assert result["gate1"].model_context_tokens == 1000
+    assert result["gate1"].assets == 10
+    assert result["gate1"].corpus_to_context_ratio >= 5.0
+    assert result["runner"] == "benchmarks/big_context_proof.py"
+
+
+def test_workspace_exposes_executable_big_context_readiness():
+    import contextmesh.api as api_module
+
+    html = (api_module.WEB_ROOT / "workspace.html").read_text(encoding="utf-8")
+    js = (api_module.WEB_ROOT / "contextmesh.js").read_text(encoding="utf-8")
+
+    assert 'id="bigContextReadinessBtn"' in html
+    assert 'id="bigContextReadinessResult"' in html
+    assert "Check Gate 1 readiness" in html
+    assert "/api/big-context/readiness" in js
+    assert "runBigContextReadiness" in js
+    assert "100+ cases required" in js
+
+
+def test_snapshot_preserves_authority_submetric_for_drift():
+    from contextmesh.big_context_proof import (
+        BaselineSummary,
+        Gate3Report,
+        NeedleRecoveryReport,
+        snapshot_from_gate3,
+    )
+    from contextmesh.models import ModelRoute
+
+    needle = NeedleRecoveryReport(
+        corpus_id="c",
+        total_cases=1,
+        present_cases=1,
+        negative_cases=0,
+        evidence_recall=0.95,
+        evidence_term_fidelity=0.95,
+        negative_accuracy=1.0,
+        unsupported_cases=0,
+        by_kind={"exact": 1.0},
+        by_corpus_position={"early": 1.0},
+        results=[],
+    )
+    baseline = BaselineSummary(
+        baseline="contextmesh-full-coverage",
+        total_tasks=4,
+        completed_tasks=4,
+        blocked_tasks=0,
+        task_accuracy=0.9,
+        latency_seconds=12.0,
+        estimated_cost_usd=0.25,
+        prompt_tokens=100,
+        completion_tokens=20,
+        accuracy_by_tag={"authority": 0.75, "contradiction": 1.0},
+        results=[],
+    )
+    gate3 = Gate3Report(
+        status="pass",
+        corpus_id="c",
+        needle=needle,
+        baselines=[baseline],
+    )
+    route = ModelRoute(
+        id="route",
+        label="route",
+        base_url="http://unused",
+        model="m",
+        max_context_tokens=128000,
+    )
+
+    snapshot = snapshot_from_gate3(gate3, route, run_id="run-1")
+
+    assert snapshot.authority_accuracy == 0.75
+    assert snapshot.evidence_recall == 0.95
+    assert snapshot.task_accuracy == 0.9
