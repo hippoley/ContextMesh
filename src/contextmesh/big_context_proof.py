@@ -1378,6 +1378,8 @@ def run_scale_curve(
     needle_cases: Iterable[NeedleCase],
     task_cases: Iterable[TaskCase],
     spec: Gate4Spec,
+    *,
+    max_workers: int = 4,
 ) -> Gate4Report:
     needles_all = list(needle_cases)
     tasks_all = list(task_cases)
@@ -1420,19 +1422,25 @@ def run_scale_curve(
                 projected_id,
                 block_ids,
             )
-            needle_report = run_full_coverage_needles(
+            needle_report = run_batched_full_coverage_needles(
                 projected_store,
                 projected_id,
                 judge_factory,
                 needles,
+                max_workers=max_workers,
             )
-            baselines = run_task_baselines(
-                projected_store,
-                projected_id,
-                judge_factory,
-                tasks,
-                lexical_top_ks=(5, 20),
-                include_direct=True,
+            baselines = (
+                run_task_baselines(
+                    projected_store,
+                    projected_id,
+                    judge_factory,
+                    tasks,
+                    lexical_top_ks=(5, 20),
+                    include_direct=True,
+                    max_workers=max_workers,
+                )
+                if tasks
+                else []
             )
             by_name = {item.baseline: item for item in baselines}
             cm = by_name.get("contextmesh-full-coverage")
@@ -1441,7 +1449,7 @@ def run_scale_curve(
                 point_blockers.append(
                     f"evidence-recall={needle_report.evidence_recall:.3f}"
                 )
-            if cm is None or cm.task_accuracy < spec.min_task_accuracy:
+            if tasks and (cm is None or cm.task_accuracy < spec.min_task_accuracy):
                 point_blockers.append(
                     f"task-accuracy={(cm.task_accuracy if cm else 0.0):.3f}"
                 )
