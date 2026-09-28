@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import time
+import tempfile
 from collections import Counter
 from enum import Enum
 from pathlib import Path
@@ -881,4 +882,538 @@ def evaluate_gate3(
         needle=needle,
         baselines=baselines,
         blockers=blockers,
+    )
+
+
+
+class ScalePointStatus(str, Enum):
+    PASS = "pass"
+    FAIL = "fail"
+    BLOCKED = "blocked"
+
+
+class ScalePointResult(BaseModel):
+    requested_ratio: float
+    actual_ratio: float = 0.0
+    status: ScalePointStatus
+    selected_blocks: int = 0
+    selected_assets: int = 0
+    estimated_tokens: int = 0
+    evidence_recall: float | None = None
+    evidence_term_fidelity: float | None = None
+    negative_accuracy: float | None = None
+    task_accuracy: float | None = None
+    baseline_task_accuracy: dict[str, float] = Field(default_factory=dict)
+    blockers: list[str] = Field(default_factory=list)
+
+
+class Gate4Spec(BaseModel):
+    ratios: list[float] = Field(default_factory=lambda: [1, 2, 5, 10, 20])
+    model_context_tokens: int
+    needle_sample_size: int = 24
+    task_sample_size: int = 12
+    min_evidence_recall: float = 0.90
+    min_task_accuracy: float = 0.90
+    max_recall_drop: float = 0.05
+    required_max_ratio: float = 20.0
+
+
+class Gate4Report(BaseModel):
+    gate: int = 4
+    status: GateStatus
+    corpus_id: str
+    model_context_tokens: int
+    points: list[ScalePointResult]
+    max_completed_ratio: float = 0.0
+    recall_drop: float = 0.0
+    blockers: list[str] = Field(default_factory=list)
+
+    def as_gate(self) -> ProofGate:
+        return ProofGate(
+            gate=4,
+            name="Scale Curve",
+            status=self.status,
+            blockers=self.blockers,
+            metrics={
+                "model_context_tokens": self.model_context_tokens,
+                "max_completed_ratio": self.max_completed_ratio,
+                "recall_drop": self.recall_drop,
+                "points": [point.model_dump(mode="json") for point in self.points],
+            },
+        )
+
+
+def _stratified_needles(
+    cases: list[NeedleCase],
+    limit: int,
+) -> list[NeedleCase]:
+    if limit <= 0 or len(cases) <= limit:
+        return list(cases)
+    groups: dict[NeedleKind, list[NeedleCase]] = {}
+    for case in sorted(cases, key=lambda x: x.id):
+        groups.setdefault(case.kind, []).append(case)
+    out: list[NeedleCase] = []
+    while len(out) < limit:
+        progressed = False
+        for kind in sorted(groups, key=lambda x: x.value):
+            group = groups[kind]
+            if group:
+                out.append(group.pop(0))
+                progressed = True
+                if len(out) >= limit:
+                    break
+        if not progressed:
+            break
+    return out
+
+
+def _anchor_blocks(
+    store: FileContextStore,
+    corpus_id: str,
+    cases: list[NeedleCase],
+) -> set[str]:
+    manifest = store.get_manifest(corpus_id)
+    targets = {
+        Path(asset).name
+        for case in cases
+        for asset in case.target_assets
+    }
+    if not targets:
+        return set()
+    out: set[str] = set()
+    for block_id in manifest.coverage_ids():
+        block = store.get_block(corpus_id, block_id)
+        if Path(block.source.path).name in targets:
+            out.add(block_id)
+    return out
+
+
+def _block_token_estimate(block: ContextBlock) -> int:
+    # Same conservative qualification rule as Gate 1. Provider-exact tokenization
+    # remains a route-level runtime concern.
+    return max(1, len(block.text or ""))
+
+
+def _plan_scale_projection(
+    store: FileContextStore,
+    corpus_id: str,
+    cases: list[NeedleCase],
+    *,
+    target_tokens: int,
+) -> tuple[list[str], int, list[str]]:
+    manifest = store.get_manifest(corpus_id)
+    ordered = manifest.coverage_ids()
+    anchors = _anchor_blocks(store, corpus_id, cases)
+    selected: list[str] = []
+    selected_set: set[str] = set()
+    total = 0
+
+    for block_id in ordered:
+        if block_id not in anchors:
+            continue
+        block = store.get_block(corpus_id, block_id)
+        selected.append(block_id)
+        selected_set.add(block_id)
+        total += _block_token_estimate(block)
+
+    blockers: list[str] = []
+    if total > target_tokens:
+        blockers.append(
+            f"anchor-evidence-exceeds-target:anchors={total},target={target_tokens}"
+        )
+        return selected, total, blockers
+
+    for block_id in ordered:
+        if block_id in selected_set:
+            continue
+        block = store.get_block(corpus_id, block_id)
+        cost = _block_token_estimate(block)
+        if selected and total + cost > target_tokens:
+            continue
+        selected.append(block_id)
+        selected_set.add(block_id)
+        total += cost
+        if total >= target_tokens:
+            break
+
+    if total < target_tokens:
+        blockers.append(
+            f"source-corpus-too-small:available={total},target={target_tokens}"
+        )
+    return selected, total, blockers
+
+
+def _materialize_projection(
+    source: FileContextStore,
+    source_corpus_id: str,
+    destination: FileContextStore,
+    target_corpus_id: str,
+    block_ids: list[str],
+) -> CorpusManifest:
+    source_manifest = source.get_manifest(source_corpus_id)
+    selected = set(block_ids)
+    source_blocks = [source.get_block(source_corpus_id, block_id) for block_id in block_ids]
+    blocks: list[ContextBlock] = []
+    for block in source_blocks:
+        blocks.append(
+            block.model_copy(
+                update={
+                    "corpus_id": target_corpus_id,
+                    "parent_id": block.parent_id if block.parent_id in selected else None,
+                    "children_ids": [x for x in block.children_ids if x in selected],
+                    "prev_id": block.prev_id if block.prev_id in selected else None,
+                    "next_id": block.next_id if block.next_id in selected else None,
+                }
+            )
+        )
+    destination.put_blocks(blocks)
+
+    assets = sorted({block.source.path for block in blocks})
+    reports = [
+        report
+        for report in source_manifest.asset_reports
+        if report.path in assets or Path(report.path).name in {Path(x).name for x in assets}
+    ]
+    modality_counts = Counter(block.modality.value for block in blocks)
+    required_capabilities = sorted(
+        {cap for block in blocks for cap in block.required_capabilities}
+    )
+    unresolved = sum(
+        1 for block in blocks if not block.processable or block.semantic_status.value != "ready"
+    )
+    total_bytes = sum(report.bytes for report in reports)
+
+    manifest = CorpusManifest(
+        schema_version=source_manifest.schema_version,
+        corpus_id=target_corpus_id,
+        assets=assets,
+        root_block_ids=[],
+        structural_block_ids=[],
+        block_ids=list(block_ids),
+        required_block_ids=list(block_ids),
+        total_blocks=len(blocks),
+        required_blocks=len(blocks),
+        total_chars=sum(len(block.text or "") for block in blocks),
+        total_bytes=total_bytes,
+        modality_counts=dict(sorted(modality_counts.items())),
+        required_capabilities=required_capabilities,
+        ingest_warnings=[],
+        asset_reports=reports,
+        ingest_coverage=1.0,
+        semantic_coverage=(len(blocks) - unresolved) / len(blocks) if blocks else 1.0,
+        unresolved_units=unresolved,
+        coverage_ready=unresolved == 0,
+    )
+    destination.put_manifest(manifest)
+    return manifest
+
+
+def run_scale_curve(
+    store: FileContextStore,
+    corpus_id: str,
+    judge_factory: Callable[[], ProofJudge],
+    needle_cases: Iterable[NeedleCase],
+    task_cases: Iterable[TaskCase],
+    spec: Gate4Spec,
+) -> Gate4Report:
+    needles_all = list(needle_cases)
+    tasks_all = list(task_cases)
+    needles = _stratified_needles(needles_all, spec.needle_sample_size)
+    tasks = sorted(tasks_all, key=lambda x: x.id)[: spec.task_sample_size]
+    points: list[ScalePointResult] = []
+
+    for ratio in spec.ratios:
+        target_tokens = int(spec.model_context_tokens * ratio)
+        block_ids, estimated_tokens, plan_blockers = _plan_scale_projection(
+            store,
+            corpus_id,
+            needles,
+            target_tokens=target_tokens,
+        )
+        if plan_blockers:
+            points.append(
+                ScalePointResult(
+                    requested_ratio=ratio,
+                    actual_ratio=(
+                        estimated_tokens / spec.model_context_tokens
+                        if spec.model_context_tokens
+                        else 0.0
+                    ),
+                    status=ScalePointStatus.BLOCKED,
+                    selected_blocks=len(block_ids),
+                    estimated_tokens=estimated_tokens,
+                    blockers=plan_blockers,
+                )
+            )
+            continue
+
+        with tempfile.TemporaryDirectory(prefix="contextmesh-scale-") as tmp:
+            projected_store = FileContextStore(Path(tmp) / "store")
+            projected_id = f"{corpus_id}__scale_{str(ratio).replace('.', '_')}"
+            projected = _materialize_projection(
+                store,
+                corpus_id,
+                projected_store,
+                projected_id,
+                block_ids,
+            )
+            needle_report = run_full_coverage_needles(
+                projected_store,
+                projected_id,
+                judge_factory,
+                needles,
+            )
+            baselines = run_task_baselines(
+                projected_store,
+                projected_id,
+                judge_factory,
+                tasks,
+                lexical_top_ks=(5, 20),
+                include_direct=True,
+            )
+            by_name = {item.baseline: item for item in baselines}
+            cm = by_name.get("contextmesh-full-coverage")
+            point_blockers: list[str] = []
+            if needle_report.evidence_recall < spec.min_evidence_recall:
+                point_blockers.append(
+                    f"evidence-recall={needle_report.evidence_recall:.3f}"
+                )
+            if cm is None or cm.task_accuracy < spec.min_task_accuracy:
+                point_blockers.append(
+                    f"task-accuracy={(cm.task_accuracy if cm else 0.0):.3f}"
+                )
+            points.append(
+                ScalePointResult(
+                    requested_ratio=ratio,
+                    actual_ratio=(
+                        estimated_tokens / spec.model_context_tokens
+                        if spec.model_context_tokens
+                        else 0.0
+                    ),
+                    status=(
+                        ScalePointStatus.PASS
+                        if not point_blockers
+                        else ScalePointStatus.FAIL
+                    ),
+                    selected_blocks=projected.required_blocks,
+                    selected_assets=len(projected.assets),
+                    estimated_tokens=estimated_tokens,
+                    evidence_recall=needle_report.evidence_recall,
+                    evidence_term_fidelity=needle_report.evidence_term_fidelity,
+                    negative_accuracy=needle_report.negative_accuracy,
+                    task_accuracy=cm.task_accuracy if cm else None,
+                    baseline_task_accuracy={
+                        name: row.task_accuracy for name, row in sorted(by_name.items())
+                    },
+                    blockers=point_blockers,
+                )
+            )
+
+    completed = [
+        point for point in points
+        if point.status != ScalePointStatus.BLOCKED
+        and point.evidence_recall is not None
+    ]
+    blockers: list[str] = []
+    max_completed_ratio = max(
+        (point.actual_ratio for point in completed),
+        default=0.0,
+    )
+    if max_completed_ratio < spec.required_max_ratio:
+        blockers.append(
+            f"max-ratio:need>={spec.required_max_ratio:g},got={max_completed_ratio:.3f}"
+        )
+
+    recall_drop = 0.0
+    if completed:
+        first_recall = completed[0].evidence_recall or 0.0
+        lowest_recall = min(point.evidence_recall or 0.0 for point in completed)
+        recall_drop = max(0.0, first_recall - lowest_recall)
+        if recall_drop > spec.max_recall_drop:
+            blockers.append(
+                f"recall-drop:need<={spec.max_recall_drop:.3f},got={recall_drop:.3f}"
+            )
+    for point in points:
+        if point.status == ScalePointStatus.FAIL:
+            blockers.append(f"scale-point-failed:{point.requested_ratio:g}x")
+        if point.status == ScalePointStatus.BLOCKED:
+            blockers.append(f"scale-point-blocked:{point.requested_ratio:g}x")
+
+    return Gate4Report(
+        status=GateStatus.PASS if not blockers else GateStatus.FAIL,
+        corpus_id=corpus_id,
+        model_context_tokens=spec.model_context_tokens,
+        points=points,
+        max_completed_ratio=max_completed_ratio,
+        recall_drop=recall_drop,
+        blockers=blockers,
+    )
+
+
+class ProofRunSnapshot(BaseModel):
+    run_id: str
+    route_id: str
+    model: str
+    model_version: str | None = None
+    prompt_version: str | None = None
+    chunk_policy: str | None = None
+    reducer_policy: str | None = None
+    evidence_recall: float
+    task_accuracy: float
+    authority_accuracy: float | None = None
+    negative_accuracy: float
+    estimated_cost_usd: float = 0.0
+    latency_seconds: float = 0.0
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def config_fingerprint(self) -> str:
+        payload = {
+            "route_id": self.route_id,
+            "model": self.model,
+            "model_version": self.model_version,
+            "prompt_version": self.prompt_version,
+            "chunk_policy": self.chunk_policy,
+            "reducer_policy": self.reducer_policy,
+            "metadata": self.metadata,
+        }
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:20]
+
+
+class DriftDelta(BaseModel):
+    run_id: str
+    reference_run_id: str
+    evidence_recall_delta: float
+    task_accuracy_delta: float
+    authority_accuracy_delta: float | None = None
+    negative_accuracy_delta: float
+    cost_ratio: float | None = None
+    latency_ratio: float | None = None
+    config_fingerprint: str
+    blockers: list[str] = Field(default_factory=list)
+
+
+class Gate5Spec(BaseModel):
+    max_evidence_recall_drop: float = 0.05
+    max_task_accuracy_drop: float = 0.05
+    max_authority_accuracy_drop: float = 0.02
+    max_negative_accuracy_drop: float = 0.02
+    max_cost_ratio: float | None = None
+    max_latency_ratio: float | None = None
+
+
+class Gate5Report(BaseModel):
+    gate: int = 5
+    status: GateStatus
+    reference: ProofRunSnapshot
+    deltas: list[DriftDelta]
+    blockers: list[str] = Field(default_factory=list)
+
+    def as_gate(self) -> ProofGate:
+        return ProofGate(
+            gate=5,
+            name="Drift",
+            status=self.status,
+            blockers=self.blockers,
+            metrics={
+                "reference_run_id": self.reference.run_id,
+                "reference_fingerprint": self.reference.config_fingerprint,
+                "deltas": [delta.model_dump(mode="json") for delta in self.deltas],
+            },
+        )
+
+
+def _ratio(candidate: float, reference: float) -> float | None:
+    if reference <= 0:
+        return None
+    return candidate / reference
+
+
+def evaluate_gate5_drift(
+    reference: ProofRunSnapshot,
+    candidates: Iterable[ProofRunSnapshot],
+    spec: Gate5Spec | None = None,
+) -> Gate5Report:
+    spec = spec or Gate5Spec()
+    deltas: list[DriftDelta] = []
+    all_blockers: list[str] = []
+
+    for candidate in candidates:
+        blockers: list[str] = []
+        evidence_delta = candidate.evidence_recall - reference.evidence_recall
+        task_delta = candidate.task_accuracy - reference.task_accuracy
+        negative_delta = candidate.negative_accuracy - reference.negative_accuracy
+        authority_delta = None
+        if (
+            reference.authority_accuracy is not None
+            and candidate.authority_accuracy is not None
+        ):
+            authority_delta = (
+                candidate.authority_accuracy - reference.authority_accuracy
+            )
+
+        if evidence_delta < -spec.max_evidence_recall_drop:
+            blockers.append(
+                f"evidence-recall-drop={-evidence_delta:.3f}"
+            )
+        if task_delta < -spec.max_task_accuracy_drop:
+            blockers.append(
+                f"task-accuracy-drop={-task_delta:.3f}"
+            )
+        if negative_delta < -spec.max_negative_accuracy_drop:
+            blockers.append(
+                f"negative-accuracy-drop={-negative_delta:.3f}"
+            )
+        if (
+            authority_delta is not None
+            and authority_delta < -spec.max_authority_accuracy_drop
+        ):
+            blockers.append(
+                f"authority-accuracy-drop={-authority_delta:.3f}"
+            )
+
+        cost_ratio = _ratio(
+            candidate.estimated_cost_usd,
+            reference.estimated_cost_usd,
+        )
+        latency_ratio = _ratio(
+            candidate.latency_seconds,
+            reference.latency_seconds,
+        )
+        if (
+            spec.max_cost_ratio is not None
+            and cost_ratio is not None
+            and cost_ratio > spec.max_cost_ratio
+        ):
+            blockers.append(f"cost-ratio={cost_ratio:.3f}")
+        if (
+            spec.max_latency_ratio is not None
+            and latency_ratio is not None
+            and latency_ratio > spec.max_latency_ratio
+        ):
+            blockers.append(f"latency-ratio={latency_ratio:.3f}")
+
+        delta = DriftDelta(
+            run_id=candidate.run_id,
+            reference_run_id=reference.run_id,
+            evidence_recall_delta=evidence_delta,
+            task_accuracy_delta=task_delta,
+            authority_accuracy_delta=authority_delta,
+            negative_accuracy_delta=negative_delta,
+            cost_ratio=cost_ratio,
+            latency_ratio=latency_ratio,
+            config_fingerprint=candidate.config_fingerprint,
+            blockers=blockers,
+        )
+        deltas.append(delta)
+        all_blockers.extend(
+            f"{candidate.run_id}:{blocker}" for blocker in blockers
+        )
+
+    return Gate5Report(
+        status=GateStatus.PASS if not all_blockers else GateStatus.FAIL,
+        reference=reference,
+        deltas=deltas,
+        blockers=all_blockers,
     )
