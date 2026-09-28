@@ -4,14 +4,14 @@
   "evidence_class": "contextmesh-public-proof-v2-bounded-table",
   "claim_scope": "Same 12-source NIST/AIRC corpus as v1, re-ingested with max_table_block_chars=12000. Proves Gate 1 and Gate 2 and bounded coverage-unit readiness; does not prove live Gate 3/4/5.",
   "repository": "hippoley/ContextMesh",
-  "head_sha": "ed87aba0424d887158cc1f82a534ca18405fa1cf",
+  "head_sha": "2a9af56d0078e98e48228e5cefbc858271fe26c1",
   "workflow_run": {
-    "id": 36393959366,
-    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36393959366",
+    "id": 36395147919,
+    "url": "https://github.com/hippoley/ContextMesh/actions/runs/36395147919",
     "conclusion": "success",
-    "artifact_id": 10956909741,
+    "artifact_id": 10958350568,
     "artifact_name": "big-context-public-nist-preflight",
-    "artifact_zip_sha256": "e47bd9bd7eca8e5507c95de0da9a31bdbece814cbbd056041175d1d95581ad1f"
+    "artifact_zip_sha256": "909bda0123a6776ead4ded011abde6db7e727d4a1e6108610cf8032b1fd7ed86"
   },
   "source_integrity": {
     "same_source_sha_set_as_v1": true,
@@ -195,5 +195,16 @@
       "needle_matrix": "sha256(canonical JSON of cases; sorted keys, compact separators, UTF-8)",
       "task_set": "sha256(canonical JSON of cases; sorted keys, compact separators, UTF-8)"
     }
+  },
+  "live_cost_preflight": {
+    "model": "qwen3-vl-8b-instruct",
+    "model_context_tokens": 131072,
+    "safety_factor": 1.35,
+    "gate3_estimated_cost_cny": 48.46,
+    "gate3_plus_gate4_estimated_cost_cny": 60.61,
+    "gate3_budget_ceiling_cny": 80,
+    "gate3_plus_gate4_preflight_ceiling_cny": 300,
+    "provider_calls_made": 0,
+    "note": "Architecture-level estimate; not a provider invoice."
   }
 }
