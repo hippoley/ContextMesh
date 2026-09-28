@@ -1096,6 +1096,7 @@ def test_gate4_plan_is_nested_and_stably_fingerprinted(tmp_path: Path):
         min_scale_kinds=1,
         min_scale_modalities=1,
         require_negative_scale_case=False,
+        require_all_corpus_positions=False,
     )
 
     first = plan_gate4_scale(store, manifest.corpus_id, [needle], spec)
@@ -1157,6 +1158,7 @@ def test_gate4_live_rejects_tampered_frozen_projection_before_model_calls(tmp_pa
         min_scale_kinds=1,
         min_scale_modalities=1,
         require_negative_scale_case=False,
+        require_all_corpus_positions=False,
     )
     plan = plan_gate4_scale(store, manifest.corpus_id, [needle], spec)
     assert plan.ready_for_live_gate4 is True
