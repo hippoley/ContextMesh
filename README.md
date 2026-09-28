@@ -48,7 +48,9 @@ The project is **not another RAG framework and not a larger context window**. It
 
 > **Did every required piece of evidence remain eligible, visible, inspected, authoritative, and reduction-safe before the final decision — and if not, at which transition did its meaning change?**
 
-## Over-context execution contract
+## Over-context execution contract — Gate 0
+
+**Mechanism self-contract, not proof of real-model task success.**
 
 **12 files · ~1.10M estimated corpus tokens · 16K simulated model window · 100% required-block inspection.**
 
@@ -73,6 +75,22 @@ The measured synthetic run reached a corpus/window ratio of **68.765×** while t
 This does **not** claim native 1.1M-token attention or real-model semantic recall. It verifies execution shape: bounded requests, full required-block coverage, resumable transition receipts, and preservation of a decisive exception into the final decision state.
 
 [Read the result](docs/reality/Over-Context-1.1M-2026-09-27.md) · [Reproduce the benchmark](benchmarks/over_context_execution.py) · [CI run](https://github.com/hippoley/ContextMesh/actions/runs/36299795477)
+
+## Big Context Proof — the actual release gate
+
+The large-context task-success claim is **not yet proven**. ContextMesh now uses a five-gate release contract before that claim can be made:
+
+```text
+Gate 1  Corpus Reality       10–30 real files, hashes, format diversity, corpus >> context
+Gate 2  Needle Matrix        100+ ground-truth cases across kinds, positions and modalities
+Gate 3  Live Fidelity        evidence recall + task accuracy + same-model baselines
+Gate 4  Scale Curve          fixed decisive evidence, increasing distractors, 1x → 20x+
+Gate 5  Drift                repeat-run model/prompt/chunk/reducer stability
+```
+
+A first live run can pass Gates 1–4 and still **does not** set `claim_proven=true`; Gate 5 requires a stored reference and a repeated run.
+
+[Read the five-gate contract](docs/BIG_CONTEXT_PROOF.md) · [Run the proof](benchmarks/big_context_proof.py) · [Needle schema](benchmarks/big-context/needle-matrix.example.json) · [Task schema](benchmarks/big-context/task-cases.example.json)
 
 ## Interactive Reality Lab
 
@@ -113,6 +131,7 @@ That is the project culture: **reproduce → measure → falsify or fix → publ
 | --- | --- |
 | Reproduce a context blind spot | Run the [Reality Probe](#60-second-start) |
 | Evaluate an answer against a corpus larger than one model window | Start the [full-coverage runtime](#run-the-runtime) |
+| Test whether large-context task success is actually proven | Run the [Big Context Proof](docs/BIG_CONTEXT_PROOF.md) |
 | Understand where evidence disappeared | Read the [evidence lifecycle](docs/EVIDENCE_LIFECYCLE.md) |
 | Challenge a ContextMesh claim | [Bring one real failure](https://github.com/hippoley/ContextMesh/issues/1) |
 | Contribute without learning the whole codebase | [Adopt a probe/backend](https://github.com/hippoley/ContextMesh/issues/2) |
