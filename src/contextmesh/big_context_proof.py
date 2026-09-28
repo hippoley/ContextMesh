@@ -1460,6 +1460,8 @@ class Gate4Spec(BaseModel):
     max_scale_cases_per_kind: int = 2
     max_negative_scale_cases: int = 1
     require_all_corpus_positions: bool = True
+    require_all_local_positions: bool = False
+    require_cross_file_scale_case: bool = False
 
 
 class Gate4Report(BaseModel):
@@ -1563,6 +1565,7 @@ def _select_gate4_scale_panel(
     kinds: set[NeedleKind] = set()
     modalities: set[Modality] = set()
     corpus_positions: set[CorpusPosition] = set()
+    local_positions: set[LocalPosition] = set()
     kind_counts: Counter[NeedleKind] = Counter()
 
     def anchor_tokens(ids: set[str]) -> int:
@@ -1579,7 +1582,15 @@ def _select_gate4_scale_panel(
             spec.require_all_corpus_positions
             and len(corpus_positions) < len(CorpusPosition)
         )
-        ranked: list[tuple[tuple[int, int, int, int, int, str], NeedleCase, set[str]]] = []
+        need_local_positions = (
+            spec.require_all_local_positions
+            and len(local_positions) < len(LocalPosition)
+        )
+        need_cross_file = (
+            spec.require_cross_file_scale_case
+            and NeedleKind.CROSS_FILE not in kinds
+        )
+        ranked: list[tuple[tuple[int, int, int, int, int, int, str], NeedleCase, set[str]]] = []
         for case in candidates:
             if case.id in selected_ids:
                 continue
@@ -1604,12 +1615,24 @@ def _select_gate4_scale_panel(
             adds_position = int(
                 need_positions and case.corpus_position not in corpus_positions
             )
+            adds_local_position = int(
+                need_local_positions and case.local_position not in local_positions
+            )
+            adds_cross_file = int(
+                need_cross_file and case.kind == NeedleKind.CROSS_FILE
+            )
             incremental = proposed_tokens - anchor_tokens(anchors)
             ranked.append(
                 (
                     (
                         -adds_negative,
-                        -(adds_kind + adds_modality + adds_position),
+                        -adds_cross_file,
+                        -(
+                            adds_kind
+                            + adds_modality
+                            + adds_position
+                            + adds_local_position
+                        ),
                         kind_counts[case.kind],
                         incremental,
                         proposed_tokens,
@@ -1630,6 +1653,7 @@ def _select_gate4_scale_panel(
         kinds.add(chosen.kind)
         modalities.add(chosen.modality)
         corpus_positions.add(chosen.corpus_position)
+        local_positions.add(chosen.local_position)
         kind_counts[chosen.kind] += 1
 
     blockers: list[str] = []
@@ -1662,6 +1686,21 @@ def _select_gate4_scale_panel(
             if position not in corpus_positions
         )
         blockers.append("scale-panel-corpus-positions:missing=" + ",".join(missing))
+    if (
+        spec.require_all_local_positions
+        and len(local_positions) < len(LocalPosition)
+    ):
+        missing = sorted(
+            position.value
+            for position in LocalPosition
+            if position not in local_positions
+        )
+        blockers.append("scale-panel-local-positions:missing=" + ",".join(missing))
+    if (
+        spec.require_cross_file_scale_case
+        and NeedleKind.CROSS_FILE not in kinds
+    ):
+        blockers.append("scale-panel-cross-file:missing")
     used = anchor_tokens(anchors)
     if used > budget:
         blockers.append(
