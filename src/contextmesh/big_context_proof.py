@@ -716,7 +716,7 @@ def run_batched_full_coverage_needles(
             term_recall = 1.0 if recovered else 0.0
         else:
             for block, note in raw_matches:
-                if not _asset_matches(block.source.path, case.target_assets):
+                if not _ground_truth_block_matches(block, case):
                     continue
                 searchable = "\n".join([block.text or "", note or ""])
                 hits = _term_hits(searchable, case.match_terms)
