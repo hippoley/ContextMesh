@@ -3,7 +3,9 @@
 **Date:** 2026-09-28  
 **Status:** **PREPARED — live Gate 4 not run**  
 **Official corpus:** `nist-public-big-context-v2`  
-**Reference public proof run:** https://github.com/hippoley/ContextMesh/actions/runs/36393959366
+**Reference public proof run:** https://github.com/hippoley/ContextMesh/actions/runs/36395147919  
+**Artifact ID:** `10958350568`  
+**Artifact ZIP SHA-256:** `909bda0123a6776ead4ded011abde6db7e727d4a1e6108610cf8032b1fd7ed86`
 
 This is the official Gate 4 experiment definition for ContextMesh. It replaces the earlier v1 scale plan.
 
@@ -95,8 +97,8 @@ Distractors use a stable SHA-256 order rather than source order, reducing early-
 Current conservative no-call estimate:
 
 ```text
-Gate 3 only                 ¥47.42
-Gate 3 + Gate 4             ¥57.17
+Gate 3 only                 ¥48.46
+Gate 3 + Gate 4             ¥60.61
 35% safety factor           included
 provider calls in preflight 0
 ```
