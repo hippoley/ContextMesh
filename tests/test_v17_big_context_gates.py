@@ -419,6 +419,7 @@ def test_gate4_scale_curve_keeps_anchor_evidence_and_grows_distractors(tmp_path:
             min_scale_kinds=1,
             min_scale_modalities=1,
             require_negative_scale_case=False,
+            require_all_corpus_positions=False,
             min_evidence_recall=1.0,
             min_task_accuracy=1.0,
             max_recall_drop=0.0,
@@ -491,6 +492,7 @@ def test_gate4_fails_when_source_corpus_cannot_reach_required_ratio(tmp_path: Pa
             min_scale_kinds=1,
             min_scale_modalities=1,
             require_negative_scale_case=False,
+            require_all_corpus_positions=False,
             required_max_ratio=20,
         ),
     )
@@ -1029,6 +1031,7 @@ def test_gate4_plan_uses_exact_target_blocks_not_whole_target_assets(tmp_path: P
             min_scale_kinds=1,
             min_scale_modalities=1,
             require_negative_scale_case=False,
+            require_all_corpus_positions=False,
             required_max_ratio=2,
         ),
     )
