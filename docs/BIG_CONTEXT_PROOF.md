@@ -92,6 +92,8 @@ direct-full-context
 contextmesh-full-coverage
 ```
 
+`direct-full-context` is a calibration baseline, not a license to send an oversized corpus to a provider. If its constructed single request exceeds the configured route token budget, ContextMesh must block it locally before network I/O; the live cost estimator relies on this zero-call contract.
+
 The baseline interface is intentionally separate from the result schema so vector/MMR/agentic-search adapters can be added without redefining the proof report.
 
 Default ContextMesh release thresholds:
