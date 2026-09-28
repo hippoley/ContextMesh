@@ -1441,6 +1441,7 @@ class ScalePointResult(BaseModel):
     negative_accuracy: float | None = None
     task_accuracy: float | None = None
     baseline_task_accuracy: dict[str, float] = Field(default_factory=dict)
+    baseline_evidence_recall: dict[str, float] = Field(default_factory=dict)
     recall_by_kind: dict[str, float] = Field(default_factory=dict)
     recall_by_modality: dict[str, float] = Field(default_factory=dict)
     recall_by_corpus_position: dict[str, float] = Field(default_factory=dict)
@@ -1492,6 +1493,57 @@ def _gate4_recovery_slices(
         ]
         dimensions["local_position"][label] = accuracy_for(group)
     return dimensions
+
+
+def _lexical_evidence_recall(
+    store: FileContextStore,
+    corpus_id: str,
+    cases: list[NeedleCase],
+    top_k: int,
+) -> float:
+    """Measure retrieval-only evidence recall for a frozen needle panel.
+
+    This baseline intentionally makes no model call. It asks a narrower causal
+    question than task accuracy: did lexical top-k keep the decisive evidence
+    eligible at all? Ground truth is consulted only after ranking, never to
+    influence the ranking itself.
+    """
+    present = [case for case in cases if case.expected_present]
+    if not present:
+        return 1.0
+    reader = CorpusReader(store, corpus_id)
+    recovered = 0
+    for case in present:
+        selected_ids = reader.lexical_order(case.question)[: max(0, top_k)]
+        matched_terms: set[str] = set()
+        matched_assets: set[str] = set()
+        matched_target = False
+        for block_id in selected_ids:
+            block = reader.read(block_id)
+            if not _ground_truth_block_matches(block, case):
+                continue
+            matched_target = True
+            hits = _term_hits(block.text or "", case.match_terms)
+            matched_terms.update(hits)
+            if hits or not case.match_terms:
+                matched_assets.add(Path(block.source.path).name)
+
+        if case.match_terms:
+            term_recall = len(matched_terms) / len(set(case.match_terms))
+            terms_ok = term_recall >= 1.0 if case.match_all_terms else bool(matched_terms)
+        else:
+            terms_ok = matched_target
+        required_asset_hits = case.required_asset_hits
+        if required_asset_hits is None:
+            required_asset_hits = (
+                len(case.target_assets)
+                if case.kind == NeedleKind.CROSS_FILE and case.target_assets
+                else 1
+            )
+        assets_ok = len(matched_assets) >= required_asset_hits
+        if terms_ok and assets_ok:
+            recovered += 1
+    return recovered / len(present)
 
 
 class Gate4Spec(BaseModel):
@@ -2230,6 +2282,15 @@ def run_scale_curve(
             )
             by_name = {item.baseline: item for item in baselines}
             cm = by_name.get("contextmesh-full-coverage")
+            lexical_evidence = {
+                f"lexical-top-{top_k}": _lexical_evidence_recall(
+                    projected_store,
+                    projected_id,
+                    needles,
+                    top_k,
+                )
+                for top_k in (5, 20)
+            }
             recovery_slices = _gate4_recovery_slices(
                 needles,
                 needle_report.results,
@@ -2266,6 +2327,7 @@ def run_scale_curve(
                     baseline_task_accuracy={
                         name: row.task_accuracy for name, row in sorted(by_name.items())
                     },
+                    baseline_evidence_recall=lexical_evidence,
                     recall_by_kind=recovery_slices["kind"],
                     recall_by_modality=recovery_slices["modality"],
                     recall_by_corpus_position=recovery_slices["corpus_position"],
