@@ -667,6 +667,54 @@ def main() -> int:
     write_proof_artifact(args.output_dir / "download-manifest.json", {"sources": download_records})
     write_proof_artifact(args.output_dir / "corpus-manifest.json", manifest)
 
+    required_blocks = [
+        store.get_block(manifest.corpus_id, block_id)
+        for block_id in manifest.coverage_ids()
+    ]
+    size_rows = sorted(
+        (
+            {
+                "block_id": block.id,
+                "chars": len(block.text or ""),
+                "modality": block.modality.value,
+                "source": Path(block.source.path).name,
+                "locator": block.source.locator,
+            }
+            for block in required_blocks
+        ),
+        key=lambda row: (-row["chars"], row["block_id"]),
+    )
+    max_by_modality: dict[str, int] = {}
+    for row in size_rows:
+        max_by_modality[row["modality"]] = max(
+            max_by_modality.get(row["modality"], 0),
+            row["chars"],
+        )
+    block_size_audit = {
+        "schema_version": 1,
+        "corpus_id": manifest.corpus_id,
+        "required_blocks": manifest.required_blocks,
+        "max_chars_by_modality": dict(sorted(max_by_modality.items())),
+        "blocks_over_12000_chars": sum(
+            1 for row in size_rows if row["chars"] > 12_000
+        ),
+        "blocks_over_model_context_chars": sum(
+            1
+            for row in size_rows
+            if row["chars"] > args.model_context_tokens
+        ),
+        "configured_max_table_block_chars": (
+            args.max_table_block_chars
+            if args.max_table_block_chars > 0
+            else None
+        ),
+        "top_oversized_blocks": size_rows[:20],
+    }
+    write_proof_artifact(
+        args.output_dir / "block-size-audit.json",
+        block_size_audit,
+    )
+
     gate1 = evaluate_gate1_corpus(
         manifest,
         Gate1CorpusSpec(
