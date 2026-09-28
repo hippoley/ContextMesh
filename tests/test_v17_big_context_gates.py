@@ -1465,3 +1465,89 @@ def test_gate4_live_curve_positive_and_negative_controls_share_one_frozen_plan(t
     assert "scale-point-failed:10x" in blockers
     assert "scale-point-failed:20x" in blockers
     assert "recall-drop:" in blockers
+
+
+def test_gate4_records_lexical_evidence_recall_separately_from_task_accuracy(tmp_path: Path):
+    from contextmesh.big_context_proof import (
+        CorpusPosition,
+        Gate4Spec,
+        LocalPosition,
+        NeedleCase,
+        NeedleKind,
+        run_scale_curve,
+    )
+    from contextmesh.ingest import ingest_paths
+    from contextmesh.models import UsageMetrics
+
+    paths = []
+    for i in range(24):
+        p = tmp_path / f"lexical-scale-{i:02d}.txt"
+        if i == 23:
+            text = "DECISIVE_GATE4_FACT_91 source truth"
+        else:
+            text = ("policy question distractor " * 80) + f" noise_{i}"
+        p.write_text(text, encoding="utf-8")
+        paths.append(p)
+
+    store = FileContextStore(tmp_path / "store")
+    manifest = ingest_paths(paths, store, "gate4-lexical-evidence", window_chars=4000, overlap_chars=0)
+    target = next(
+        store.get_block(manifest.corpus_id, block_id)
+        for block_id in manifest.coverage_ids()
+        if "DECISIVE_GATE4_FACT_91" in store.get_block(manifest.corpus_id, block_id).text
+    )
+    needle = NeedleCase(
+        id="lexical-miss",
+        kind=NeedleKind.EXACT,
+        question="What does the policy question say?",
+        target_assets=[Path(target.source.path).name],
+        target_block_ids=[target.id],
+        expected_present=True,
+        match_terms=["DECISIVE_GATE4_FACT_91"],
+        corpus_position=CorpusPosition.LATE,
+        local_position=LocalPosition.TAIL,
+    )
+
+    class Judge:
+        route_id = "gate4-evidence-baseline"
+        def can_inspect(self, block):
+            return True
+        def inspect_question_batch(self, block, questions):
+            return {
+                item["id"]: "DECISIVE_GATE4_FACT_91"
+                for item in questions
+                if "DECISIVE_GATE4_FACT_91" in block.text
+            }
+        def inspect(self, question, answer, block, notes):
+            return ("DECISIVE_GATE4_FACT_91", "DECISIVE_GATE4_FACT_91" in block.text)
+        def score_full(self, question, answer, blocks):
+            return 100.0, "ok"
+        def usage_snapshot(self):
+            return UsageMetrics(route_id=self.route_id)
+
+    report = run_scale_curve(
+        store,
+        manifest.corpus_id,
+        Judge,
+        [needle],
+        [],
+        Gate4Spec(
+            ratios=[1],
+            model_context_tokens=max(1, manifest.total_chars),
+            needle_sample_size=1,
+            task_sample_size=0,
+            min_evidence_recall=0.0,
+            required_max_ratio=1,
+            anchor_budget_ratio=1.0,
+            min_scale_kinds=1,
+            min_scale_modalities=1,
+            require_negative_scale_case=False,
+            require_all_corpus_positions=False,
+        ),
+    )
+
+    point = report.points[0]
+    assert point.evidence_recall == 1.0
+    assert point.baseline_evidence_recall["lexical-top-5"] == 0.0
+    assert point.baseline_evidence_recall["lexical-top-20"] == 0.0
+    assert point.baseline_task_accuracy == {}

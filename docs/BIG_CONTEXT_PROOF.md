@@ -162,6 +162,7 @@ The live gate records:
 - requested and actual ratio;
 - selected blocks/assets;
 - evidence recall;
+- retrieval-only evidence recall for `lexical-top-5` and `lexical-top-20` on the exact same frozen projection;
 - evidence term fidelity;
 - negative accuracy;
 - optional task accuracy/baselines;
