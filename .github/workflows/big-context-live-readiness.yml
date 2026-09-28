@@ -10,6 +10,7 @@ on:
       - 'benchmarks/estimate_big_context_live_cost.py'
       - 'benchmarks/build_public_nist_proof.py'
       - 'benchmarks/smoke_live_provider.py'
+      - 'benchmarks/verify_frozen_public_proof.py'
       - 'src/contextmesh/provider_smoke.py'
 
 permissions:
@@ -37,6 +38,7 @@ jobs:
             benchmarks/big_context_proof.py \
             benchmarks/estimate_big_context_live_cost.py \
             benchmarks/smoke_live_provider.py \
+            benchmarks/verify_frozen_public_proof.py \
             src/contextmesh/big_context_proof.py \
             src/contextmesh/provider_smoke.py \
             src/contextmesh/judges.py
