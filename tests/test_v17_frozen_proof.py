@@ -126,3 +126,122 @@ def test_frozen_public_proof_blocks_panel_membership_drift():
             gate12_proof=gate12,
             gate4_preflight=preflight,
         )
+
+
+
+def test_frozen_v2_blocks_full_benchmark_drift_before_provider_calls():
+    import hashlib
+    import json
+
+    download, plan, gate12, preflight = _fixtures()
+    corpus = {"required_block_ids": ["b1", "b2", "b3"]}
+    needles = {
+        "cases": [
+            {"id": "n1", "question": "q1"},
+            {"id": "n2", "question": "q2"},
+        ]
+    }
+    tasks = {
+        "cases": [
+            {"id": "t1", "question": "q", "candidate_answer": "a"},
+        ]
+    }
+
+    def canonical(value):
+        return hashlib.sha256(
+            json.dumps(
+                value,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode("utf-8")
+        ).hexdigest()
+
+    gate12["frozen_fingerprints"] = {
+        "coverage_fingerprint": hashlib.sha256(
+            "\n".join(corpus["required_block_ids"]).encode("utf-8")
+        ).hexdigest(),
+        "needle_matrix_fingerprint": canonical(needles["cases"]),
+        "task_set_fingerprint": canonical(tasks["cases"]),
+    }
+
+    ok = verify_frozen_public_proof(
+        download_manifest=download,
+        gate4_plan=plan,
+        gate12_proof=gate12,
+        gate4_preflight=preflight,
+        corpus_manifest=corpus,
+        needle_matrix=needles,
+        task_cases=tasks,
+    )
+    assert ok["verified"] is True
+    assert all(
+        check["matches"] for check in ok["fingerprint_checks"].values()
+    )
+
+    changed_corpus = {"required_block_ids": ["b1", "b3"]}
+    with pytest.raises(FrozenProofMismatch, match="coverage-fingerprint-mismatch"):
+        verify_frozen_public_proof(
+            download_manifest=download,
+            gate4_plan=plan,
+            gate12_proof=gate12,
+            gate4_preflight=preflight,
+            corpus_manifest=changed_corpus,
+            needle_matrix=needles,
+            task_cases=tasks,
+        )
+
+    changed_needles = {
+        "cases": [
+            {"id": "n1", "question": "q1 CHANGED"},
+            {"id": "n2", "question": "q2"},
+        ]
+    }
+    with pytest.raises(FrozenProofMismatch, match="needle-matrix-fingerprint-mismatch"):
+        verify_frozen_public_proof(
+            download_manifest=download,
+            gate4_plan=plan,
+            gate12_proof=gate12,
+            gate4_preflight=preflight,
+            corpus_manifest=corpus,
+            needle_matrix=changed_needles,
+            task_cases=tasks,
+        )
+
+    changed_tasks = {
+        "cases": [
+            {"id": "t1", "question": "q", "candidate_answer": "changed"},
+        ]
+    }
+    with pytest.raises(FrozenProofMismatch, match="task-set-fingerprint-mismatch"):
+        verify_frozen_public_proof(
+            download_manifest=download,
+            gate4_plan=plan,
+            gate12_proof=gate12,
+            gate4_preflight=preflight,
+            corpus_manifest=corpus,
+            needle_matrix=needles,
+            task_cases=changed_tasks,
+        )
+
+
+def test_frozen_v2_requires_fingerprint_inputs_when_frozen_proof_declares_them():
+    download, plan, gate12, preflight = _fixtures()
+    gate12["frozen_fingerprints"] = {
+        "coverage_fingerprint": "x",
+        "needle_matrix_fingerprint": "y",
+        "task_set_fingerprint": "z",
+    }
+
+    with pytest.raises(FrozenProofMismatch) as exc:
+        verify_frozen_public_proof(
+            download_manifest=download,
+            gate4_plan=plan,
+            gate12_proof=gate12,
+            gate4_preflight=preflight,
+        )
+
+    message = str(exc.value)
+    assert "coverage-fingerprint-input-missing" in message
+    assert "needle-matrix-fingerprint-input-missing" in message
+    assert "task-set-fingerprint-input-missing" in message
