@@ -141,6 +141,7 @@ jobs:
             --model-context-tokens "${{ inputs.context_tokens }}" \
             --workers "${{ inputs.workers }}" \
             --ratios "1,2,5,10,20" \
+            --task-sample-size 0 \
             --run-id "github-${{ github.run_id }}" \
             --model-version "${{ inputs.model }}" \
             --output /tmp/contextmesh-live-proof/results/live-proof.json \
