@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 
 class TokenBudgetExceeded(ValueError):
@@ -128,6 +128,86 @@ class TextTokenBudget:
                 f"mode={self.mode}, media_items={media_items}"
             )
         return tokens
+
+
+    def _message_parts(self, messages: list[dict[str, Any]]) -> tuple[list[str], int, int]:
+        texts: list[str] = []
+        media_items = 0
+        structured_items = 0
+        for message in messages:
+            role = str(message.get("role") or "")
+            if role:
+                texts.append(role)
+            content = message.get("content")
+            items = content if isinstance(content, list) else [content]
+            for item in items:
+                if item is None:
+                    continue
+                structured_items += 1
+                if isinstance(item, str):
+                    texts.append(item)
+                    continue
+                if not isinstance(item, dict):
+                    texts.append(str(item))
+                    continue
+                kind = str(item.get("type") or "")
+                if kind == "text":
+                    texts.append(str(item.get("text") or ""))
+                elif kind in {"image_url", "input_audio", "input_video"}:
+                    media_items += 1
+                else:
+                    # Unknown structures are counted textually rather than ignored.
+                    texts.append(str(item))
+        return texts, media_items, structured_items
+
+    def count_messages(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        protocol_tokens_per_message: int = 24,
+        protocol_tokens_per_item: int = 12,
+        media_reserve_tokens: int = 4096,
+    ) -> tuple[int, dict[str, int | str | bool]]:
+        texts, media_items, structured_items = self._message_parts(messages)
+        text_tokens = sum(self.count(text) for text in texts)
+        protocol_tokens = (
+            len(messages) * max(0, protocol_tokens_per_message)
+            + structured_items * max(0, protocol_tokens_per_item)
+        )
+        media_tokens = media_items * max(0, media_reserve_tokens)
+        total = text_tokens + protocol_tokens + media_tokens
+        return total, {
+            "mode": self.mode,
+            "exact_text": self.exact,
+            "text_tokens": text_tokens,
+            "protocol_reserve_tokens": protocol_tokens,
+            "media_items": media_items,
+            "media_reserve_tokens": media_tokens,
+            "total_input_tokens": total,
+        }
+
+    def assert_messages(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        protocol_tokens_per_message: int = 24,
+        protocol_tokens_per_item: int = 12,
+        media_reserve_tokens: int = 4096,
+    ) -> dict[str, int | str | bool]:
+        total, detail = self.count_messages(
+            messages,
+            protocol_tokens_per_message=protocol_tokens_per_message,
+            protocol_tokens_per_item=protocol_tokens_per_item,
+            media_reserve_tokens=media_reserve_tokens,
+        )
+        budget = self.input_budget_tokens()
+        if budget is not None and total > budget:
+            raise TokenBudgetExceeded(
+                "model-facing message request exceeds ContextMesh token budget: "
+                f"estimated_or_exact_tokens={total}, budget={budget}, "
+                f"mode={self.mode}, media_items={detail['media_items']}"
+            )
+        return detail
 
     def split_text(
         self,
