@@ -611,6 +611,9 @@ def main() -> int:
     ap.add_argument("--output-dir", type=Path, required=True)
     ap.add_argument("--model-context-tokens", type=int, default=128_000)
     ap.add_argument("--min-corpus-ratio", type=float, default=5.0)
+    ap.add_argument("--corpus-id")
+    ap.add_argument("--max-table-block-chars", type=int, default=0)
+    ap.add_argument("--reuse-downloads", action="store_true")
     args = ap.parse_args()
 
     spec = _load_spec(args.spec)
@@ -622,7 +625,20 @@ def main() -> int:
     paths = []
     for source in spec["sources"]:
         target = downloads / source["name"]
-        record = _download(source["url"], target)
+        if args.reuse_downloads and target.is_file() and target.stat().st_size > 0:
+            data = target.read_bytes()
+            record = {
+                "name": target.name,
+                "url": source["url"],
+                "final_url": source["url"],
+                "content_type": "reused-local",
+                "size_bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "reused": True,
+            }
+        else:
+            record = _download(source["url"], target)
+            record["reused"] = False
         record["declared_family"] = source.get("family")
         download_records.append(record)
         paths.append(target)
@@ -632,12 +648,21 @@ def main() -> int:
         )
 
     store = FileContextStore(store_root)
+    corpus_id = args.corpus_id or spec.get(
+        "corpus_id",
+        "nist-public-big-context-v1",
+    )
     manifest = ingest_paths(
         paths,
         store,
-        spec.get("corpus_id", "nist-public-big-context-v1"),
+        corpus_id,
         window_chars=12_000,
         overlap_chars=800,
+        max_table_block_chars=(
+            args.max_table_block_chars
+            if args.max_table_block_chars > 0
+            else None
+        ),
     )
     write_proof_artifact(args.output_dir / "download-manifest.json", {"sources": download_records})
     write_proof_artifact(args.output_dir / "corpus-manifest.json", manifest)
