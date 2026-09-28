@@ -12,6 +12,9 @@ on:
       - 'benchmarks/smoke_live_provider.py'
       - 'benchmarks/verify_frozen_public_proof.py'
       - 'src/contextmesh/provider_smoke.py'
+      - 'src/contextmesh/big_context_proof.py'
+      - 'tests/test_v17_big_context_gates.py'
+      - 'tests/test_v17_frozen_proof.py'
 
 permissions:
   contents: read
@@ -42,6 +45,15 @@ jobs:
             src/contextmesh/big_context_proof.py \
             src/contextmesh/provider_smoke.py \
             src/contextmesh/judges.py
+
+      - name: Run proof-engine regression tests without provider calls
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,rich]'
+          pytest -q \
+            tests/test_v17_big_context_gates.py \
+            tests/test_v17_frozen_proof.py \
+            tests/test_v17_provider_smoke.py
           test -f benchmarks/big-context/nist-public-corpus.json
           test -f .github/workflows/big-context-live-proof.yml
 
