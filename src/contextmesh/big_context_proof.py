@@ -213,6 +213,7 @@ class NeedleCase(BaseModel):
     kind: NeedleKind
     question: str
     target_assets: list[str] = Field(default_factory=list)
+    target_block_ids: list[str] = Field(default_factory=list)
     expected_present: bool = True
     expected_answer: str | None = None
     match_terms: list[str] = Field(default_factory=list)
@@ -306,14 +307,23 @@ def validate_needle_matrix(
 
     if manifest is not None:
         known_assets = {Path(path).name for path in manifest.assets}
+        known_blocks = set(manifest.coverage_ids())
         unknown: set[str] = set()
+        unknown_blocks: set[str] = set()
         for case in items:
             for target in case.target_assets:
                 if Path(target).name not in known_assets:
                     unknown.add(Path(target).name)
+            for block_id in case.target_block_ids:
+                if block_id not in known_blocks:
+                    unknown_blocks.add(block_id)
         if unknown:
             blockers.append(
                 "unknown-target-assets:" + ",".join(sorted(unknown)[:20])
+            )
+        if unknown_blocks:
+            blockers.append(
+                "unknown-target-blocks:" + ",".join(sorted(unknown_blocks)[:20])
             )
 
     return Gate2NeedleMatrixReport(
@@ -413,6 +423,15 @@ def _asset_matches(path: str, targets: list[str]) -> bool:
     return any(path == target or name == Path(target).name for target in targets)
 
 
+def _ground_truth_block_matches(
+    block: ContextBlock,
+    case: NeedleCase,
+) -> bool:
+    if case.target_block_ids and block.id not in set(case.target_block_ids):
+        return False
+    return _asset_matches(block.source.path, case.target_assets)
+
+
 def _case_recovery_from_result(
     store: FileContextStore,
     corpus_id: str,
@@ -424,7 +443,7 @@ def _case_recovery_from_result(
 
     for evidence in result.evidence:
         block = store.get_block(corpus_id, evidence.block_id)
-        if not _asset_matches(block.source.path, case.target_assets):
+        if not _ground_truth_block_matches(block, case):
             continue
         searchable = "\n".join([block.text or "", evidence.note or ""])
         hits = _term_hits(searchable, case.match_terms)
@@ -439,7 +458,11 @@ def _case_recovery_from_result(
 
     if not case.match_terms:
         recovered = any(
-            _asset_matches(ev.source.path, case.target_assets)
+            (
+                not case.target_block_ids
+                or ev.block_id in set(case.target_block_ids)
+            )
+            and _asset_matches(ev.source.path, case.target_assets)
             for ev in result.evidence
         )
         return recovered, 1.0 if recovered else 0.0, [], sorted(matched_assets)
