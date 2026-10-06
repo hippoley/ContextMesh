@@ -61,6 +61,19 @@ on:
         required: false
         default: ''
         type: string
+      lineage_source_run_id:
+        description: 'Optional workflow run ID carrying the latest lineage; use rollback workflow run after a rollback'
+        required: false
+        default: ''
+        type: string
+      lineage_source_kind:
+        description: 'Artifact kind for lineage_source_run_id'
+        required: true
+        default: 'live-proof'
+        type: choice
+        options:
+          - live-proof
+          - rollback
       promotion_max_cost_ratio:
         description: 'Reject promotion if candidate/reference cost ratio exceeds this'
         required: true
@@ -243,6 +256,25 @@ jobs:
           name: big-context-live-proof-${{ inputs.reference_run_id }}
           path: /tmp/contextmesh-reference
 
+      - name: Download latest lineage source
+        if: ${{ !inputs.smoke_only && inputs.lineage_source_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.lineage_source_run_id }}
+          name: ${{ inputs.lineage_source_kind == 'rollback' && format('big-context-reference-rollback-{0}', inputs.lineage_source_run_id) || format('big-context-live-proof-{0}', inputs.lineage_source_run_id) }}
+          path: /tmp/contextmesh-lineage
+
+      - name: Validate recovery context
+        if: ${{ !inputs.smoke_only && inputs.lineage_source_run_id != '' }}
+        run: |
+          test -f /tmp/contextmesh-lineage/promotion-lineage.json
+          python benchmarks/validate_recovery_context.py \
+            --lineage /tmp/contextmesh-lineage/promotion-lineage.json \
+            --reference-run-id "github-${{ inputs.reference_run_id }}" \
+            --candidate-run-id "github-${{ github.run_id }}" \
+            --output /tmp/contextmesh-nist-proof/results/recovery-context.json
+
       - name: Run Gate 3 live proof
         if: ${{ !inputs.smoke_only && !inputs.run_scale }}
         run: |
@@ -322,7 +354,9 @@ jobs:
         run: |
           if [ -f /tmp/contextmesh-nist-proof/results/promotion-decision.json ]; then
             prior=()
-            if [ -f /tmp/contextmesh-reference/promotion-lineage.json ]; then
+            if [ -f /tmp/contextmesh-lineage/promotion-lineage.json ]; then
+              prior+=(--prior-lineage /tmp/contextmesh-lineage/promotion-lineage.json)
+            elif [ -f /tmp/contextmesh-reference/promotion-lineage.json ]; then
               prior+=(--prior-lineage /tmp/contextmesh-reference/promotion-lineage.json)
             fi
             python benchmarks/update_promotion_lineage.py \
