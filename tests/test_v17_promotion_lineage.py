@@ -89,3 +89,22 @@ def test_lineage_rejects_workflow_identity_mismatch():
         assert "reference run mismatch" in str(exc)
     else:
         raise AssertionError("expected identity mismatch")
+
+
+def test_append_after_rollback_preserves_rollback_history_and_count():
+    first = mod.build_lineage(_decision("A", "B", "PROMOTE"))
+    first["schema_version"] = 2
+    first["rollback_count"] = 1
+    first["supersedes_lineage_fingerprint"] = first["lineage_fingerprint"]
+    # Re-fingerprint after simulating a valid rollback-derived lineage envelope.
+    first["lineage_fingerprint"] = mod._fingerprint(first)
+
+    second = mod.build_lineage(
+        _decision("B", "C", "PROMOTE"),
+        prior_lineage=first,
+        expected_reference_run_id="B",
+        expected_candidate_run_id="C",
+    )
+    assert second["schema_version"] == 2
+    assert second["rollback_count"] == 1
+    assert second["supersedes_lineage_fingerprint"] == first["supersedes_lineage_fingerprint"]

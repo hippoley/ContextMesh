@@ -82,12 +82,15 @@ def build_lineage(
         current = candidate
 
     payload = {
-        "schema_version": 1,
+        "schema_version": max(2, int(prior_lineage.get("schema_version") or 1)) if prior_lineage else 2,
         "root_reference_run_id": root,
         "current_reference_run_id": current,
         "event_count": len(events),
         "events": events,
+        "rollback_count": int((prior_lineage or {}).get("rollback_count") or 0),
     }
+    if prior_lineage and prior_lineage.get("supersedes_lineage_fingerprint"):
+        payload["supersedes_lineage_fingerprint"] = prior_lineage["supersedes_lineage_fingerprint"]
     payload["lineage_fingerprint"] = _fingerprint(payload)
     return payload
 
