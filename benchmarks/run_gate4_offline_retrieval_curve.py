@@ -13,7 +13,7 @@ from contextmesh.big_context_proof import (
     load_needle_matrix,
 )
 from contextmesh.store import FileContextStore
-from gate4_retrieval_diagnostics import lexical_case_diagnostics, failure_classification
+from contextmesh.gate4_diagnostics import lexical_case_diagnostics, failure_classification
 
 
 def _fingerprint(block_ids: list[str]) -> str:
