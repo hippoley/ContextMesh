@@ -124,3 +124,62 @@ def lexical_case_diagnostics(
         })
     return out
 
+
+
+def failure_classification(
+    points: list[dict[str, Any]], case_id: str, key: str
+) -> dict[str, Any]:
+    observations = [
+        (float(point["requested_ratio"]), next(
+            (x for x in point[key] if x["case_id"] == case_id), None
+        ))
+        for point in points
+    ]
+    present = [(ratio, diag) for ratio, diag in observations if diag and diag["expected_present"]]
+    if not present:
+        return {"classification": "not-applicable", "first_failure_scale": None}
+    first_ratio, first_diag = present[0]
+    if not first_diag["recovered"]:
+        return {"classification": "baseline-incapable", "first_failure_scale": first_ratio}
+    for ratio, diag in present[1:]:
+        if not diag["recovered"]:
+            return {"classification": "scale-regression", "first_failure_scale": ratio}
+    return {"classification": "stable", "first_failure_scale": None}
+
+
+def compare_live_to_lexical(
+    lexical_cases: list[dict[str, Any]],
+    live_results: list[Any],
+) -> list[dict[str, Any]]:
+    """Join already-scored live results to retrieval diagnostics without re-judging."""
+    lexical_by_id = {row["case_id"]: row for row in lexical_cases}
+    out: list[dict[str, Any]] = []
+    for live in live_results:
+        if not live.expected_present:
+            continue
+        lexical = lexical_by_id.get(live.case_id)
+        lexical_recovered = None if lexical is None else lexical.get("recovered")
+        if lexical_recovered is False and live.recovered:
+            classification = "contextmesh-recovery-win"
+        elif lexical_recovered is True and not live.recovered:
+            classification = "contextmesh-regression"
+        elif lexical_recovered is False and not live.recovered:
+            classification = "shared-evidence-bottleneck"
+        elif lexical_recovered is True and live.recovered:
+            classification = "stable"
+        else:
+            classification = "baseline-unavailable"
+        out.append({
+            "case_id": live.case_id,
+            "kind": live.kind.value,
+            "lexical_recovered": lexical_recovered,
+            "contextmesh_recovered": live.recovered,
+            "term_recall": live.term_recall,
+            "coverage": live.coverage,
+            "visited_blocks": live.visited_blocks,
+            "total_blocks": live.total_blocks,
+            "judgment_valid": live.judgment_valid,
+            "latency_seconds": live.latency_seconds,
+            "classification": classification,
+        })
+    return out
