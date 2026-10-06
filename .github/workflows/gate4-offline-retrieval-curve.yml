@@ -2,6 +2,16 @@ name: Gate 4 Offline Retrieval Curve
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'benchmarks/run_gate4_offline_retrieval_curve.py'
+      - 'benchmarks/plan_gate4_scale.py'
+      - 'benchmarks/build_public_nist_proof.py'
+      - 'benchmarks/verify_frozen_public_proof.py'
+      - 'benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json'
+      - 'benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json'
+      - 'src/contextmesh/big_context_proof.py'
+      - '.github/workflows/gate4-offline-retrieval-curve.yml'
   push:
     branches: [main]
     paths:
