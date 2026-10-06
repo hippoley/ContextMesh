@@ -382,6 +382,18 @@ jobs:
               > /tmp/contextmesh-nist-proof/results/gate4-scale-curve.md
           fi
 
+      - name: Render reviewer-facing evidence report
+        if: always()
+        run: |
+          args=()
+          if [ -f /tmp/contextmesh-nist-proof/results/gate5-drift-diff.json ]; then
+            args+=(--gate5-diff /tmp/contextmesh-nist-proof/results/gate5-drift-diff.json)
+          fi
+          python benchmarks/render_big_context_evidence_report.py \
+            --live-proof /tmp/contextmesh-nist-proof/results/live-proof.json \
+            --markdown /tmp/contextmesh-nist-proof/results/evidence-report.md \
+            "${args[@]}"
+
       - name: Summarize live run artifact
         if: always()
         run: |
