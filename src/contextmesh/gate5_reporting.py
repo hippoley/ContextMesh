@@ -45,3 +45,71 @@ def case_drift_rows(
             "classification": classification,
         })
     return rows
+
+
+def _points_by_ratio(proof: dict[str, Any] | None) -> dict[float, dict[str, Any]]:
+    if not isinstance(proof, dict):
+        return {}
+    gate4 = proof.get("gate4")
+    if not isinstance(gate4, dict):
+        return {}
+    out: dict[float, dict[str, Any]] = {}
+    for point in gate4.get("points") or []:
+        if not isinstance(point, dict):
+            continue
+        try:
+            out[float(point.get("requested_ratio"))] = point
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def scale_case_drift_matrix(
+    reference_proof: dict[str, Any] | None,
+    candidate_proof: dict[str, Any] | None,
+) -> dict[str, Any]:
+    reference = _points_by_ratio(reference_proof)
+    candidate = _points_by_ratio(candidate_proof)
+    ratios = sorted(set(reference) | set(candidate))
+    points = [
+        {
+            "requested_ratio": ratio,
+            "cases": case_drift_rows(reference.get(ratio), candidate.get(ratio)),
+        }
+        for ratio in ratios
+    ]
+    case_ids = sorted({
+        row["case_id"]
+        for point in points
+        for row in point["cases"]
+    })
+    onset: list[dict[str, Any]] = []
+    for case_id in case_ids:
+        ref_fail = None
+        cand_fail = None
+        comparable = True
+        for ratio in ratios:
+            ref = _case_map(reference.get(ratio)).get(case_id)
+            cand = _case_map(candidate.get(ratio)).get(case_id)
+            if ref is None or cand is None:
+                comparable = False
+                continue
+            if ref_fail is None and not bool(ref.get("recovered")):
+                ref_fail = ratio
+            if cand_fail is None and not bool(cand.get("recovered")):
+                cand_fail = ratio
+        if not comparable:
+            classification = "not-comparable"
+        elif cand_fail is not None and (ref_fail is None or cand_fail < ref_fail):
+            classification = "failure-onset-earlier"
+        elif ref_fail is not None and (cand_fail is None or cand_fail > ref_fail):
+            classification = "failure-onset-later"
+        else:
+            classification = "failure-onset-stable"
+        onset.append({
+            "case_id": case_id,
+            "reference_first_failure_ratio": ref_fail,
+            "candidate_first_failure_ratio": cand_fail,
+            "classification": classification,
+        })
+    return {"points": points, "failure_onset": onset}

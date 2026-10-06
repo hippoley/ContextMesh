@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from contextmesh.gate5_reporting import case_drift_rows
+from contextmesh.gate5_reporting import case_drift_rows, scale_case_drift_matrix
 
 
 def _load(path: Path) -> dict[str, Any] | None:
@@ -142,6 +142,7 @@ def build_diff(
             },
         },
         "case_drift_20x": case_drift_rows(ref20, cand20),
+        "scale_case_drift": scale_case_drift_matrix(reference_proof, candidate_proof),
         "blockers": list(g(cand_gate5, "blockers") or []),
     }
     return out
@@ -223,6 +224,22 @@ def render_markdown(diff: dict[str, Any]) -> str:
                 f"| {row.get('case_id')} | {row.get('kind')} | "
                 f"{_fmt(row.get('reference_recovered'))} | "
                 f"{_fmt(row.get('candidate_recovered'))} | "
+                f"{row.get('classification')} |"
+            )
+    onset = (diff.get("scale_case_drift") or {}).get("failure_onset") or []
+    if onset:
+        lines += [
+            "",
+            "## Failure Onset",
+            "",
+            "| Case | Reference first fail | Candidate first fail | Classification |",
+            "|:---|---:|---:|:---|",
+        ]
+        for row in onset:
+            lines.append(
+                f"| {row.get('case_id')} | "
+                f"{_fmt(row.get('reference_first_failure_ratio'))} | "
+                f"{_fmt(row.get('candidate_first_failure_ratio'))} | "
                 f"{row.get('classification')} |"
             )
     blockers = diff.get("blockers") or []
