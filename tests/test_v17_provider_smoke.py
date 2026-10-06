@@ -164,3 +164,66 @@ def test_vision_failure_preserves_completed_text_call_usage():
     assert evidence["completion_tokens"] == 1
     assert evidence["total_tokens"] == 11
     assert evidence["failed_stage"] == "vision"
+
+
+def test_text_validation_failure_counts_completed_call_and_usage():
+    def opener(request, timeout):
+        return _Response(
+            {
+                "choices": [{"message": {"content": "WRONG"}}],
+                "usage": {"prompt_tokens": 8, "completion_tokens": 2, "total_tokens": 10},
+            }
+        )
+
+    with pytest.raises(ProviderSmokeError) as exc:
+        smoke_openai_compatible(
+            base_url="https://workspace.example/compatible-mode/v1",
+            model="qwen3-vl-8b-instruct",
+            api_key="secret",
+            opener=opener,
+        )
+
+    assert exc.value.evidence() == {
+        "provider_calls": 1,
+        "prompt_tokens": 8,
+        "completion_tokens": 2,
+        "total_tokens": 10,
+        "failed_stage": "text-validation",
+    }
+
+
+def test_vision_validation_failure_counts_both_completed_calls_and_usage():
+    calls = 0
+
+    def opener(request, timeout):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return _Response(
+                {
+                    "choices": [{"message": {"content": "TEXT_OK"}}],
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 1, "total_tokens": 11},
+                }
+            )
+        return _Response(
+            {
+                "choices": [{"message": {"content": "BLUE"}}],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 2, "total_tokens": 22},
+            }
+        )
+
+    with pytest.raises(ProviderSmokeError) as exc:
+        smoke_openai_compatible(
+            base_url="https://workspace.example/compatible-mode/v1",
+            model="qwen3-vl-8b-instruct",
+            api_key="secret",
+            opener=opener,
+        )
+
+    assert exc.value.evidence() == {
+        "provider_calls": 2,
+        "prompt_tokens": 30,
+        "completion_tokens": 3,
+        "total_tokens": 33,
+        "failed_stage": "vision-validation",
+    }

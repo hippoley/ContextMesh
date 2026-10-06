@@ -196,7 +196,12 @@ def smoke_openai_compatible(
     text_ok = "TEXT_OK" in text_response.upper()
     if not text_ok:
         raise ProviderSmokeError(
-            "text smoke response did not contain the expected TEXT_OK marker"
+            "text smoke response did not contain the expected TEXT_OK marker",
+            provider_calls=1,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            stage="text-validation",
         )
 
     try:
@@ -246,7 +251,12 @@ def smoke_openai_compatible(
     vision_ok = "MAGENTA" in vision_response.upper()
     if not vision_ok:
         raise ProviderSmokeError(
-            "vision smoke response did not contain the expected MAGENTA marker"
+            "vision smoke response did not contain the expected MAGENTA marker",
+            provider_calls=2,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            stage="vision-validation",
         )
 
     return ProviderSmokeResult(
