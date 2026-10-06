@@ -1,4 +1,4 @@
-from benchmarks.render_gate4_scale_curve import case_rows, render_markdown
+from contextmesh.gate4_reporting import case_rows, render_markdown
 
 
 def test_case_rows_and_markdown_render_live_telemetry() -> None:
