@@ -127,3 +127,40 @@ def test_provider_smoke_failure_does_not_echo_secret():
 
     assert secret not in str(exc.value)
     assert "HTTP 401" in str(exc.value)
+
+
+def test_vision_failure_preserves_completed_text_call_usage():
+    calls = []
+
+    def opener(request, timeout):
+        calls.append(request.full_url)
+        if len(calls) == 1:
+            return _Response(
+                {
+                    "choices": [{"message": {"content": "TEXT_OK"}}],
+                    "usage": {
+                        "prompt_tokens": 10,
+                        "completion_tokens": 1,
+                        "total_tokens": 11,
+                    },
+                }
+            )
+        raise urllib.error.HTTPError(
+            request.full_url, 400, "Bad Request", hdrs=None, fp=None
+        )
+
+    with pytest.raises(ProviderSmokeError) as exc:
+        smoke_openai_compatible(
+            base_url="https://workspace.example/compatible-mode/v1",
+            model="qwen3-vl-8b-instruct",
+            api_key="secret",
+            opener=opener,
+        )
+
+    evidence = exc.value.evidence()
+    assert len(calls) == 2
+    assert evidence["provider_calls"] == 1
+    assert evidence["prompt_tokens"] == 10
+    assert evidence["completion_tokens"] == 1
+    assert evidence["total_tokens"] == 11
+    assert evidence["failed_stage"] == "vision"
