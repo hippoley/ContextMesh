@@ -9,7 +9,7 @@ def test_manifest_surfaces_provider_configuration_blocker(tmp_path: Path) -> Non
         '"reason":"missing-provider-credential","provider":"dashscope"}\n',
         encoding="utf-8",
     )
-    manifest = build_manifest(
+    manifest = _build_manifest()(
         tmp_path,
         run_id="123",
         git_sha="abc",
