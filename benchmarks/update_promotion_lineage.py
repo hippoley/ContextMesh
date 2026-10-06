@@ -42,6 +42,13 @@ def build_lineage(
         raise ValueError("promotion decision must require Gate 5 PASS")
     if policy.get("requires_scale20_comparability") is not True:
         raise ValueError("promotion decision must require 20x comparability")
+    limits = {"max_cost_ratio": 1.25, "max_latency_ratio": 1.25, "max_scale20_recall_drop": 0.05}
+    for key, allowed in limits.items():
+        value = policy.get(key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"promotion policy {key} must be numeric")
+        if float(value) > allowed:
+            raise ValueError(f"promotion policy {key}={float(value):.3f} exceeds allowed {allowed:.3f}")
 
     reference = decision.get("reference_run_id")
     candidate = decision.get("candidate_run_id")
