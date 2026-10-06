@@ -40,7 +40,11 @@ def build_manifest(
     elif proof is not None:
         stage = "live-proof-complete"
     elif smoke is not None:
-        stage = "provider-smoke-complete"
+        stage = (
+            "provider-smoke-failed"
+            if smoke.get("status") == "failed"
+            else "provider-smoke-complete"
+        )
     elif cost is not None:
         stage = "preflight-complete-no-provider"
     elif verification is not None:

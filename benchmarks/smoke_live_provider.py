@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 
-from contextmesh.provider_smoke import smoke_openai_compatible
+from contextmesh.provider_smoke import ProviderSmokeError, smoke_openai_compatible
 
 
 def main() -> int:
@@ -24,12 +24,31 @@ def main() -> int:
         print(f"PROVIDER_SMOKE_BLOCKED missing environment variable: {args.api_key_env}")
         return 2
 
-    result = smoke_openai_compatible(
-        base_url=args.base_url,
-        model=args.model,
-        api_key=api_key,
-        timeout=args.timeout,
-    )
+    try:
+        result = smoke_openai_compatible(
+            base_url=args.base_url,
+            model=args.model,
+            api_key=api_key,
+            timeout=args.timeout,
+        )
+    except ProviderSmokeError as exc:
+        payload = {
+            "schema_version": 1,
+            "status": "failed",
+            "model": args.model,
+            "base_url": args.base_url,
+            "error": str(exc),
+            "credential_material_recorded": False,
+        }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False))
+        print("PROVIDER_SMOKE_FAIL")
+        return 3
+
     payload = result.as_dict()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
