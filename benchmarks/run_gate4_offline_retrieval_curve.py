@@ -174,6 +174,30 @@ def main() -> int:
             "{selected_blocks} | {selected_assets} | {lexical_top_5_evidence_recall:.3f} | "
             "{lexical_top_20_evidence_recall:.3f} |".format(**row)
         )
+    lines.extend([
+        "",
+        "## Case evidence sufficiency (lexical top-20)",
+        "",
+        "| Scale | Case | First hit | Sufficient rank | Result | Failure reason |",
+        "| ---: | :--- | ---: | ---: | :---: | :--- |",
+    ])
+    for row in rows:
+        for case in row["lexical_top_20_cases"]:
+            if not case.get("expected_present", True):
+                continue
+            first_hit = case.get("best_ground_truth_rank")
+            sufficient = case.get("first_sufficient_rank")
+            lines.append(
+                "| {scale:g}x | {case_id} | {first_hit} | {sufficient} | {result} | {reason} |".format(
+                    scale=float(row["requested_ratio"]),
+                    case_id=case.get("case_id"),
+                    first_hit="—" if first_hit is None else first_hit,
+                    sufficient="—" if sufficient is None else sufficient,
+                    result="recovered" if case.get("recovered") else "miss",
+                    reason=case.get("failure_reason") or "—",
+                )
+            )
+
     lines.extend(
         [
             "",
