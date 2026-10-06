@@ -63,3 +63,44 @@ def test_evidence_summary_missing_live_proof_is_not_run() -> None:
     summary = build_evidence_summary(None)
     assert summary["status"] == "not-run"
     assert summary["provenance"]["live_proof"] == "missing"
+
+
+def test_renderer_persists_machine_readable_summary(tmp_path, monkeypatch):
+    from importlib.util import module_from_spec, spec_from_file_location
+    import json
+    from pathlib import Path
+    import sys
+
+    script = Path("benchmarks/render_big_context_evidence_report.py")
+    spec = spec_from_file_location("render_evidence_report_script", script)
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    live = tmp_path / "live-proof.json"
+    markdown = tmp_path / "evidence-report.md"
+    summary = tmp_path / "evidence-summary.json"
+    live.write_text(
+        json.dumps({"gate3": {"status": "pass"}, "gate4": {"status": "pass", "blockers": []}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "render_big_context_evidence_report.py",
+            "--live-proof",
+            str(live),
+            "--markdown",
+            str(markdown),
+            "--json",
+            str(summary),
+        ],
+    )
+
+    assert module.main() == 0
+    assert markdown.is_file()
+    assert summary.is_file()
+    payload = json.loads(summary.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["gates"]["gate4"]["status"] == "pass"
