@@ -108,3 +108,33 @@ def test_malformed_blockers_hold_without_iterating_string() -> None:
     result = evidence_check(summary)
     assert result["decision"] == "hold"
     assert "gate4-blockers:invalid" in result["reasons"]
+
+
+def test_boolean_failure_onset_count_is_rejected() -> None:
+    summary = {
+        "schema_version": 1,
+        "gates": {
+            "gate3": {"status": "pass"},
+            "gate4": {"status": "pass", "blockers": []},
+            "gate5": {"status": "not-run"},
+        },
+        "gate5_failure_onset": {"earlier": True},
+    }
+    result = evidence_check(summary)
+    assert result["decision"] == "hold"
+    assert result["reasons"] == ["invalid-failure-onset-count"]
+
+
+def test_numeric_string_failure_onset_count_is_rejected() -> None:
+    summary = {
+        "schema_version": 1,
+        "gates": {
+            "gate3": {"status": "pass"},
+            "gate4": {"status": "pass", "blockers": []},
+            "gate5": {"status": "not-run"},
+        },
+        "gate5_failure_onset": {"earlier": "2"},
+    }
+    result = evidence_check(summary)
+    assert result["decision"] == "hold"
+    assert result["reasons"] == ["invalid-failure-onset-count"]
