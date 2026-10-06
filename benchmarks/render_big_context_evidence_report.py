@@ -23,6 +23,11 @@ def main() -> int:
     live = _load(args.live_proof)\n    gate5 = _load(args.gate5_diff)\n    text = build_evidence_report(live, gate5)\n    summary = build_evidence_summary(live, gate5)
     args.markdown.parent.mkdir(parents=True, exist_ok=True)
     args.markdown.write_text(text + "\n", encoding="utf-8")
+    args.json.parent.mkdir(parents=True, exist_ok=True)
+    args.json.write_text(
+        json.dumps(summary, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
     print(text)
     return 0
 
