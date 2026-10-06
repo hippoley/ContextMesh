@@ -83,7 +83,9 @@ def build_manifest(
         "provider_tokens": int(smoke.get("total_tokens") or 0) if smoke else 0,
         "estimated_cost_cny": cost.get("estimated_cost_cny") if cost else None,
         "within_budget": cost.get("within_budget") if cost else None,
-        "frozen_proof_verified": bool(verification),
+        "frozen_proof_verified": (
+            verification.get("verified") is True if verification else False
+        ),
         "scale_plan_fingerprint": (
             scale_plan.get("anchor_fingerprint") if scale_plan else None
         ),
