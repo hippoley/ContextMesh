@@ -84,3 +84,13 @@ def test_promotion_rejects_negative_policy_thresholds():
         assert "must be non-negative" in str(exc)
     else:
         raise AssertionError("expected negative threshold rejection")
+
+
+def test_promotion_rejects_non_finite_policy_thresholds():
+    for value in [float("nan"), float("inf"), float("-inf")]:
+        try:
+            mod.decide(_diff(), max_cost_ratio=value)
+        except ValueError as exc:
+            assert "must be finite" in str(exc)
+        else:
+            raise AssertionError("expected non-finite threshold rejection")
