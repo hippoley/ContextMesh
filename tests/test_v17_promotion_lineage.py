@@ -160,3 +160,16 @@ def test_lineage_rejects_non_finite_policy_thresholds():
             assert "must be finite" in str(exc)
         else:
             raise AssertionError("expected non-finite lineage policy rejection")
+
+
+def test_lineage_rejects_ambiguous_run_identities():
+    for reference, candidate in [(" ", "B"), (1, "B"), (True, "B"), (" A", "B"), ("A ", "B")]:
+        decision = _decision("A", "B", "PROMOTE")
+        decision["reference_run_id"] = reference
+        decision["candidate_run_id"] = candidate
+        try:
+            mod.build_lineage(decision)
+        except ValueError as exc:
+            assert "promotion decision reference_run_id" in str(exc)
+        else:
+            raise AssertionError("expected ambiguous run identity rejection")
