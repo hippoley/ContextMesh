@@ -1,4 +1,4 @@
-from contextmesh.evidence_reporting import build_evidence_report
+from contextmesh.evidence_reporting import build_evidence_report, build_evidence_summary
 
 
 def test_evidence_report_keeps_missing_live_proof_not_run() -> None:
@@ -37,3 +37,29 @@ def test_evidence_report_summarizes_existing_evidence_without_rejudging() -> Non
     assert "cross-file-008: 10x -> 5x" in text
     assert "scale-point-failed:20x" in text
     assert "diagnostic classifications do not override" in text
+
+
+def test_evidence_summary_is_read_only_and_provenanced() -> None:
+    proof = {
+        "gate3": {"status": "pass"},
+        "gate4": {
+            "status": "fail",
+            "points": [],
+            "blockers": ["scale-point-failed:20x"],
+        },
+    }
+    summary = build_evidence_summary(proof)
+    assert summary["schema_version"] == 1
+    assert summary["gates"]["gate3"]["status"] == "pass"
+    assert summary["gates"]["gate3"]["source"] == "live-proof.json#/gate3/status"
+    assert summary["gates"]["gate4"]["status"] == "fail"
+    assert summary["gates"]["gate4"]["blockers"] == ["scale-point-failed:20x"]
+    assert summary["gates"]["gate5"]["status"] == "not-run"
+    assert summary["gates"]["gate5"]["source"] is None
+    assert summary["provenance"]["policy"] == "read-only-summary-no-rejudging"
+
+
+def test_evidence_summary_missing_live_proof_is_not_run() -> None:
+    summary = build_evidence_summary(None)
+    assert summary["status"] == "not-run"
+    assert summary["provenance"]["live_proof"] == "missing"
