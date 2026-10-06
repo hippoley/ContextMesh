@@ -31,6 +31,8 @@ def build_manifest(
     proof = _load(result_dir / "live-proof.json")
     verification = _load(result_dir / "frozen-proof-verification.json")
     scale_plan = _load(result_dir / "gate4-scale-plan.json")
+    promotion = _load(result_dir / "promotion-decision.json")
+    lineage = _load(result_dir / "promotion-lineage.json")
 
     if proof is not None:
         stage = "live-proof-complete"
@@ -76,7 +78,14 @@ def build_manifest(
         "scale_plan_fingerprint": (
             scale_plan.get("anchor_fingerprint") if scale_plan else None
         ),
-        "files_present": sorted(path.name for path in result_dir.glob("*.json")),
+        "promotion_decision": promotion.get("decision") if promotion else None,
+        "promotion_lineage_fingerprint": (
+            lineage.get("lineage_fingerprint") if lineage else None
+        ),
+        "current_reference_run_id": (
+            lineage.get("current_reference_run_id") if lineage else None
+        ),
+        "files_present": sorted(path.name for path in result_dir.iterdir() if path.is_file()),
         "credential_material_recorded": False,
     }
 
