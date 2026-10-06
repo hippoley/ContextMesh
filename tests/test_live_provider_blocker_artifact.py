@@ -1,6 +1,14 @@
+from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
-from benchmarks.summarize_big_context_live_run import build_manifest
+
+def _build_manifest():
+    path = Path("benchmarks/summarize_big_context_live_run.py")
+    spec = spec_from_file_location("summarize_big_context_live_run", path)
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.build_manifest
 
 
 def test_manifest_surfaces_provider_configuration_blocker(tmp_path: Path) -> None:
