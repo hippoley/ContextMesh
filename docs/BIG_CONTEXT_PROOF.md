@@ -252,6 +252,28 @@ candidate/reference latency      <= 1.25x
 
 Missing comparability or unavailable operational ratios produce `HOLD`, not `PROMOTE`.
 
+### Promotion lineage
+
+Each comparable candidate run can append a verified lineage event:
+
+```text
+A
+↓ PROMOTE
+B
+├─ C REJECT
+└─ D PROMOTE
+   ↓
+   current reference = D
+```
+
+The lineage is carried forward from the selected reference artifact. It rejects:
+- a candidate whose decision names a different workflow run;
+- a decision whose reference is not the lineage's current reference;
+- a tampered prior lineage fingerprint;
+- self-comparison where reference and candidate are the same run.
+
+Only `PROMOTE` advances `current_reference_run_id`; `HOLD` and `REJECT` remain historical branches.
+
 ## Run the proof
 
 First live run:
