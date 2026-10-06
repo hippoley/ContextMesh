@@ -11,12 +11,19 @@ spec.loader.exec_module(mod)
 
 def _decision(reference, candidate, outcome):
     return {
+        "schema_version": 1,
         "decision": outcome,
         "reference_run_id": reference,
         "candidate_run_id": candidate,
         "hard_failures": [] if outcome != "REJECT" else ["quality-regression"],
         "warnings": [] if outcome != "HOLD" else ["cost-ratio-unavailable"],
-        "policy": {"max_cost_ratio": 1.25},
+        "policy": {
+            "max_cost_ratio": 1.25,
+            "max_latency_ratio": 1.25,
+            "max_scale20_recall_drop": 0.05,
+            "requires_gate5_pass": True,
+            "requires_scale20_comparability": True,
+        },
     }
 
 
@@ -108,3 +115,25 @@ def test_append_after_rollback_preserves_rollback_history_and_count():
     assert second["schema_version"] == 2
     assert second["rollback_count"] == 1
     assert second["supersedes_lineage_fingerprint"] == first["supersedes_lineage_fingerprint"]
+
+
+def test_lineage_rejects_unversioned_promotion_artifact():
+    decision = _decision("A", "B", "PROMOTE")
+    decision.pop("schema_version")
+    try:
+        mod.build_lineage(decision)
+    except ValueError as exc:
+        assert "unsupported promotion decision schema" in str(exc)
+    else:
+        raise AssertionError("expected schema rejection")
+
+
+def test_lineage_rejects_weakened_promotion_policy():
+    decision = _decision("A", "B", "PROMOTE")
+    decision["policy"]["requires_gate5_pass"] = False
+    try:
+        mod.build_lineage(decision)
+    except ValueError as exc:
+        assert "must require Gate 5 PASS" in str(exc)
+    else:
+        raise AssertionError("expected weakened policy rejection")
