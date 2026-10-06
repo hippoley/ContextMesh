@@ -33,8 +33,11 @@ def build_manifest(
     scale_plan = _load(result_dir / "gate4-scale-plan.json")
     promotion = _load(result_dir / "promotion-decision.json")
     lineage = _load(result_dir / "promotion-lineage.json")
+    provider_blocker = _load(result_dir / "provider-blocker.json")
 
-    if proof is not None:
+    if provider_blocker is not None:
+        stage = "provider-configuration-blocked"
+    elif proof is not None:
         stage = "live-proof-complete"
     elif smoke is not None:
         stage = "provider-smoke-complete"
@@ -71,6 +74,7 @@ def build_manifest(
         "claim_proven": claim_proven,
         "gate_statuses": gate_statuses,
         "provider_calls": int(smoke.get("provider_calls") or 0) if smoke else 0,
+        "provider_blocker": provider_blocker,
         "provider_tokens": int(smoke.get("total_tokens") or 0) if smoke else 0,
         "estimated_cost_cny": cost.get("estimated_cost_cny") if cost else None,
         "within_budget": cost.get("within_budget") if cost else None,
