@@ -49,7 +49,11 @@ def build_manifest(
     elif cost is not None:
         stage = "preflight-complete-no-provider"
     elif verification is not None:
-        stage = "frozen-proof-verified"
+        stage = (
+            "frozen-proof-verified"
+            if verification.get("verified") is True
+            else "frozen-proof-verification-failed"
+        )
     else:
         stage = "setup-incomplete"
 
