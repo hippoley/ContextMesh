@@ -30,6 +30,9 @@ def lexical_case_diagnostics(
                 "expected_present": False,
                 "recovered": None,
                 "best_ground_truth_rank": None,
+                "ground_truth_ranks": [],
+                "first_sufficient_rank": None,
+                "failure_reason": "not-applicable",
                 "matched_terms": [],
                 "matched_assets": [],
             })
@@ -40,12 +43,38 @@ def lexical_case_diagnostics(
         matched_terms: set[str] = set()
         matched_assets: set[str] = set()
         matched_target = False
-        best_rank: int | None = None
+        ground_truth_ranks: list[int] = []
+        first_sufficient_rank: int | None = None
 
+        required_asset_hits = case.required_asset_hits
+        if required_asset_hits is None:
+            required_asset_hits = (
+                len(case.target_assets)
+                if case.kind == NeedleKind.CROSS_FILE and case.target_assets
+                else 1
+            )
+
+        cumulative_terms: set[str] = set()
+        cumulative_assets: set[str] = set()
         for rank, block_id in enumerate(ordered, start=1):
             block = reader.read(block_id)
-            if _ground_truth_block_matches(block, case):
-                best_rank = rank
+            if not _ground_truth_block_matches(block, case):
+                continue
+            ground_truth_ranks.append(rank)
+            hits = _term_hits(block.text or "", case.match_terms)
+            cumulative_terms.update(hits)
+            if hits or not case.match_terms:
+                cumulative_assets.add(Path(block.source.path).name)
+            if case.match_terms:
+                cumulative_terms_ok = (
+                    len(cumulative_terms) == len(set(case.match_terms))
+                    if case.match_all_terms
+                    else bool(cumulative_terms)
+                )
+            else:
+                cumulative_terms_ok = True
+            if cumulative_terms_ok and len(cumulative_assets) >= required_asset_hits:
+                first_sufficient_rank = rank
                 break
 
         for block_id in selected_ids:
@@ -67,14 +96,16 @@ def lexical_case_diagnostics(
         else:
             terms_ok = matched_target
 
-        required_asset_hits = case.required_asset_hits
-        if required_asset_hits is None:
-            required_asset_hits = (
-                len(case.target_assets)
-                if case.kind == NeedleKind.CROSS_FILE and case.target_assets
-                else 1
-            )
         assets_ok = len(matched_assets) >= required_asset_hits
+        if terms_ok and assets_ok:
+            failure_reason = "recovered"
+        elif not matched_target:
+            failure_reason = "candidate-miss"
+        elif not terms_ok:
+            failure_reason = "term-miss"
+        else:
+            failure_reason = "asset-miss"
+
         out.append({
             "case_id": case.id,
             "kind": case.kind.value,
@@ -83,12 +114,16 @@ def lexical_case_diagnostics(
             "local_position": getattr(case, "local_position", None),
             "expected_present": True,
             "recovered": bool(terms_ok and assets_ok),
-            "best_ground_truth_rank": best_rank,
+            "best_ground_truth_rank": ground_truth_ranks[0] if ground_truth_ranks else None,
+            "ground_truth_ranks": ground_truth_ranks,
+            "first_sufficient_rank": first_sufficient_rank,
+            "failure_reason": failure_reason,
             "matched_terms": sorted(matched_terms),
             "matched_assets": sorted(matched_assets),
             "required_asset_hits": required_asset_hits,
         })
     return out
+
 
 
 def failure_classification(
