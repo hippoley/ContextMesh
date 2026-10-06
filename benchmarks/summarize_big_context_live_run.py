@@ -34,6 +34,7 @@ def build_manifest(
     promotion = _load(result_dir / "promotion-decision.json")
     lineage = _load(result_dir / "promotion-lineage.json")
     provider_blocker = _load(result_dir / "provider-blocker.json")
+    evidence_check = _load(result_dir / "evidence-check.json")
 
     if provider_blocker is not None:
         stage = "provider-configuration-blocked"
@@ -86,6 +87,9 @@ def build_manifest(
         "scale_plan_fingerprint": (
             scale_plan.get("anchor_fingerprint") if scale_plan else None
         ),
+        "evidence_readiness": evidence_check.get("decision") if evidence_check else None,
+        "evidence_readiness_reasons": list(evidence_check.get("reasons") or []) if evidence_check else [],
+        "evidence_readiness_policy": evidence_check.get("policy") if evidence_check else None,
         "promotion_decision": promotion.get("decision") if promotion else None,
         "promotion_lineage_fingerprint": (
             lineage.get("lineage_fingerprint") if lineage else None
