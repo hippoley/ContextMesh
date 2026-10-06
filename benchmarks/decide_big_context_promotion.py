@@ -15,10 +15,24 @@ def _load(path: Path) -> dict[str, Any] | None:
 
 
 def _metric(diff: dict[str, Any], section: str, key: str, field: str) -> float | None:
-    item = (diff.get(section) or {}).get(key) or {}
+    container = diff.get(section)
+    if not isinstance(container, dict):
+        return None
+    item = container.get(key)
+    if not isinstance(item, dict):
+        return None
     value = item.get(field)
-    return None if value is None else float(value)
-
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError(f"{section}.{key}.{field} must be numeric")
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{section}.{key}.{field} must be numeric") from exc
+    if not math.isfinite(parsed):
+        raise ValueError(f"{section}.{key}.{field} must be finite")
+    return parsed
 
 def decide(
     diff: dict[str, Any] | None,
@@ -62,7 +76,13 @@ def decide(
     if str(diff.get("status")).lower() != "pass":
         hard_failures.append(f"gate5-status={diff.get('status')}")
 
-    scale20_delta = _metric(diff, "scale_20x", "contextmesh_evidence_recall", "delta")
+    try:
+        scale20_delta = _metric(diff, "scale_20x", "contextmesh_evidence_recall", "delta")
+        cost_ratio = _metric(diff, "operations", "estimated_cost_usd", "ratio")
+        latency_ratio = _metric(diff, "operations", "latency_seconds", "ratio")
+    except ValueError as exc:
+        hard_failures.append(f"invalid-metric:{exc}")
+        scale20_delta = cost_ratio = latency_ratio = None
     if scale20_delta is None:
         hard_failures.append("scale20-contextmesh-recall-missing")
     elif scale20_delta < -max_scale20_recall_drop:
@@ -70,9 +90,6 @@ def decide(
             f"scale20-contextmesh-recall-drop={-scale20_delta:.3f}>"
             f"{max_scale20_recall_drop:.3f}"
         )
-
-    cost_ratio = _metric(diff, "operations", "estimated_cost_usd", "ratio")
-    latency_ratio = _metric(diff, "operations", "latency_seconds", "ratio")
 
     if cost_ratio is None:
         warnings.append("cost-ratio-unavailable")
