@@ -296,6 +296,33 @@ A valid rollback:
 
 The dedicated `Big Context Reference Rollback` workflow makes zero model/provider calls and emits a rollback receipt with `production_deployment_changed=false`.
 
+### Recovery / re-validation after rollback
+
+Rollback does not grant a previously promoted version automatic eligibility to return.
+
+After a rollback, the workflow separates two identities:
+
+```text
+reference_run_id
+  = the live proof run used for Gate 5 comparison
+
+lineage_source_run_id
+  = the workflow artifact carrying the latest lineage state
+```
+
+This matters because a rollback artifact may be newer than the live proof run restored as the current reference.
+
+A repaired candidate must still execute a fresh:
+
+```text
+Gate 3
+→ Gate 4
+→ Gate 5 against the restored current reference
+→ promotion decision
+```
+
+and the latest rollback lineage is appended only after its fingerprint and current-reference identity are verified. Prior promotion history never bypasses re-validation.
+
 ## Run the proof
 
 First live run:
