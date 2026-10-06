@@ -13,6 +13,7 @@ from contextmesh.big_context_proof import (
     load_needle_matrix,
 )
 from contextmesh.store import FileContextStore
+from gate4_retrieval_diagnostics import lexical_case_diagnostics, first_failure_scale
 
 
 def _fingerprint(block_ids: list[str]) -> str:
@@ -93,6 +94,8 @@ def main() -> int:
             top20 = _lexical_evidence_recall(
                 projected_store, projected_id, needles, 20
             )
+            diag5 = lexical_case_diagnostics(projected_store, projected_id, needles, 5)
+            diag20 = lexical_case_diagnostics(projected_store, projected_id, needles, 20)
 
         rows.append(
             {
@@ -106,6 +109,8 @@ def main() -> int:
                 "nested_with_previous": point.nested_with_previous,
                 "lexical_top_5_evidence_recall": top5,
                 "lexical_top_20_evidence_recall": top20,
+                "lexical_top_5_cases": diag5,
+                "lexical_top_20_cases": diag20,
             }
         )
 
@@ -136,6 +141,15 @@ def main() -> int:
         "points": rows,
         "lexical_top_5_max_drop": first5 - min5,
         "lexical_top_20_max_drop": first20 - min20,
+        "case_failures": [
+            {
+                "case_id": case.id,
+                "kind": case.kind.value,
+                "top_5_first_failure_scale": first_failure_scale(rows, case.id, "lexical_top_5_cases"),
+                "top_20_first_failure_scale": first_failure_scale(rows, case.id, "lexical_top_20_cases"),
+            }
+            for case in needles if case.expected_present
+        ],
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
