@@ -29,6 +29,20 @@ def build_lineage(
     expected_candidate_run_id: str | None = None,
     candidate_git_sha: str | None = None,
 ) -> dict[str, Any]:
+    if decision.get("schema_version") != 1:
+        raise ValueError(f"unsupported promotion decision schema: {decision.get('schema_version')!r}")
+    policy = decision.get("policy")
+    if not isinstance(policy, dict):
+        raise ValueError("promotion decision policy is missing or invalid")
+    required_policy = {"max_cost_ratio", "max_latency_ratio", "max_scale20_recall_drop", "requires_gate5_pass", "requires_scale20_comparability"}
+    missing_policy = sorted(required_policy - set(policy))
+    if missing_policy:
+        raise ValueError("promotion decision policy is incomplete: " + ",".join(missing_policy))
+    if policy.get("requires_gate5_pass") is not True:
+        raise ValueError("promotion decision must require Gate 5 PASS")
+    if policy.get("requires_scale20_comparability") is not True:
+        raise ValueError("promotion decision must require 20x comparability")
+
     reference = decision.get("reference_run_id")
     candidate = decision.get("candidate_run_id")
     outcome = str(decision.get("decision") or "").upper()
