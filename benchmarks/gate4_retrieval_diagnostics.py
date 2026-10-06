@@ -91,9 +91,22 @@ def lexical_case_diagnostics(
     return out
 
 
-def first_failure_scale(points: list[dict[str, Any]], case_id: str, key: str) -> float | None:
-    for point in points:
-        diag = next((x for x in point[key] if x["case_id"] == case_id), None)
-        if diag and diag["expected_present"] and not diag["recovered"]:
-            return float(point["requested_ratio"])
-    return None
+def failure_classification(
+    points: list[dict[str, Any]], case_id: str, key: str
+) -> dict[str, Any]:
+    observations = [
+        (float(point["requested_ratio"]), next(
+            (x for x in point[key] if x["case_id"] == case_id), None
+        ))
+        for point in points
+    ]
+    present = [(ratio, diag) for ratio, diag in observations if diag and diag["expected_present"]]
+    if not present:
+        return {"classification": "not-applicable", "first_failure_scale": None}
+    first_ratio, first_diag = present[0]
+    if not first_diag["recovered"]:
+        return {"classification": "baseline-incapable", "first_failure_scale": first_ratio}
+    for ratio, diag in present[1:]:
+        if not diag["recovered"]:
+            return {"classification": "scale-regression", "first_failure_scale": ratio}
+    return {"classification": "stable", "first_failure_scale": None}
