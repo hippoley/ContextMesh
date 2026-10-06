@@ -1,0 +1,106 @@
+name: Gate 4 Offline Retrieval Curve
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'benchmarks/run_gate4_offline_retrieval_curve.py'
+      - 'benchmarks/plan_gate4_scale.py'
+      - 'benchmarks/build_public_nist_proof.py'
+      - 'benchmarks/verify_frozen_public_proof.py'
+      - 'benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json'
+      - 'benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json'
+      - 'src/contextmesh/big_context_proof.py'
+      - '.github/workflows/gate4-offline-retrieval-curve.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'benchmarks/run_gate4_offline_retrieval_curve.py'
+      - 'benchmarks/plan_gate4_scale.py'
+      - 'benchmarks/build_public_nist_proof.py'
+      - 'benchmarks/verify_frozen_public_proof.py'
+      - 'benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json'
+      - 'benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json'
+      - 'src/contextmesh/big_context_proof.py'
+      - '.github/workflows/gate4-offline-retrieval-curve.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-curve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install proof dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev,rich]'
+
+      - name: Rebuild official bounded-table NIST v2 corpus
+        run: |
+          python benchmarks/build_public_nist_proof.py \
+            --workdir /tmp/contextmesh-nist-proof \
+            --output-dir /tmp/contextmesh-nist-proof/results \
+            --model-context-tokens 131072 \
+            --min-corpus-ratio 5 \
+            --corpus-id nist-public-big-context-v2 \
+            --max-table-block-chars 12000
+
+      - name: Rebuild strict frozen Gate 4 plan
+        run: |
+          python benchmarks/plan_gate4_scale.py nist-public-big-context-v2 \
+            --store /tmp/contextmesh-nist-proof/store \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --model-context-tokens 131072 \
+            --ratios "1,2,5,10,20" \
+            --needle-sample-size 12 \
+            --required-max-ratio 20 \
+            --require-cross-file \
+            --require-all-local-positions \
+            --output /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
+
+      - name: Verify rebuilt plan against committed frozen proof
+        run: |
+          python benchmarks/verify_frozen_public_proof.py \
+            --download-manifest /tmp/contextmesh-nist-proof/results/download-manifest.json \
+            --gate4-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
+            --gate1-2-proof benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json \
+            --gate4-preflight benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json \
+            --corpus-manifest /tmp/contextmesh-nist-proof/results/corpus-manifest.json \
+            --needle-matrix /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --task-cases /tmp/contextmesh-nist-proof/results/task-cases.json \
+            --output /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
+
+      - name: Run no-provider retrieval curve on exact frozen projections
+        run: |
+          python benchmarks/run_gate4_offline_retrieval_curve.py \
+            nist-public-big-context-v2 \
+            --store /tmp/contextmesh-nist-proof/store \
+            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+            --scale-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
+            --output /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.json \
+            --markdown /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.md
+
+      - name: Show curve
+        run: |
+          cat /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.md
+          cat /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.json
+
+      - name: Upload offline Gate 4 evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate4-offline-retrieval-curve
+          path: |
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.json
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.md
+            /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
+            /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
+          if-no-files-found: error
+          retention-days: 90
