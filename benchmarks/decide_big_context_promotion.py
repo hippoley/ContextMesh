@@ -26,6 +26,24 @@ def decide(
     max_latency_ratio: float = 1.25,
     max_scale20_recall_drop: float = 0.05,
 ) -> dict[str, Any]:
+    approved_limits = {
+        "max_cost_ratio": 1.25,
+        "max_latency_ratio": 1.25,
+        "max_scale20_recall_drop": 0.05,
+    }
+    requested_limits = {
+        "max_cost_ratio": max_cost_ratio,
+        "max_latency_ratio": max_latency_ratio,
+        "max_scale20_recall_drop": max_scale20_recall_drop,
+    }
+    for key, approved in approved_limits.items():
+        value = requested_limits[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"promotion policy {key} must be numeric")
+        if value < 0:
+            raise ValueError(f"promotion policy {key} must be non-negative")
+        if float(value) > approved:
+            raise ValueError(f"promotion policy {key}={float(value):.3f} exceeds approved {approved:.3f}")
     if not diff or diff.get("status") in {"not-comparable", "not-run", None}:
         return {
             "schema_version": 1,

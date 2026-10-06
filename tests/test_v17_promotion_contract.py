@@ -61,3 +61,26 @@ def test_promotion_holds_when_operations_are_unavailable_but_quality_passes():
     result = mod.decide(diff)
     assert result["decision"] == "HOLD"
     assert "cost-ratio-unavailable" in result["warnings"]
+
+
+def test_promotion_rejects_relaxed_policy_before_decision():
+    for kwargs in [
+        {"max_cost_ratio": 999},
+        {"max_latency_ratio": 999},
+        {"max_scale20_recall_drop": 1.0},
+    ]:
+        try:
+            mod.decide(_diff(), **kwargs)
+        except ValueError as exc:
+            assert "exceeds approved" in str(exc)
+        else:
+            raise AssertionError("expected relaxed promotion policy rejection")
+
+
+def test_promotion_rejects_negative_policy_thresholds():
+    try:
+        mod.decide(_diff(), max_scale20_recall_drop=-0.01)
+    except ValueError as exc:
+        assert "must be non-negative" in str(exc)
+    else:
+        raise AssertionError("expected negative threshold rejection")
