@@ -111,3 +111,57 @@ def test_live_run_manifest_surfaces_evidence_readiness_without_rejudging(tmp_pat
     assert manifest["evidence_readiness_reasons"] == ["gate4:not-run"]
     assert manifest["evidence_readiness_policy"] == "evidence-readiness-only-not-promotion"
     assert manifest["promotion_decision"] is None
+
+
+def test_live_run_manifest_does_not_treat_failed_verification_file_as_verified(tmp_path: Path):
+    result_dir = tmp_path / "results"
+    result_dir.mkdir()
+    (result_dir / "frozen-proof-verification.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "verified": False,
+                "error": "fingerprint mismatch",
+                "provider_calls_made": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = mod.build_manifest(
+        result_dir,
+        run_id="789",
+        git_sha="ghi",
+        provider="dashscope",
+        model="qwen",
+        context_tokens=131072,
+        workers=6,
+        smoke_only=True,
+        run_scale=False,
+    )
+
+    assert manifest["stage"] == "frozen-proof-verified"
+    assert manifest["frozen_proof_verified"] is False
+
+
+def test_live_run_manifest_requires_explicit_true_for_frozen_verification(tmp_path: Path):
+    result_dir = tmp_path / "results"
+    result_dir.mkdir()
+    (result_dir / "frozen-proof-verification.json").write_text(
+        json.dumps({"schema_version": 1, "verified": True}),
+        encoding="utf-8",
+    )
+
+    manifest = mod.build_manifest(
+        result_dir,
+        run_id="790",
+        git_sha="jkl",
+        provider="dashscope",
+        model="qwen",
+        context_tokens=131072,
+        workers=6,
+        smoke_only=True,
+        run_scale=False,
+    )
+
+    assert manifest["frozen_proof_verified"] is True
