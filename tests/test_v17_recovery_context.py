@@ -23,12 +23,19 @@ s3.loader.exec_module(recovery)
 
 def _decision(reference, candidate):
     return {
+        "schema_version": 1,
         "decision": "PROMOTE",
         "reference_run_id": reference,
         "candidate_run_id": candidate,
         "hard_failures": [],
         "warnings": [],
-        "policy": {},
+        "policy": {
+            "max_cost_ratio": 1.25,
+            "max_latency_ratio": 1.25,
+            "max_scale20_recall_drop": 0.05,
+            "requires_gate5_pass": True,
+            "requires_scale20_comparability": True,
+        },
     }
 
 
