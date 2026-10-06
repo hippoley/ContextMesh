@@ -118,6 +118,37 @@ def render_markdown(proof: dict[str, Any], rows: list[dict[str, Any]]) -> str:
                 ]) + " |"
             )
         lines.append("")
+    attribution_rows: list[dict[str, Any]] = []
+    for point in gate4.get("points") or []:
+        if not isinstance(point, dict):
+            continue
+        for baseline, items in (point.get("case_attribution") or {}).items():
+            for item in items or []:
+                if isinstance(item, dict):
+                    attribution_rows.append({
+                        "scale": point.get("requested_ratio"),
+                        "baseline": baseline,
+                        **item,
+                    })
+    if attribution_rows:
+        lines.extend([
+            "## Same-projection attribution",
+            "",
+            "| Scale | Baseline | Case | Lexical | ContextMesh | Classification |",
+            "|---:|:---|:---|:---:|:---:|:---|",
+        ])
+        for item in attribution_rows:
+            lines.append(
+                "| " + " | ".join([
+                    fmt(item.get("scale")),
+                    fmt(item.get("baseline")),
+                    fmt(item.get("case_id")),
+                    fmt(item.get("lexical_recovered")),
+                    fmt(item.get("contextmesh_recovered")),
+                    fmt(item.get("classification")),
+                ]) + " |"
+            )
+        lines.append("")
     blockers = gate4.get("blockers") or []
     if blockers:
         lines.append("Blockers:")
