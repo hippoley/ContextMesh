@@ -140,7 +140,7 @@ def test_live_run_manifest_does_not_treat_failed_verification_file_as_verified(t
         run_scale=False,
     )
 
-    assert manifest["stage"] == "frozen-proof-verified"
+    assert manifest["stage"] == "frozen-proof-verification-failed"
     assert manifest["frozen_proof_verified"] is False
 
 
