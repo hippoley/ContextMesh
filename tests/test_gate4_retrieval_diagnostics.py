@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from benchmarks.gate4_retrieval_diagnostics import failure_classification
+from contextmesh.gate4_diagnostics import failure_classification
 
 
 def test_failure_classification_distinguishes_baseline_and_scale_regression() -> None:
