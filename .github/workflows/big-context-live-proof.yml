@@ -392,6 +392,7 @@ jobs:
           python benchmarks/render_big_context_evidence_report.py \
             --live-proof /tmp/contextmesh-nist-proof/results/live-proof.json \
             --markdown /tmp/contextmesh-nist-proof/results/evidence-report.md \
+            --json /tmp/contextmesh-nist-proof/results/evidence-summary.json \
             "${args[@]}"
 
       - name: Summarize live run artifact
