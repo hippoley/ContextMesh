@@ -137,3 +137,14 @@ def test_lineage_rejects_weakened_promotion_policy():
         assert "must require Gate 5 PASS" in str(exc)
     else:
         raise AssertionError("expected weakened policy rejection")
+
+
+def test_lineage_rejects_weakened_numeric_threshold():
+    decision = _decision("A", "B", "PROMOTE")
+    decision["policy"]["max_cost_ratio"] = 999
+    try:
+        mod.build_lineage(decision)
+    except ValueError as exc:
+        assert "exceeds allowed" in str(exc)
+    else:
+        raise AssertionError("expected weakened threshold rejection")
