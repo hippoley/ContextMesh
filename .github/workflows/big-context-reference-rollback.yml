@@ -1,0 +1,89 @@
+name: Big Context Reference Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Workflow run ID whose artifact contains the current promotion lineage'
+        required: true
+        type: string
+      target_run_id:
+        description: 'Previously promoted proof run ID, e.g. github-123456'
+        required: true
+        type: string
+      reason:
+        description: 'Why the proof reference must be rolled back'
+        required: true
+        type: string
+      incident_ref:
+        description: 'Optional incident/issue/reference identifier'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  rollback-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download source proof artifact
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.source_run_id }}
+          name: big-context-live-proof-${{ inputs.source_run_id }}
+          path: /tmp/contextmesh-source
+
+      - name: Verify and rollback proof reference
+        run: |
+          test -f /tmp/contextmesh-source/promotion-lineage.json
+          mkdir -p /tmp/contextmesh-rollback
+          python benchmarks/rollback_promotion_lineage.py \
+            --lineage /tmp/contextmesh-source/promotion-lineage.json \
+            --target-run-id "${{ inputs.target_run_id }}" \
+            --reason "${{ inputs.reason }}" \
+            --incident-ref "${{ inputs.incident_ref }}" \
+            --operator "${{ github.actor }}" \
+            --json /tmp/contextmesh-rollback/promotion-lineage.json \
+            --markdown /tmp/contextmesh-rollback/reference-rollback.md
+
+      - name: Record rollback receipt
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          lineage = json.loads(Path("/tmp/contextmesh-rollback/promotion-lineage.json").read_text())
+          receipt = {
+              "schema_version": 1,
+              "operation": "proof-reference-rollback",
+              "production_deployment_changed": False,
+              "source_workflow_run_id": os.environ["SOURCE_RUN"],
+              "rollback_workflow_run_id": os.environ["ROLLBACK_RUN"],
+              "target_reference_run_id": lineage["current_reference_run_id"],
+              "lineage_fingerprint": lineage["lineage_fingerprint"],
+              "credential_material_recorded": False,
+          }
+          Path("/tmp/contextmesh-rollback/rollback-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+        env:
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          ROLLBACK_RUN: ${{ github.run_id }}
+
+      - name: Upload rollback artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: big-context-reference-rollback-${{ github.run_id }}
+          path: /tmp/contextmesh-rollback/
+          retention-days: 90

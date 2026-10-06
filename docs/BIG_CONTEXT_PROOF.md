@@ -274,6 +274,28 @@ The lineage is carried forward from the selected reference artifact. It rejects:
 
 Only `PROMOTE` advances `current_reference_run_id`; `HOLD` and `REJECT` remain historical branches.
 
+### Reference rollback
+
+A promotion can later be reversed at the **proof/reference layer** when external evidence exposes a failure that the frozen benchmark did not capture.
+
+Rollback is intentionally separate from promotion and from production deployment:
+
+```text
+A → B PROMOTE
+B → C PROMOTE
+C → B ROLLBACK
+```
+
+A valid rollback:
+- starts from a fingerprint-valid lineage;
+- targets only the root or a run previously reached by `PROMOTE`;
+- requires a non-empty reason;
+- preserves all prior events and appends a `ROLLBACK` event;
+- records the superseded lineage fingerprint;
+- does **not** claim that production traffic or infrastructure was changed.
+
+The dedicated `Big Context Reference Rollback` workflow makes zero model/provider calls and emits a rollback receipt with `production_deployment_changed=false`.
+
 ## Run the proof
 
 First live run:
