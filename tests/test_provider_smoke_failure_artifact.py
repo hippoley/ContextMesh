@@ -83,3 +83,29 @@ def test_missing_credential_still_makes_no_smoke_artifact(
 
     assert script.main() == 2
     assert not output.exists()
+
+
+def test_live_manifest_distinguishes_failed_smoke(tmp_path: Path) -> None:
+    smoke = tmp_path / "provider-smoke.json"
+    smoke.write_text(
+        '{"schema_version":1,"status":"failed","credential_material_recorded":false}\n',
+        encoding="utf-8",
+    )
+    path = Path("benchmarks/summarize_big_context_live_run.py")
+    spec = spec_from_file_location("summarize_live_run_for_smoke_test", path)
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    spec.loader.exec_module(module)
+    manifest = module.build_manifest(
+        tmp_path,
+        run_id="123",
+        git_sha="abc",
+        provider="dashscope",
+        model="qwen",
+        context_tokens=131072,
+        workers=6,
+        smoke_only=True,
+        run_scale=False,
+    )
+    assert manifest["stage"] == "provider-smoke-failed"
+    assert manifest["provider_calls"] == 0
