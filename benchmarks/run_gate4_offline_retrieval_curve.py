@@ -13,7 +13,7 @@ from contextmesh.big_context_proof import (
     load_needle_matrix,
 )
 from contextmesh.store import FileContextStore
-from gate4_retrieval_diagnostics import lexical_case_diagnostics, first_failure_scale
+from gate4_retrieval_diagnostics import lexical_case_diagnostics, failure_classification
 
 
 def _fingerprint(block_ids: list[str]) -> str:
@@ -145,8 +145,8 @@ def main() -> int:
             {
                 "case_id": case.id,
                 "kind": case.kind.value,
-                "top_5_first_failure_scale": first_failure_scale(rows, case.id, "lexical_top_5_cases"),
-                "top_20_first_failure_scale": first_failure_scale(rows, case.id, "lexical_top_20_cases"),
+                "top_5": failure_classification(rows, case.id, "lexical_top_5_cases"),
+                "top_20": failure_classification(rows, case.id, "lexical_top_20_cases"),
             }
             for case in needles if case.expected_present
         ],
