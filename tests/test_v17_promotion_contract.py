@@ -94,3 +94,20 @@ def test_promotion_rejects_non_finite_policy_thresholds():
             assert "must be finite" in str(exc)
         else:
             raise AssertionError("expected non-finite threshold rejection")
+
+
+def test_promotion_rejects_non_finite_artifact_metrics_without_crashing():
+    for value in [float("nan"), float("inf"), float("-inf")]:
+        diff = _diff()
+        diff["operations"]["estimated_cost_usd"]["ratio"] = value
+        result = mod.decide(diff)
+        assert result["decision"] == "REJECT"
+        assert any("invalid-metric:" in item for item in result["hard_failures"])
+
+
+def test_promotion_rejects_malformed_artifact_metric_without_crashing():
+    diff = _diff()
+    diff["scale_20x"]["contextmesh_evidence_recall"]["delta"] = "garbage"
+    result = mod.decide(diff)
+    assert result["decision"] == "REJECT"
+    assert any("must be numeric" in item for item in result["hard_failures"])
