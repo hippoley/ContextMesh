@@ -12,7 +12,17 @@ from typing import Any, Callable
 
 
 class ProviderSmokeError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, provider_calls: int = 0, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int = 0, stage: str = "pre-call") -> None:
+        super().__init__(message)
+        self.provider_calls = provider_calls
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.total_tokens = total_tokens
+        self.stage = stage
+
+    def evidence(self) -> dict[str, Any]:
+        return {"provider_calls": self.provider_calls, "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens, "total_tokens": self.total_tokens, "failed_stage": self.stage}
+
 
 
 @dataclass(frozen=True)
@@ -189,35 +199,45 @@ def smoke_openai_compatible(
             "text smoke response did not contain the expected TEXT_OK marker"
         )
 
-    vision_payload = _post_json(
-        endpoint,
-        api_key,
-        {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": magenta_png_data_url()},
-                        },
-                        {
-                            "type": "text",
-                            "text": (
-                                "What is the dominant color of the attached image? "
-                                "Reply with exactly MAGENTA and nothing else."
-                            ),
-                        },
-                    ],
-                }
-            ],
-            "temperature": 0,
-            "max_tokens": 16,
-        },
-        timeout=timeout,
-        opener=opener,
-    )
+    try:
+        vision_payload = _post_json(
+            endpoint,
+            api_key,
+            {
+                "model": model,
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": magenta_png_data_url()},
+                            },
+                            {
+                                "type": "text",
+                                "text": (
+                                    "What is the dominant color of the attached image? "
+                                    "Reply with exactly MAGENTA and nothing else."
+                                ),
+                            },
+                        ],
+                    }
+                ],
+                "temperature": 0,
+                "max_tokens": 16,
+            },
+            timeout=timeout,
+            opener=opener,
+        )
+    except ProviderSmokeError as exc:
+        raise ProviderSmokeError(
+            str(exc),
+            provider_calls=1,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            stage="vision",
+        ) from exc
     vision_response = _extract_content(vision_payload)
     p, c, t = _usage(vision_payload)
     prompt_tokens += p
