@@ -1446,6 +1446,7 @@ class ScalePointResult(BaseModel):
     recall_by_modality: dict[str, float] = Field(default_factory=dict)
     recall_by_corpus_position: dict[str, float] = Field(default_factory=dict)
     recall_by_local_position: dict[str, float] = Field(default_factory=dict)
+    case_results: list[NeedleRunResult] = Field(default_factory=list)
     blockers: list[str] = Field(default_factory=list)
 
 
@@ -2332,6 +2333,7 @@ def run_scale_curve(
                     recall_by_modality=recovery_slices["modality"],
                     recall_by_corpus_position=recovery_slices["corpus_position"],
                     recall_by_local_position=recovery_slices["local_position"],
+                    case_results=needle_report.results,
                     blockers=point_blockers,
                 )
             )
