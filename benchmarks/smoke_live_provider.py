@@ -38,6 +38,7 @@ def main() -> int:
             "model": args.model,
             "base_url": args.base_url,
             "error": str(exc),
+            **exc.evidence(),
             "credential_material_recorded": False,
         }
         args.output.parent.mkdir(parents=True, exist_ok=True)
