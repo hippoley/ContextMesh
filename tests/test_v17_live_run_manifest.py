@@ -78,3 +78,36 @@ def test_live_run_manifest_distinguishes_preflight_smoke_and_proof(tmp_path: Pat
     assert proof["claim_proven"] is False
     assert proof["gate_statuses"]["gate3"] == "pass"
     assert proof["credential_material_recorded"] is False
+
+
+def test_live_run_manifest_surfaces_evidence_readiness_without_rejudging(tmp_path: Path):
+    result_dir = tmp_path / "results"
+    result_dir.mkdir()
+    (result_dir / "evidence-check.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "decision": "hold",
+                "reasons": ["gate4:not-run"],
+                "policy": "evidence-readiness-only-not-promotion",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = mod.build_manifest(
+        result_dir,
+        run_id="456",
+        git_sha="def",
+        provider="dashscope",
+        model="qwen",
+        context_tokens=131072,
+        workers=6,
+        smoke_only=True,
+        run_scale=False,
+    )
+
+    assert manifest["evidence_readiness"] == "hold"
+    assert manifest["evidence_readiness_reasons"] == ["gate4:not-run"]
+    assert manifest["evidence_readiness_policy"] == "evidence-readiness-only-not-promotion"
+    assert manifest["promotion_decision"] is None
