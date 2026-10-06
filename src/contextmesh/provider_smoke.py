@@ -229,8 +229,15 @@ def smoke_openai_compatible(
             timeout=timeout,
             opener=opener,
         )
-        except ProviderSmokeError as exc:
-        raise ProviderSmokeError(str(exc), provider_calls=1, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens, total_tokens=total_tokens, stage="vision") from exc
+    except ProviderSmokeError as exc:
+        raise ProviderSmokeError(
+            str(exc),
+            provider_calls=1,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            stage="vision",
+        ) from exc
     vision_response = _extract_content(vision_payload)
     p, c, t = _usage(vision_payload)
     prompt_tokens += p
