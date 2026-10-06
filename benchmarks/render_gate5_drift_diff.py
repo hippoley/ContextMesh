@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from contextmesh.gate5_reporting import case_drift_rows
+
 
 def _load(path: Path) -> dict[str, Any] | None:
     if not path.is_file():
@@ -139,6 +141,7 @@ def build_diff(
                 ),
             },
         },
+        "case_drift_20x": case_drift_rows(ref20, cand20),
         "blockers": list(g(cand_gate5, "blockers") or []),
     }
     return out
@@ -206,6 +209,22 @@ def render_markdown(diff: dict[str, Any]) -> str:
         item = diff["scale_20x"][key]
         lines.append(f"| {label} | {_fmt(item['reference'])} | {_fmt(item['candidate'])} | {_fmt(item['delta'])} |")
 
+    case_drift = diff.get("case_drift_20x") or []
+    if case_drift:
+        lines += [
+            "",
+            "## 20× Case Drift",
+            "",
+            "| Case | Kind | Reference | Candidate | Classification |",
+            "|:---|:---|:---:|:---:|:---|",
+        ]
+        for row in case_drift:
+            lines.append(
+                f"| {row.get('case_id')} | {row.get('kind')} | "
+                f"{_fmt(row.get('reference_recovered'))} | "
+                f"{_fmt(row.get('candidate_recovered'))} | "
+                f"{row.get('classification')} |"
+            )
     blockers = diff.get("blockers") or []
     if blockers:
         lines += ["", "## Blockers", ""]
