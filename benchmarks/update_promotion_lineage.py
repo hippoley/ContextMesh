@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,10 @@ def build_lineage(
         value = policy.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(f"promotion policy {key} must be numeric")
+        if not math.isfinite(float(value)):
+            raise ValueError(f"promotion policy {key} must be finite")
+        if float(value) < 0:
+            raise ValueError(f"promotion policy {key} must be non-negative")
         if float(value) > allowed:
             raise ValueError(f"promotion policy {key}={float(value):.3f} exceeds allowed {allowed:.3f}")
 

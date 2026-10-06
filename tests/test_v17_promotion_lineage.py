@@ -148,3 +148,15 @@ def test_lineage_rejects_weakened_numeric_threshold():
         assert "exceeds allowed" in str(exc)
     else:
         raise AssertionError("expected weakened threshold rejection")
+
+
+def test_lineage_rejects_non_finite_policy_thresholds():
+    for value in [float("nan"), float("inf"), float("-inf")]:
+        decision = _decision("A", "B", "PROMOTE")
+        decision["policy"]["max_cost_ratio"] = value
+        try:
+            mod.build_lineage(decision)
+        except ValueError as exc:
+            assert "must be finite" in str(exc)
+        else:
+            raise AssertionError("expected non-finite lineage policy rejection")
