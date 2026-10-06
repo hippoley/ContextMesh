@@ -317,6 +317,24 @@ jobs:
               > /tmp/contextmesh-nist-proof/results/promotion-decision.md
           fi
 
+      - name: Append verified promotion lineage
+        if: always()
+        run: |
+          if [ -f /tmp/contextmesh-nist-proof/results/promotion-decision.json ]; then
+            prior=()
+            if [ -f /tmp/contextmesh-reference/promotion-lineage.json ]; then
+              prior+=(--prior-lineage /tmp/contextmesh-reference/promotion-lineage.json)
+            fi
+            python benchmarks/update_promotion_lineage.py \
+              --decision /tmp/contextmesh-nist-proof/results/promotion-decision.json \
+              "${prior[@]}" \
+              --expected-reference-run-id "github-${{ inputs.reference_run_id }}" \
+              --expected-candidate-run-id "github-${{ github.run_id }}" \
+              --candidate-git-sha "${{ github.sha }}" \
+              --json /tmp/contextmesh-nist-proof/results/promotion-lineage.json \
+              --markdown /tmp/contextmesh-nist-proof/results/promotion-lineage.md
+          fi
+
       - name: Render Gate 4 curve artifacts
         if: always()
         run: |
