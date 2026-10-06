@@ -395,6 +395,34 @@ jobs:
             --json /tmp/contextmesh-nist-proof/results/evidence-summary.json \
             "${args[@]}"
 
+      - name: Observe evidence readiness
+        if: always()
+        run: |
+          python benchmarks/check_evidence_summary.py \
+            --summary /tmp/contextmesh-nist-proof/results/evidence-summary.json \
+            --output /tmp/contextmesh-nist-proof/results/evidence-check.json
+
+          python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+
+          path = Path("/tmp/contextmesh-nist-proof/results/evidence-check.json")
+          result = json.loads(path.read_text(encoding="utf-8"))
+          print("## Big Context Evidence Readiness")
+          print()
+          print("**Decision:** {}".format(str(result.get("decision", "hold")).upper()))
+          print()
+          reasons = result.get("reasons") or []
+          if reasons:
+              print("**Reasons:**")
+              for reason in reasons:
+                  print("- `{}`".format(reason))
+          else:
+              print("No readiness blockers reported.")
+          print()
+          print("> Observation mode only. This step does not fail the workflow or replace promotion policy.")
+          PY
+
       - name: Summarize live run artifact
         if: always()
         run: |
