@@ -51,3 +51,60 @@ def test_failure_onset_regression_is_diagnostic_hold() -> None:
     result = evidence_check(summary)
     assert result["decision"] == "hold"
     assert result["reasons"] == ["failure-onset-earlier:2"]
+
+
+def test_unsupported_schema_version_holds() -> None:
+    summary = {
+        "schema_version": 2,
+        "gates": {
+            "gate3": {"status": "pass"},
+            "gate4": {"status": "pass", "blockers": []},
+            "gate5": {"status": "not-run"},
+        },
+        "gate5_failure_onset": {"earlier": 0},
+    }
+    result = evidence_check(summary)
+    assert result["decision"] == "hold"
+    assert "unsupported-schema-version:2" in result["reasons"]
+
+
+def test_malformed_failure_onset_count_holds_without_crashing() -> None:
+    summary = {
+        "schema_version": 1,
+        "gates": {
+            "gate3": {"status": "pass"},
+            "gate4": {"status": "pass", "blockers": []},
+            "gate5": {"status": "not-run"},
+        },
+        "gate5_failure_onset": {"earlier": "not-a-number"},
+    }
+    result = evidence_check(summary)
+    assert result["decision"] == "hold"
+    assert "invalid-failure-onset-count" in result["reasons"]
+
+
+def test_malformed_gates_hold_without_crashing() -> None:
+    result = evidence_check({
+        "schema_version": 1,
+        "gates": ["gate3", "gate4"],
+        "gate5_failure_onset": {"earlier": 0},
+    })
+    assert result["decision"] == "hold"
+    assert "invalid-gates" in result["reasons"]
+    assert "gate3:invalid" in result["reasons"]
+    assert "gate4:invalid" in result["reasons"]
+
+
+def test_malformed_blockers_hold_without_iterating_string() -> None:
+    summary = {
+        "schema_version": 1,
+        "gates": {
+            "gate3": {"status": "pass"},
+            "gate4": {"status": "pass", "blockers": "bad-shape"},
+            "gate5": {"status": "not-run"},
+        },
+        "gate5_failure_onset": {"earlier": 0},
+    }
+    result = evidence_check(summary)
+    assert result["decision"] == "hold"
+    assert "gate4-blockers:invalid" in result["reasons"]
