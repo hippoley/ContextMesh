@@ -50,16 +50,13 @@ def evidence_check(summary: dict[str, Any] | None) -> dict[str, Any]:
     if not isinstance(onset, dict):
         reasons.append("invalid-failure-onset")
     else:
-        raw_earlier = onset.get("earlier") or 0
-        try:
-            earlier = int(raw_earlier)
-        except (TypeError, ValueError):
+        raw_earlier = onset.get("earlier", 0)
+        if isinstance(raw_earlier, bool) or not isinstance(raw_earlier, int):
             reasons.append("invalid-failure-onset-count")
-        else:
-            if earlier < 0:
-                reasons.append("invalid-failure-onset-count")
-            elif earlier:
-                reasons.append(f"failure-onset-earlier:{earlier}")
+        elif raw_earlier < 0:
+            reasons.append("invalid-failure-onset-count")
+        elif raw_earlier:
+            reasons.append(f"failure-onset-earlier:{raw_earlier}")
 
     return {
         "schema_version": 1,
