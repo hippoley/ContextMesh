@@ -1447,6 +1447,7 @@ class ScalePointResult(BaseModel):
     recall_by_corpus_position: dict[str, float] = Field(default_factory=dict)
     recall_by_local_position: dict[str, float] = Field(default_factory=dict)
     case_results: list[NeedleRunResult] = Field(default_factory=list)
+    case_attribution: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     blockers: list[str] = Field(default_factory=list)
 
 
@@ -2296,6 +2297,22 @@ def run_scale_curve(
                 needles,
                 needle_report.results,
             )
+            from contextmesh.gate4_diagnostics import (
+                compare_live_to_lexical,
+                lexical_case_diagnostics,
+            )
+            case_attribution = {
+                f"lexical-top-{top_k}": compare_live_to_lexical(
+                    lexical_case_diagnostics(
+                        projected_store,
+                        projected_id,
+                        needles,
+                        top_k,
+                    ),
+                    needle_report.results,
+                )
+                for top_k in (5, 20)
+            }
             point_blockers: list[str] = []
             if needle_report.evidence_recall < spec.min_evidence_recall:
                 point_blockers.append(
@@ -2334,6 +2351,7 @@ def run_scale_curve(
                     recall_by_corpus_position=recovery_slices["corpus_position"],
                     recall_by_local_position=recovery_slices["local_position"],
                     case_results=needle_report.results,
+                    case_attribution=case_attribution,
                     blockers=point_blockers,
                 )
             )
