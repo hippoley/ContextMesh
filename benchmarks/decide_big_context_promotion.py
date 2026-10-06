@@ -73,6 +73,13 @@ def decide(
     hard_failures: list[str] = []
     warnings: list[str] = []
 
+    for name in ("reference_run_id", "candidate_run_id"):
+        value = diff.get(name)
+        if not isinstance(value, str) or not value.strip() or value != value.strip() or len(value) > 128:
+            hard_failures.append(f"invalid-{name}")
+    if diff.get("reference_run_id") == diff.get("candidate_run_id"):
+        hard_failures.append("reference-candidate-run-id-collision")
+
     if str(diff.get("status")).lower() != "pass":
         hard_failures.append(f"gate5-status={diff.get('status')}")
 
