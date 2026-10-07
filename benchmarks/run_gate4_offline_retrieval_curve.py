@@ -13,7 +13,7 @@ from contextmesh.big_context_proof import (
     load_needle_matrix,
 )
 from contextmesh.store import FileContextStore
-from contextmesh.gate4_diagnostics import lexical_case_diagnostics, failure_classification
+from contextmesh.gate4_diagnostics import (\n    failure_classification,\n    failure_frontier,\n    lexical_case_diagnostics,\n)
 
 
 def _fingerprint(block_ids: list[str]) -> str:
@@ -150,6 +150,25 @@ def main() -> int:
             }
             for case in needles if case.expected_present
         ],
+        "failure_frontiers": [
+            {
+                "case_id": case.id,
+                "kind": case.kind.value,
+                "top_5": failure_frontier(
+                    rows,
+                    case.id,
+                    "lexical_top_5_cases",
+                    top_k=5,
+                ),
+                "top_20": failure_frontier(
+                    rows,
+                    case.id,
+                    "lexical_top_20_cases",
+                    top_k=20,
+                ),
+            }
+            for case in needles if case.expected_present
+        ],
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -195,6 +214,36 @@ def main() -> int:
                     sufficient="—" if sufficient is None else sufficient,
                     result="recovered" if case.get("recovered") else "miss",
                     reason=case.get("failure_reason") or "—",
+                )
+            )
+
+    lines.extend([
+        "",
+        "## Observed failure frontiers",
+        "",
+        "| Case | Budget | Last recovered | First failure | Breakpoint bracket | Mechanism | Recovery top-k |",
+        "| :--- | ---: | ---: | ---: | :--- | :--- | ---: |",
+    ])
+    for case in payload["failure_frontiers"]:
+        for label, budget in (("top_5", 5), ("top_20", 20)):
+            frontier = case[label]
+            bracket = frontier.get("breakpoint_bracket")
+            if bracket:
+                bracket_text = (
+                    f"({bracket['greater_than']:g}x, "
+                    f"{bracket['less_than_or_equal']:g}x]"
+                )
+            else:
+                bracket_text = "—"
+            lines.append(
+                "| {case_id} | {budget} | {last} | {first} | {bracket} | {mechanism} | {recovery} |".format(
+                    case_id=case["case_id"],
+                    budget=budget,
+                    last="—" if frontier.get("last_recovered_scale") is None else f"{frontier['last_recovered_scale']:g}x",
+                    first="—" if frontier.get("first_failure_scale") is None else f"{frontier['first_failure_scale']:g}x",
+                    bracket=bracket_text,
+                    mechanism=frontier.get("mechanism") or "—",
+                    recovery="—" if frontier.get("recovery_top_k") is None else frontier["recovery_top_k"],
                 )
             )
 
