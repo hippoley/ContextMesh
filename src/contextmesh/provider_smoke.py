@@ -12,8 +12,9 @@ from typing import Any, Callable
 
 
 class ProviderSmokeError(RuntimeError):
-    def __init__(self, message: str, *, provider_calls: int = 0, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int = 0, stage: str = "pre-call") -> None:
+    def __init__(self, message: str, *, provider_attempts: int = 0, provider_calls: int = 0, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int = 0, stage: str = "pre-call") -> None:
         super().__init__(message)
+        self.provider_attempts = provider_attempts
         self.provider_calls = provider_calls
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
@@ -21,7 +22,7 @@ class ProviderSmokeError(RuntimeError):
         self.stage = stage
 
     def evidence(self) -> dict[str, Any]:
-        return {"provider_calls": self.provider_calls, "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens, "total_tokens": self.total_tokens, "failed_stage": self.stage}
+        return {"provider_attempts": self.provider_attempts, "provider_calls": self.provider_calls, "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens, "total_tokens": self.total_tokens, "failed_stage": self.stage}
 
 
 
@@ -31,6 +32,7 @@ class ProviderSmokeResult:
     base_url: str
     text_ok: bool
     vision_ok: bool
+    provider_attempts: int
     provider_calls: int
     prompt_tokens: int
     completion_tokens: int
@@ -46,6 +48,7 @@ class ProviderSmokeResult:
             "base_url": self.base_url,
             "text_ok": self.text_ok,
             "vision_ok": self.vision_ok,
+            "provider_attempts": self.provider_attempts,
             "provider_calls": self.provider_calls,
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
@@ -131,21 +134,21 @@ def _post_json(
         # Never include response headers or request headers in the exception because
         # credentials belong only in the Authorization header.
         raise ProviderSmokeError(
-            f"provider returned HTTP {exc.code} for {url}"
+            f"provider returned HTTP {exc.code} for {url}", provider_attempts=1
         ) from exc
     except Exception as exc:
         raise ProviderSmokeError(
-            f"provider request failed for {url}: {type(exc).__name__}"
+            f"provider request failed for {url}: {type(exc).__name__}", provider_attempts=1
         ) from exc
 
     try:
         obj = json.loads(raw.decode("utf-8"))
     except Exception as exc:
         raise ProviderSmokeError(
-            f"provider returned non-JSON content for {url}"
+            f"provider returned non-JSON content for {url}", provider_attempts=1
         ) from exc
     if not isinstance(obj, dict):
-        raise ProviderSmokeError("provider JSON response must be an object")
+        raise ProviderSmokeError("provider JSON response must be an object", provider_attempts=1)
     return obj
 
 
@@ -197,6 +200,7 @@ def smoke_openai_compatible(
     if not text_ok:
         raise ProviderSmokeError(
             "text smoke response did not contain the expected TEXT_OK marker",
+            provider_attempts=1,
             provider_calls=1,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -237,6 +241,7 @@ def smoke_openai_compatible(
     except ProviderSmokeError as exc:
         raise ProviderSmokeError(
             str(exc),
+            provider_attempts=1 + max(1, exc.provider_attempts),
             provider_calls=1,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -252,6 +257,7 @@ def smoke_openai_compatible(
     if not vision_ok:
         raise ProviderSmokeError(
             "vision smoke response did not contain the expected MAGENTA marker",
+            provider_attempts=2,
             provider_calls=2,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -264,6 +270,7 @@ def smoke_openai_compatible(
         base_url=base_url,
         text_ok=text_ok,
         vision_ok=vision_ok,
+        provider_attempts=2,
         provider_calls=2,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
