@@ -22,6 +22,43 @@ def _fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _validate_prior_lineage(lineage: dict[str, Any]) -> list[dict[str, Any]]:
+    if lineage.get("schema_version") != 2:
+        raise ValueError("prior lineage schema_version must be 2")
+    events = lineage.get("events")
+    if not isinstance(events, list):
+        raise ValueError("prior lineage events must be a list")
+    if lineage.get("event_count") != len(events):
+        raise ValueError("prior lineage event_count does not match events")
+    root = lineage.get("root_reference_run_id")
+    current = lineage.get("current_reference_run_id")
+    for name, value in (("root_reference_run_id", root), ("current_reference_run_id", current)):
+        if not isinstance(value, str) or not value.strip() or value != value.strip() or len(value) > 128:
+            raise ValueError(f"prior lineage {name} is invalid")
+    for index, event in enumerate(events, start=1):
+        if not isinstance(event, dict):
+            raise ValueError("prior lineage event must be an object")
+        if event.get("sequence") != index:
+            raise ValueError("prior lineage event sequence is invalid")
+        for name in ("reference_run_id", "candidate_run_id"):
+            value = event.get(name)
+            if not isinstance(value, str) or not value.strip() or value != value.strip() or len(value) > 128:
+                raise ValueError(f"prior lineage event {name} is invalid")
+        if event.get("decision") not in {"PROMOTE", "HOLD", "REJECT"}:
+            raise ValueError("prior lineage event decision is invalid")
+        for name in ("hard_failures", "warnings"):
+            value = event.get(name)
+            if not isinstance(value, list) or len(value) > 100:
+                raise ValueError(f"prior lineage event {name} is invalid")
+            if any(not isinstance(item, str) or not item.strip() or len(item) > 512 for item in value):
+                raise ValueError(f"prior lineage event {name} is invalid")
+        if not isinstance(event.get("policy"), dict):
+            raise ValueError("prior lineage event policy is invalid")
+    rollback_count = lineage.get("rollback_count")
+    if isinstance(rollback_count, bool) or not isinstance(rollback_count, int) or rollback_count < 0:
+        raise ValueError("prior lineage rollback_count is invalid")
+    return events
+
 def build_lineage(
     decision: dict[str, Any],
     *,
@@ -98,11 +135,9 @@ def build_lineage(
         )
 
     if prior_lineage:
-        events = list(prior_lineage.get("events") or [])
+        events = list(_validate_prior_lineage(prior_lineage))
         root = prior_lineage.get("root_reference_run_id")
         current = prior_lineage.get("current_reference_run_id")
-        if not root or not current:
-            raise ValueError("prior lineage is missing root/current reference identity")
         prior_fp = prior_lineage.get("lineage_fingerprint")
         if prior_fp and prior_fp != _fingerprint(prior_lineage):
             raise ValueError("prior lineage fingerprint mismatch")
