@@ -16,6 +16,7 @@ from contextmesh.store import FileContextStore
 from contextmesh.gate4_diagnostics import (
     failure_classification,
     failure_frontier,
+    failure_witness,
     lexical_case_diagnostics,
 )
 
@@ -173,6 +174,29 @@ def main() -> int:
             }
             for case in needles if case.expected_present
         ],
+        "failure_witnesses": [
+            {
+                "case_id": case.id,
+                "kind": case.kind.value,
+                "top_5": failure_witness(
+                    rows,
+                    case.id,
+                    "lexical_top_5_cases",
+                    top_k=5,
+                    expected_terms=case.match_terms,
+                    target_assets=case.target_assets,
+                ),
+                "top_20": failure_witness(
+                    rows,
+                    case.id,
+                    "lexical_top_20_cases",
+                    top_k=20,
+                    expected_terms=case.match_terms,
+                    target_assets=case.target_assets,
+                ),
+            }
+            for case in needles if case.expected_present
+        ],
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -248,6 +272,59 @@ def main() -> int:
                     bracket=bracket_text,
                     mechanism=frontier.get("mechanism") or "—",
                     recovery="—" if frontier.get("recovery_top_k") is None else frontier["recovery_top_k"],
+                )
+            )
+
+    lines.extend([
+        "",
+        "## Minimal observed failure witnesses",
+        "",
+        "> Suggested recovery top-k is diagnostic inference only. "
+        "It is not a verified intervention until a separate run executes it.",
+        "",
+        "| Case | Budget | PASS scale | FAIL scale | First hit | Sufficient rank | Shortfall | Missing terms | Missing assets | Suggested top-k |",
+        "| :--- | ---: | ---: | ---: | ---: | ---: | ---: | :--- | :--- | ---: |",
+    ])
+    for case in payload["failure_witnesses"]:
+        for label, budget in (("top_5", 5), ("top_20", 20)):
+            witness = case[label]
+            failure = witness.get("failure")
+            previous = witness.get("previous_pass")
+            if not failure:
+                continue
+            shortfall = (witness.get("rank_shift") or {}).get(
+                "budget_shortfall"
+            )
+            lines.append(
+                "| {case_id} | {budget} | {pass_scale} | {fail_scale} | "
+                "{first_hit} | {sufficient} | {shortfall} | {terms} | "
+                "{assets} | {suggested} |".format(
+                    case_id=case["case_id"],
+                    budget=budget,
+                    pass_scale=(
+                        "—"
+                        if not previous
+                        else f"{previous['scale']:g}x"
+                    ),
+                    fail_scale=f"{failure['scale']:g}x",
+                    first_hit=(
+                        "—"
+                        if failure.get("best_ground_truth_rank") is None
+                        else failure["best_ground_truth_rank"]
+                    ),
+                    sufficient=(
+                        "—"
+                        if failure.get("first_sufficient_rank") is None
+                        else failure["first_sufficient_rank"]
+                    ),
+                    shortfall="—" if shortfall is None else shortfall,
+                    terms=", ".join(witness.get("missing_terms") or []) or "—",
+                    assets=", ".join(witness.get("missing_assets") or []) or "—",
+                    suggested=(
+                        "—"
+                        if witness.get("suggested_recovery_top_k") is None
+                        else witness["suggested_recovery_top_k"]
+                    ),
                 )
             )
 
