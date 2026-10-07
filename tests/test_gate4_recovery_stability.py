@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import importlib.util
+import sys
+from pathlib import Path
 
-from benchmarks.verify_gate4_recovery_stability import verify_stability
+
+ROOT = Path(__file__).parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "contextmesh_gate4_recovery_stability_benchmark",
+    ROOT / "benchmarks" / "verify_gate4_recovery_stability.py",
+)
+assert SPEC and SPEC.loader
+MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = MODULE
+SPEC.loader.exec_module(MODULE)
+verify_stability = MODULE.verify_stability
 
 
 def _curve(
