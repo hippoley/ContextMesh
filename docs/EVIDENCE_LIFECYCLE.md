@@ -41,6 +41,7 @@ It distinguishes:
 - `missing-execution`: a configured contributor never ran;
 - `unauthorized-execution`: an excluded contributor ran anyway;
 - `unauthorized-contribution`: an excluded contributor affected candidates, scores, context, or judgment;
+- `invalid-telemetry`: contribution is claimed without a corresponding execution, so the audit fails closed;
 - `compliant`: execution stayed within the configured contract.
 
 This makes omission and unauthorized influence symmetric audit failures. A successful retrieval result is not sufficient if an excluded backend secretly helped produce it.
