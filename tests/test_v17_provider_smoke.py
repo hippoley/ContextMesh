@@ -159,6 +159,7 @@ def test_vision_failure_preserves_completed_text_call_usage():
 
     evidence = exc.value.evidence()
     assert len(calls) == 2
+    assert evidence["provider_attempts"] == 2
     assert evidence["provider_calls"] == 1
     assert evidence["prompt_tokens"] == 10
     assert evidence["completion_tokens"] == 1
@@ -184,6 +185,7 @@ def test_text_validation_failure_counts_completed_call_and_usage():
         )
 
     assert exc.value.evidence() == {
+        "provider_attempts": 1,
         "provider_calls": 1,
         "prompt_tokens": 8,
         "completion_tokens": 2,
@@ -221,9 +223,28 @@ def test_vision_validation_failure_counts_both_completed_calls_and_usage():
         )
 
     assert exc.value.evidence() == {
+        "provider_attempts": 2,
         "provider_calls": 2,
         "prompt_tokens": 30,
         "completion_tokens": 3,
         "total_tokens": 33,
         "failed_stage": "vision-validation",
     }
+
+
+def test_http_failure_records_attempt_without_completed_call():
+    def opener(request, timeout):
+        raise urllib.error.HTTPError(request.full_url, 503, "Unavailable", hdrs=None, fp=None)
+
+    with pytest.raises(ProviderSmokeError) as exc:
+        smoke_openai_compatible(
+            base_url="https://workspace.example/compatible-mode/v1",
+            model="qwen3-vl-8b-instruct",
+            api_key="secret",
+            opener=opener,
+        )
+
+    evidence = exc.value.evidence()
+    assert evidence["provider_attempts"] == 1
+    assert evidence["provider_calls"] == 0
+    assert evidence["failed_stage"] == "pre-call"
