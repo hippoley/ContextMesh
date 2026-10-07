@@ -10,6 +10,7 @@ from .audit import audit_corpus
 from .fidelity import NeedleProbe, run_live_needles
 from .ingest import ingest_paths
 from .judges import HeuristicJudge, OpenAICompatibleJudge
+from .authority_replay import run_authority_replay
 from .memory_replay import run_memory_replay
 from .reader import CorpusReader
 from .reality_probe import (
@@ -103,6 +104,13 @@ def main() -> None:
     mr = sub.add_parser("memory-replay", help="replay temporal memory conflicts and compare authority policies")
     mr.add_argument("--format", choices=["json", "markdown"], default="json")
 
+    ar = sub.add_parser(
+        "authority-replay",
+        help="sweep authority lifecycle cases under supersession depth and candidate truncation",
+    )
+    ar.add_argument("--format", choices=["json", "markdown"], default="json")
+    ar.add_argument("--candidate-budget", type=int, default=10)
+
     rp = sub.add_parser("reality-probe", help="compare retrieval eligibility against full-coverage execution")
     rp.add_argument("--backend", action="append", choices=["lexical", "head-tail", "contextmesh", "cognee"], default=[])
     rp.add_argument("--top-k", type=int, default=5)
@@ -133,6 +141,10 @@ def main() -> None:
         return
     if args.cmd == "memory-replay":
         report = run_memory_replay()
+        print(report.to_markdown() if args.format == "markdown" else report.model_dump_json(indent=2))
+        return
+    if args.cmd == "authority-replay":
+        report = run_authority_replay(candidate_budget=args.candidate_budget)
         print(report.to_markdown() if args.format == "markdown" else report.model_dump_json(indent=2))
         return
     if args.cmd == "reality-probe":
