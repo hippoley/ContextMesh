@@ -26,6 +26,25 @@ reduced
 judged
 ```
 
+## Execution contributors are audited before evidence lifecycle
+
+Document evidence still begins at `ingested`. Retrieval methods, tools, providers, and other execution contributors have a separate contract boundary before that lifecycle:
+
+```text
+configured -> executed -> contributed
+```
+
+These states are not forced into `EvidenceStage`, because a stored document and a retrieval backend are different kinds of objects. `ExecutionContributorAudit` records the execution contract without changing historical evidence traces.
+
+It distinguishes:
+
+- `missing-execution`: a configured contributor never ran;
+- `unauthorized-execution`: an excluded contributor ran anyway;
+- `unauthorized-contribution`: an excluded contributor affected candidates, scores, context, or judgment;
+- `compliant`: execution stayed within the configured contract.
+
+This makes omission and unauthorized influence symmetric audit failures. A successful retrieval result is not sufficient if an excluded backend secretly helped produce it.
+
 ## Why a single coverage percentage is not enough
 
 Three externally reproduced failures illustrate different loss stages.
