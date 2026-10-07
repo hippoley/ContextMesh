@@ -291,3 +291,204 @@ def failure_frontier(
         "breakpoint_bracket": bracket,
         **mechanism,
     }
+
+
+
+def failure_witness(
+    points: list[dict[str, Any]],
+    case_id: str,
+    key: str,
+    *,
+    top_k: int,
+    expected_terms: list[str] | None = None,
+    target_assets: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build a minimal observed PASS->FAIL witness for one retrieval case.
+
+    The suggested recovery budget is an inference from the observed ranking.
+    It is not labeled as a successful intervention until a separate run
+    actually executes that budget.
+    """
+    observations: list[tuple[float, dict[str, Any]]] = []
+    for point in points:
+        diag = next(
+            (
+                row
+                for row in point.get(key, [])
+                if row.get("case_id") == case_id
+            ),
+            None,
+        )
+        if diag and diag.get("expected_present"):
+            observations.append(
+                (float(point["requested_ratio"]), diag)
+            )
+
+    previous_pass: tuple[float, dict[str, Any]] | None = None
+    for ratio, diag in observations:
+        if diag.get("recovered"):
+            previous_pass = (ratio, diag)
+            continue
+        if previous_pass is None:
+            return {
+                "case_id": case_id,
+                "top_k": top_k,
+                "classification": "baseline-incapable",
+                "observed": True,
+                "previous_pass": None,
+                "failure": {
+                    "scale": ratio,
+                    "best_ground_truth_rank": diag.get(
+                        "best_ground_truth_rank"
+                    ),
+                    "first_sufficient_rank": diag.get(
+                        "first_sufficient_rank"
+                    ),
+                    "failure_reason": diag.get(
+                        "failure_reason"
+                    ),
+                    "matched_terms": list(
+                        diag.get("matched_terms") or []
+                    ),
+                    "matched_assets": list(
+                        diag.get("matched_assets") or []
+                    ),
+                },
+                "missing_terms": sorted(
+                    set(expected_terms or [])
+                    - set(diag.get("matched_terms") or [])
+                ),
+                "missing_assets": sorted(
+                    {
+                        Path(asset).name
+                        for asset in (target_assets or [])
+                    }
+                    - set(diag.get("matched_assets") or [])
+                ),
+                "suggested_recovery_top_k": diag.get(
+                    "first_sufficient_rank"
+                ),
+                "suggestion_evidence": "diagnostic-inference",
+                "intervention_verified": False,
+            }
+
+        pass_ratio, pass_diag = previous_pass
+        sufficient = diag.get("first_sufficient_rank")
+        witness = {
+            "case_id": case_id,
+            "top_k": top_k,
+            "classification": "scale-regression",
+            "observed": True,
+            "previous_pass": {
+                "scale": pass_ratio,
+                "best_ground_truth_rank": pass_diag.get(
+                    "best_ground_truth_rank"
+                ),
+                "first_sufficient_rank": pass_diag.get(
+                    "first_sufficient_rank"
+                ),
+                "matched_terms": list(
+                    pass_diag.get("matched_terms") or []
+                ),
+                "matched_assets": list(
+                    pass_diag.get("matched_assets") or []
+                ),
+            },
+            "failure": {
+                "scale": ratio,
+                "best_ground_truth_rank": diag.get(
+                    "best_ground_truth_rank"
+                ),
+                "first_sufficient_rank": sufficient,
+                "failure_reason": diag.get(
+                    "failure_reason"
+                ),
+                "matched_terms": list(
+                    diag.get("matched_terms") or []
+                ),
+                "matched_assets": list(
+                    diag.get("matched_assets") or []
+                ),
+            },
+            "rank_shift": {
+                "best_ground_truth_rank_delta": (
+                    None
+                    if (
+                        pass_diag.get("best_ground_truth_rank")
+                        is None
+                        or diag.get("best_ground_truth_rank")
+                        is None
+                    )
+                    else (
+                        int(diag["best_ground_truth_rank"])
+                        - int(pass_diag["best_ground_truth_rank"])
+                    )
+                ),
+                "sufficient_rank_delta": (
+                    None
+                    if (
+                        pass_diag.get("first_sufficient_rank")
+                        is None
+                        or sufficient is None
+                    )
+                    else (
+                        int(sufficient)
+                        - int(
+                            pass_diag["first_sufficient_rank"]
+                        )
+                    )
+                ),
+                "budget_shortfall": (
+                    None
+                    if sufficient is None
+                    else max(0, int(sufficient) - top_k)
+                ),
+            },
+            "missing_terms": sorted(
+                set(expected_terms or [])
+                - set(diag.get("matched_terms") or [])
+            ),
+            "missing_assets": sorted(
+                {
+                    Path(asset).name
+                    for asset in (target_assets or [])
+                }
+                - set(diag.get("matched_assets") or [])
+            ),
+            "suggested_recovery_top_k": sufficient,
+            "suggestion_evidence": "diagnostic-inference",
+            "intervention_verified": False,
+        }
+        return witness
+
+    return {
+        "case_id": case_id,
+        "top_k": top_k,
+        "classification": "stable",
+        "observed": False,
+        "previous_pass": (
+            None
+            if previous_pass is None
+            else {
+                "scale": previous_pass[0],
+                "best_ground_truth_rank": previous_pass[1].get(
+                    "best_ground_truth_rank"
+                ),
+                "first_sufficient_rank": previous_pass[1].get(
+                    "first_sufficient_rank"
+                ),
+                "matched_terms": list(
+                    previous_pass[1].get("matched_terms") or []
+                ),
+                "matched_assets": list(
+                    previous_pass[1].get("matched_assets") or []
+                ),
+            }
+        ),
+        "failure": None,
+        "missing_terms": [],
+        "missing_assets": [],
+        "suggested_recovery_top_k": None,
+        "suggestion_evidence": None,
+        "intervention_verified": False,
+    }
