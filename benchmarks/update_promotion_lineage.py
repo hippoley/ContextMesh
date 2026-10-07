@@ -146,12 +146,12 @@ def build_lineage(
         )
 
     if prior_lineage:
-        events = list(_validate_prior_lineage(prior_lineage))
-        root = prior_lineage.get("root_reference_run_id")
-        current = prior_lineage.get("current_reference_run_id")
         prior_fp = prior_lineage.get("lineage_fingerprint")
         if prior_fp and prior_fp != _fingerprint(prior_lineage):
             raise ValueError("prior lineage fingerprint mismatch")
+        events = list(_validate_prior_lineage(prior_lineage))
+        root = prior_lineage.get("root_reference_run_id")
+        current = prior_lineage.get("current_reference_run_id")
         if str(current) != str(reference):
             raise ValueError(
                 f"lineage fork rejected: current reference={current}, decision reference={reference}"
