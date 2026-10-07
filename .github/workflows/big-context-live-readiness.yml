@@ -86,6 +86,8 @@ jobs:
             tests/test_v17_promotion_lineage.py \
             tests/test_v17_reference_rollback.py \
             tests/test_v17_recovery_context.py
+            tests/test_execution_contributor_audit.py \
+            tests/test_contract_resolution_receipt.py
           test -f benchmarks/big-context/nist-public-corpus.json
           test -f .github/workflows/big-context-live-proof.yml
           test -f .github/workflows/big-context-reference-rollback.yml
