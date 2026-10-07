@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'benchmarks/run_gate4_offline_retrieval_curve.py'
+      - 'benchmarks/verify_gate4_recovery_stability.py'
       - 'benchmarks/plan_gate4_scale.py'
       - 'benchmarks/build_public_nist_proof.py'
       - 'benchmarks/verify_frozen_public_proof.py'
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - 'benchmarks/run_gate4_offline_retrieval_curve.py'
+      - 'benchmarks/verify_gate4_recovery_stability.py'
       - 'benchmarks/plan_gate4_scale.py'
       - 'benchmarks/build_public_nist_proof.py'
       - 'benchmarks/verify_frozen_public_proof.py'
@@ -78,20 +80,40 @@ jobs:
             --task-cases /tmp/contextmesh-nist-proof/results/task-cases.json \
             --output /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
 
-      - name: Run no-provider retrieval curve on exact frozen projections
+      - name: Run three independent no-provider retrieval/recovery curves
         run: |
-          python benchmarks/run_gate4_offline_retrieval_curve.py \
-            nist-public-big-context-v2 \
-            --store /tmp/contextmesh-nist-proof/store \
-            --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
-            --scale-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
-            --output /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.json \
-            --markdown /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.md
+          for run in 1 2 3; do
+            python benchmarks/run_gate4_offline_retrieval_curve.py \
+              nist-public-big-context-v2 \
+              --store /tmp/contextmesh-nist-proof/store \
+              --needles /tmp/contextmesh-nist-proof/results/needle-matrix.json \
+              --scale-plan /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json \
+              --output "/tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-${run}.json" \
+              --markdown "/tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-${run}.md"
+          done
 
-      - name: Show curve
+          cp /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-1.json \
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.json
+          cp /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-1.md \
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.md
+
+      - name: Verify repeated recovery stability
+        run: |
+          python benchmarks/verify_gate4_recovery_stability.py \
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-1.json \
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-2.json \
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-3.json \
+            --require-runs 3 \
+            --require-case cross-file-008 \
+            --require-budget top_20 \
+            --require-first-failure-scale 2 \
+            --require-recovery-verified \
+            --output /tmp/contextmesh-nist-proof/results/gate4-recovery-stability.json
+
+      - name: Show curve and stability evidence
         run: |
           cat /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.md
-          cat /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.json
+          cat /tmp/contextmesh-nist-proof/results/gate4-recovery-stability.json
 
       - name: Upload offline Gate 4 evidence
         uses: actions/upload-artifact@v4
@@ -100,6 +122,9 @@ jobs:
           path: |
             /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.json
             /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve.md
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-*.json
+            /tmp/contextmesh-nist-proof/results/gate4-offline-retrieval-curve-run-*.md
+            /tmp/contextmesh-nist-proof/results/gate4-recovery-stability.json
             /tmp/contextmesh-nist-proof/results/frozen-proof-verification.json
             /tmp/contextmesh-nist-proof/results/gate4-scale-plan.json
           if-no-files-found: error
