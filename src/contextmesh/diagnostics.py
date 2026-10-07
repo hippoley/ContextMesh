@@ -52,8 +52,8 @@ class ContractResolutionReceipt(BaseModel):
     field_id: str
     declared_fingerprint: str | None = None
     resolved_fingerprint: str | None = None
-    declared_scope: list[str] = Field(default_factory=list)
-    resolved_scope: list[str] = Field(default_factory=list)
+    declared_scope: list[str] | None = None
+    resolved_scope: list[str] | None = None
     transform: str | None = None
     fallback_authorized: bool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -61,8 +61,10 @@ class ContractResolutionReceipt(BaseModel):
     @computed_field
     @property
     def disposition(self) -> ContractResolutionDisposition:
-        if self.declared_scope and not set(self.resolved_scope).issubset(set(self.declared_scope)):
-            return ContractResolutionDisposition.SCOPE_EXPANSION
+        if self.declared_scope is not None:
+            resolved_scope = self.resolved_scope or []
+            if not set(resolved_scope).issubset(set(self.declared_scope)):
+                return ContractResolutionDisposition.SCOPE_EXPANSION
         if self.declared_fingerprint is not None and self.resolved_fingerprint is None:
             return ContractResolutionDisposition.DROPPED
         if (
