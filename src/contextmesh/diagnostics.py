@@ -39,6 +39,52 @@ class EvidenceFailureClass(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ContractResolutionDisposition(str, Enum):
+    PRESERVED = "preserved"
+    EXPLICIT_TRANSFORM = "explicit-transform"
+    DROPPED = "dropped"
+    UNEXPECTED_FALLBACK = "unexpected-fallback"
+    SCOPE_EXPANSION = "scope-expansion"
+
+
+class ContractResolutionReceipt(BaseModel):
+    field_id: str
+    declared_fingerprint: str | None = None
+    resolved_fingerprint: str | None = None
+    declared_scope: list[str] = Field(default_factory=list)
+    resolved_scope: list[str] = Field(default_factory=list)
+    transform: str | None = None
+    fallback_authorized: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @computed_field
+    @property
+    def disposition(self) -> ContractResolutionDisposition:
+        if self.declared_scope and not set(self.resolved_scope).issubset(set(self.declared_scope)):
+            return ContractResolutionDisposition.SCOPE_EXPANSION
+        if self.declared_fingerprint is not None and self.resolved_fingerprint is None:
+            return ContractResolutionDisposition.DROPPED
+        if (
+            self.declared_fingerprint is not None
+            and self.resolved_fingerprint is not None
+            and self.declared_fingerprint != self.resolved_fingerprint
+        ):
+            if self.transform:
+                return ContractResolutionDisposition.EXPLICIT_TRANSFORM
+            if self.fallback_authorized:
+                return ContractResolutionDisposition.EXPLICIT_TRANSFORM
+            return ContractResolutionDisposition.UNEXPECTED_FALLBACK
+        return ContractResolutionDisposition.PRESERVED
+
+    @computed_field
+    @property
+    def compliant(self) -> bool:
+        return self.disposition in {
+            ContractResolutionDisposition.PRESERVED,
+            ContractResolutionDisposition.EXPLICIT_TRANSFORM,
+        }
+
+
 class ExecutionContributorDisposition(str, Enum):
     COMPLIANT = "compliant"
     MISSING_EXECUTION = "missing-execution"
