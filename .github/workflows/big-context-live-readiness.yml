@@ -85,7 +85,7 @@ jobs:
             tests/test_v17_promotion_contract.py \
             tests/test_v17_promotion_lineage.py \
             tests/test_v17_reference_rollback.py \
-            tests/test_v17_recovery_context.py
+            tests/test_v17_recovery_context.py \
             tests/test_execution_contributor_audit.py \
             tests/test_contract_resolution_receipt.py
           test -f benchmarks/big-context/nist-public-corpus.json
