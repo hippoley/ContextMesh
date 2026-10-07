@@ -492,3 +492,110 @@ def failure_witness(
         "suggestion_evidence": None,
         "intervention_verified": False,
     }
+
+
+
+def lexical_recovery_checks(
+    store: FileContextStore,
+    corpus_id: str,
+    cases: list[NeedleCase],
+    diagnostics: list[dict[str, Any]],
+    *,
+    baseline_top_k: int,
+) -> list[dict[str, Any]]:
+    """Actually rerun failed lexical cases at their observed sufficient rank.
+
+    This verifies a retrieval-budget intervention on the same frozen projection.
+    It remains retrieval-only evidence and does not imply live model recovery.
+    """
+    by_id = {case.id: case for case in cases}
+    checks: list[dict[str, Any]] = []
+
+    for diag in diagnostics:
+        if not diag.get("expected_present"):
+            continue
+        if diag.get("recovered"):
+            continue
+
+        case_id = str(diag.get("case_id") or "")
+        case = by_id.get(case_id)
+        suggested = diag.get("first_sufficient_rank")
+        if (
+            case is None
+            or suggested is None
+            or int(suggested) <= baseline_top_k
+        ):
+            continue
+
+        recovery_top_k = int(suggested)
+        rerun = lexical_case_diagnostics(
+            store,
+            corpus_id,
+            [case],
+            recovery_top_k,
+        )[0]
+        checks.append({
+            "case_id": case_id,
+            "baseline_top_k": baseline_top_k,
+            "verified_recovery_top_k": recovery_top_k,
+            "intervention_type": "retrieval-budget-increase",
+            "intervention_verified": True,
+            "recovered": bool(rerun.get("recovered")),
+            "failure_reason": rerun.get("failure_reason"),
+            "best_ground_truth_rank": rerun.get(
+                "best_ground_truth_rank"
+            ),
+            "first_sufficient_rank": rerun.get(
+                "first_sufficient_rank"
+            ),
+            "matched_terms": list(
+                rerun.get("matched_terms") or []
+            ),
+            "matched_assets": list(
+                rerun.get("matched_assets") or []
+            ),
+            "evidence_scope": "offline-retrieval-only",
+            "live_model_recovery_verified": False,
+        })
+
+    return checks
+
+
+def attach_recovery_confirmation(
+    witness: dict[str, Any],
+    *,
+    scale: float,
+    checks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Attach an actually rerun retrieval intervention to a failure witness."""
+    out = dict(witness)
+    failure = witness.get("failure")
+    if not failure or float(failure.get("scale")) != float(scale):
+        return out
+
+    check = next(
+        (
+            row
+            for row in checks
+            if row.get("case_id") == witness.get("case_id")
+            and int(row.get("baseline_top_k") or -1)
+            == int(witness.get("top_k") or -2)
+        ),
+        None,
+    )
+    if check is None:
+        return out
+
+    out["intervention_verified"] = True
+    out["intervention_recovered"] = bool(
+        check.get("recovered")
+    )
+    out["verified_recovery_top_k"] = check.get(
+        "verified_recovery_top_k"
+    )
+    out["intervention_evidence_scope"] = check.get(
+        "evidence_scope"
+    )
+    out["live_model_recovery_verified"] = False
+    out["recovery_check"] = check
+    return out
