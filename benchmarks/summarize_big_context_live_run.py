@@ -90,6 +90,7 @@ def build_manifest(
         "stage": stage,
         "claim_proven": claim_proven,
         "gate_statuses": gate_statuses,
+        "provider_attempts": int(smoke.get("provider_attempts") or 0) if smoke else 0,
         "provider_calls": int(smoke.get("provider_calls") or 0) if smoke else 0,
         "provider_blocker": provider_blocker,
         "provider_tokens": int(smoke.get("total_tokens") or 0) if smoke else 0,
