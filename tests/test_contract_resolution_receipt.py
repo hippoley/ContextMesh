@@ -75,3 +75,23 @@ def test_unspecified_scope_does_not_invent_a_scope_contract():
     )
     assert receipt.disposition == ContractResolutionDisposition.PRESERVED
     assert receipt.compliant is True
+
+
+def test_declared_scope_without_resolution_fails_closed():
+    receipt = ContractResolutionReceipt(
+        field_id="search-methods",
+        declared_scope=["bm25"],
+        resolved_scope=None,
+    )
+    assert receipt.disposition == ContractResolutionDisposition.UNRESOLVED
+    assert receipt.compliant is False
+
+
+def test_explicit_empty_scope_can_resolve_to_empty():
+    receipt = ContractResolutionReceipt(
+        field_id="search-methods",
+        declared_scope=[],
+        resolved_scope=[],
+    )
+    assert receipt.disposition == ContractResolutionDisposition.PRESERVED
+    assert receipt.compliant is True
