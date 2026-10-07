@@ -10,7 +10,10 @@ from contextmesh.evidence_reporting import build_evidence_report, build_evidence
 def _load(path: Path | None):
     if path is None or not path.is_file():
         return None
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
     return raw if isinstance(raw, dict) else None
 
 
