@@ -690,7 +690,7 @@ def live_attribution_frontier(
 
     observations.sort(key=lambda row: row["scale"])
     first_by_classification: dict[str, float] = {}
-    last_stable_scale: float | None = None
+    last_stable_before_transition: float | None = None
     first_non_stable: dict[str, Any] | None = None
 
     for row in observations:
@@ -702,7 +702,10 @@ def live_attribution_frontier(
             float(row["scale"]),
         )
         if classification == "stable":
-            last_stable_scale = float(row["scale"])
+            if first_non_stable is None:
+                last_stable_before_transition = float(
+                    row["scale"]
+                )
         elif (
             classification != "baseline-unavailable"
             and first_non_stable is None
@@ -740,11 +743,11 @@ def live_attribution_frontier(
         None
         if (
             first_transition_scale is None
-            or last_stable_scale is None
-            or last_stable_scale >= first_transition_scale
+            or last_stable_before_transition is None
+            or last_stable_before_transition >= first_transition_scale
         )
         else {
-            "greater_than": last_stable_scale,
+            "greater_than": last_stable_before_transition,
             "less_than_or_equal": first_transition_scale,
         }
     )
@@ -756,7 +759,7 @@ def live_attribution_frontier(
         "observed_scales": [
             row["scale"] for row in observations
         ],
-        "last_stable_scale": last_stable_scale,
+        "last_stable_scale": last_stable_before_transition,
         "first_transition_scale": first_transition_scale,
         "transition_bracket": transition_bracket,
         "first_by_classification": dict(
