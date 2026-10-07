@@ -95,3 +95,18 @@ def test_explicit_empty_scope_can_resolve_to_empty():
     )
     assert receipt.disposition == ContractResolutionDisposition.PRESERVED
     assert receipt.compliant is True
+
+
+def test_explicit_falsy_scalar_replaced_by_default_is_unexpected_fallback():
+    """Reality regression: Graphiti #1951 resolves explicit overlap_tokens=0 to a default."""
+    receipt = ContractResolutionReceipt(
+        field_id="overlap-tokens",
+        declared_fingerprint="sha256:int:0",
+        resolved_fingerprint="sha256:int:default-overlap",
+        metadata={
+            "reality_source": "getzep/graphiti#1951",
+            "failure_shape": "explicit-falsy-value-replaced-by-default",
+        },
+    )
+    assert receipt.disposition == ContractResolutionDisposition.UNEXPECTED_FALLBACK
+    assert receipt.compliant is False
