@@ -120,3 +120,19 @@ def test_promotion_rejects_invalid_or_colliding_run_identities():
         diff["candidate_run_id"] = candidate
         result = mod.decide(diff)
         assert result["decision"] == "REJECT"
+
+
+def test_promotion_rejects_invalid_gate5_status_type_or_value():
+    for status in [True, 1, "PASS", "unknown", ""]:
+        result = mod.decide(_diff(status=status))
+        assert result["decision"] == "REJECT"
+        assert "invalid-gate5-status" in result["hard_failures"]
+
+
+def test_promotion_rejects_malformed_blockers_contract():
+    for blockers in ["oops", {"x": 1}, [""], [1], [True]]:
+        diff = _diff()
+        diff["blockers"] = blockers
+        result = mod.decide(diff)
+        assert result["decision"] == "REJECT"
+        assert "invalid-gate5-blockers" in result["hard_failures"]
