@@ -39,6 +39,40 @@ class EvidenceFailureClass(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ExecutionContributorDisposition(str, Enum):
+    COMPLIANT = "compliant"
+    MISSING_EXECUTION = "missing-execution"
+    UNAUTHORIZED_EXECUTION = "unauthorized-execution"
+    UNAUTHORIZED_CONTRIBUTION = "unauthorized-contribution"
+    INVALID_TELEMETRY = "invalid-telemetry"
+
+
+class ExecutionContributorAudit(BaseModel):
+    contributor_id: str
+    configured: bool
+    executed: bool
+    contributed: bool
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @computed_field
+    @property
+    def disposition(self) -> ExecutionContributorDisposition:
+        if self.contributed and not self.executed:
+            return ExecutionContributorDisposition.INVALID_TELEMETRY
+        if self.contributed and not self.configured:
+            return ExecutionContributorDisposition.UNAUTHORIZED_CONTRIBUTION
+        if self.executed and not self.configured:
+            return ExecutionContributorDisposition.UNAUTHORIZED_EXECUTION
+        if self.configured and not self.executed:
+            return ExecutionContributorDisposition.MISSING_EXECUTION
+        return ExecutionContributorDisposition.COMPLIANT
+
+    @computed_field
+    @property
+    def compliant(self) -> bool:
+        return self.disposition == ExecutionContributorDisposition.COMPLIANT
+
+
 class EvidenceStageRecord(BaseModel):
     stage: EvidenceStage
     disposition: EvidenceDisposition
