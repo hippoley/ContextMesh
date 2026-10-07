@@ -181,6 +181,31 @@ def compare_live_to_lexical(
             "judgment_valid": live.judgment_valid,
             "latency_seconds": live.latency_seconds,
             "classification": classification,
+            "lexical_best_ground_truth_rank": (
+                None
+                if lexical is None
+                else lexical.get("best_ground_truth_rank")
+            ),
+            "lexical_first_sufficient_rank": (
+                None
+                if lexical is None
+                else lexical.get("first_sufficient_rank")
+            ),
+            "lexical_failure_reason": (
+                None
+                if lexical is None
+                else lexical.get("failure_reason")
+            ),
+            "lexical_matched_terms": (
+                []
+                if lexical is None
+                else list(lexical.get("matched_terms") or [])
+            ),
+            "lexical_matched_assets": (
+                []
+                if lexical is None
+                else list(lexical.get("matched_assets") or [])
+            ),
         })
     return out
 
@@ -599,3 +624,185 @@ def attach_recovery_confirmation(
     out["live_model_recovery_verified"] = False
     out["recovery_check"] = check
     return out
+
+
+
+def live_attribution_frontier(
+    points: list[Any],
+    case_id: str,
+    *,
+    baseline: str = "lexical-top-20",
+) -> dict[str, Any]:
+    """Summarize the first observed live-vs-lexical attribution transition.
+
+    This consumes already-scored Gate 4 point telemetry. It never invokes a
+    provider and must not be used to claim live evidence unless the input points
+    came from an actual live Gate 4 execution.
+    """
+    observations: list[dict[str, Any]] = []
+    for point in points:
+        if hasattr(point, "model_dump"):
+            raw = point.model_dump(mode="json")
+        elif isinstance(point, dict):
+            raw = point
+        else:
+            continue
+
+        attribution = raw.get("case_attribution") or {}
+        rows = attribution.get(baseline) or []
+        row = next(
+            (
+                item
+                for item in rows
+                if item.get("case_id") == case_id
+            ),
+            None,
+        )
+        if row is None:
+            continue
+
+        observations.append({
+            "scale": float(raw.get("requested_ratio", 0.0)),
+            "point_status": (
+                raw.get("status")
+                if isinstance(raw.get("status"), str)
+                else getattr(raw.get("status"), "value", raw.get("status"))
+            ),
+            "classification": row.get("classification"),
+            "lexical_recovered": row.get("lexical_recovered"),
+            "contextmesh_recovered": row.get(
+                "contextmesh_recovered"
+            ),
+            "lexical_best_ground_truth_rank": row.get(
+                "lexical_best_ground_truth_rank"
+            ),
+            "lexical_first_sufficient_rank": row.get(
+                "lexical_first_sufficient_rank"
+            ),
+            "lexical_failure_reason": row.get(
+                "lexical_failure_reason"
+            ),
+            "term_recall": row.get("term_recall"),
+            "coverage": row.get("coverage"),
+            "judgment_valid": row.get("judgment_valid"),
+            "latency_seconds": row.get("latency_seconds"),
+        })
+
+    observations.sort(key=lambda row: row["scale"])
+    first_by_classification: dict[str, float] = {}
+    last_stable_before_transition: float | None = None
+    first_non_stable: dict[str, Any] | None = None
+
+    for row in observations:
+        classification = str(
+            row.get("classification") or "unknown"
+        )
+        first_by_classification.setdefault(
+            classification,
+            float(row["scale"]),
+        )
+        if classification == "stable":
+            if first_non_stable is None:
+                last_stable_before_transition = float(
+                    row["scale"]
+                )
+        elif (
+            classification != "baseline-unavailable"
+            and first_non_stable is None
+        ):
+            first_non_stable = row
+
+    if not observations:
+        status = "not-observed"
+    elif first_non_stable is None:
+        status = "stable"
+    elif (
+        first_non_stable["classification"]
+        == "contextmesh-recovery-win"
+    ):
+        status = "contextmesh-rescues-retrieval"
+    elif (
+        first_non_stable["classification"]
+        == "contextmesh-regression"
+    ):
+        status = "contextmesh-regresses-despite-evidence"
+    elif (
+        first_non_stable["classification"]
+        == "shared-evidence-bottleneck"
+    ):
+        status = "shared-retrieval-bottleneck"
+    else:
+        status = str(first_non_stable["classification"])
+
+    first_transition_scale = (
+        None
+        if first_non_stable is None
+        else float(first_non_stable["scale"])
+    )
+    transition_bracket = (
+        None
+        if (
+            first_transition_scale is None
+            or last_stable_before_transition is None
+            or last_stable_before_transition >= first_transition_scale
+        )
+        else {
+            "greater_than": last_stable_before_transition,
+            "less_than_or_equal": first_transition_scale,
+        }
+    )
+
+    return {
+        "case_id": case_id,
+        "baseline": baseline,
+        "status": status,
+        "observed_scales": [
+            row["scale"] for row in observations
+        ],
+        "last_stable_scale": last_stable_before_transition,
+        "first_transition_scale": first_transition_scale,
+        "transition_bracket": transition_bracket,
+        "first_by_classification": dict(
+            sorted(first_by_classification.items())
+        ),
+        "transition": first_non_stable,
+        "observations": observations,
+        "evidence_scope": "already-scored-live-telemetry",
+        "provider_call_performed": False,
+    }
+
+
+def live_attribution_frontiers(
+    points: list[Any],
+    *,
+    baselines: tuple[str, ...] = (
+        "lexical-top-5",
+        "lexical-top-20",
+    ),
+) -> list[dict[str, Any]]:
+    """Build attribution frontiers for every observed case/baseline pair."""
+    case_ids: set[str] = set()
+    for point in points:
+        raw = (
+            point.model_dump(mode="json")
+            if hasattr(point, "model_dump")
+            else point
+        )
+        if not isinstance(raw, dict):
+            continue
+        attribution = raw.get("case_attribution") or {}
+        for baseline in baselines:
+            for row in attribution.get(baseline) or []:
+                case_id = row.get("case_id")
+                if case_id:
+                    case_ids.add(str(case_id))
+
+    return [
+        live_attribution_frontier(
+            points,
+            case_id,
+            baseline=baseline,
+        )
+        for case_id in sorted(case_ids)
+        for baseline in baselines
+    ]
