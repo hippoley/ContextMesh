@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextmesh.gate4_diagnostics import failure_frontier, failure_mechanism, failure_witness
+from contextmesh.gate4_diagnostics import attach_recovery_confirmation, failure_frontier, failure_mechanism, failure_witness
 
 
 def _diag(
@@ -277,3 +277,71 @@ def test_failure_witness_stable_case_has_no_failure_artifact() -> None:
     assert witness["observed"] is False
     assert witness["failure"] is None
     assert witness["suggested_recovery_top_k"] is None
+
+
+
+def test_attach_recovery_confirmation_requires_matching_scale_and_budget() -> None:
+    witness = {
+        "case_id": "cross-file-008",
+        "top_k": 20,
+        "failure": {"scale": 2.0},
+        "intervention_verified": False,
+    }
+    checks = [
+        {
+            "case_id": "cross-file-008",
+            "baseline_top_k": 20,
+            "verified_recovery_top_k": 24,
+            "intervention_verified": True,
+            "recovered": True,
+            "evidence_scope": "offline-retrieval-only",
+        }
+    ]
+
+    wrong_scale = attach_recovery_confirmation(
+        witness,
+        scale=5.0,
+        checks=checks,
+    )
+    assert wrong_scale["intervention_verified"] is False
+
+    confirmed = attach_recovery_confirmation(
+        witness,
+        scale=2.0,
+        checks=checks,
+    )
+    assert confirmed["intervention_verified"] is True
+    assert confirmed["intervention_recovered"] is True
+    assert confirmed["verified_recovery_top_k"] == 24
+    assert confirmed["intervention_evidence_scope"] == (
+        "offline-retrieval-only"
+    )
+    assert confirmed["live_model_recovery_verified"] is False
+
+
+def test_attach_recovery_confirmation_does_not_use_wrong_budget() -> None:
+    witness = {
+        "case_id": "cross-file-008",
+        "top_k": 20,
+        "failure": {"scale": 2.0},
+        "intervention_verified": False,
+    }
+    checks = [
+        {
+            "case_id": "cross-file-008",
+            "baseline_top_k": 5,
+            "verified_recovery_top_k": 9,
+            "intervention_verified": True,
+            "recovered": True,
+            "evidence_scope": "offline-retrieval-only",
+        }
+    ]
+
+    result = attach_recovery_confirmation(
+        witness,
+        scale=2.0,
+        checks=checks,
+    )
+
+    assert result["intervention_verified"] is False
+    assert "verified_recovery_top_k" not in result
