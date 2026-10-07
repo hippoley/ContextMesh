@@ -183,3 +183,111 @@ def compare_live_to_lexical(
             "classification": classification,
         })
     return out
+
+
+
+def failure_mechanism(diag: dict[str, Any], *, top_k: int) -> dict[str, Any]:
+    """Classify why a lexical case failed at a fixed retrieval budget."""
+    if not diag.get("expected_present", True):
+        return {
+            "mechanism": "not-applicable",
+            "recovery_top_k": None,
+            "rank_gap": None,
+        }
+    if diag.get("recovered"):
+        return {
+            "mechanism": "recovered",
+            "recovery_top_k": diag.get("first_sufficient_rank"),
+            "rank_gap": 0,
+        }
+
+    first_hit = diag.get("best_ground_truth_rank")
+    sufficient = diag.get("first_sufficient_rank")
+    if first_hit is None:
+        mechanism = "ground-truth-displaced"
+    elif first_hit > top_k:
+        mechanism = "first-hit-beyond-budget"
+    elif sufficient is None:
+        mechanism = "evidence-closure-unresolved"
+    elif sufficient > top_k:
+        mechanism = "partial-evidence-below-sufficiency"
+    else:
+        mechanism = diag.get("failure_reason") or "unclassified"
+
+    return {
+        "mechanism": mechanism,
+        "recovery_top_k": sufficient,
+        "rank_gap": None if sufficient is None else max(0, sufficient - top_k),
+    }
+
+
+def failure_frontier(
+    points: list[dict[str, Any]],
+    case_id: str,
+    key: str,
+    *,
+    top_k: int,
+) -> dict[str, Any]:
+    """Locate the first observed scale failure and explain its retrieval mechanism.
+
+    This reports an observed bracket over the frozen scale points; it does not
+    interpolate an unmeasured exact breakpoint.
+    """
+    present: list[tuple[float, dict[str, Any]]] = []
+    for point in points:
+        diag = next(
+            (row for row in point.get(key, []) if row.get("case_id") == case_id),
+            None,
+        )
+        if diag and diag.get("expected_present"):
+            present.append((float(point["requested_ratio"]), diag))
+
+    if not present:
+        return {
+            "classification": "not-applicable",
+            "last_recovered_scale": None,
+            "first_failure_scale": None,
+            "breakpoint_bracket": None,
+            "mechanism": "not-applicable",
+            "recovery_top_k": None,
+            "rank_gap": None,
+        }
+
+    last_recovered: float | None = None
+    first_failure: tuple[float, dict[str, Any]] | None = None
+    for ratio, diag in present:
+        if diag.get("recovered"):
+            last_recovered = ratio
+            continue
+        first_failure = (ratio, diag)
+        break
+
+    if first_failure is None:
+        return {
+            "classification": "stable",
+            "last_recovered_scale": last_recovered,
+            "first_failure_scale": None,
+            "breakpoint_bracket": None,
+            "mechanism": "recovered",
+            "recovery_top_k": None,
+            "rank_gap": 0,
+        }
+
+    failure_ratio, failure_diag = first_failure
+    mechanism = failure_mechanism(failure_diag, top_k=top_k)
+    baseline_failed = last_recovered is None
+    bracket = (
+        None
+        if baseline_failed
+        else {
+            "greater_than": last_recovered,
+            "less_than_or_equal": failure_ratio,
+        }
+    )
+    return {
+        "classification": "baseline-incapable" if baseline_failed else "scale-regression",
+        "last_recovered_scale": last_recovered,
+        "first_failure_scale": failure_ratio,
+        "breakpoint_bracket": bracket,
+        **mechanism,
+    }
