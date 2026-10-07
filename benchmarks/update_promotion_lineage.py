@@ -66,7 +66,21 @@ def build_lineage(
             raise ValueError(f"promotion decision {name} must not contain surrounding whitespace")
         if len(value) > 128:
             raise ValueError(f"promotion decision {name} is too long")
-    outcome = str(decision.get("decision") or "").upper()
+    outcome_raw = decision.get("decision")
+    if not isinstance(outcome_raw, str) or outcome_raw not in {"PROMOTE", "HOLD", "REJECT"}:
+        raise ValueError(f"invalid promotion decision: {outcome_raw!r}")
+    outcome = outcome_raw
+
+    audit_fields: dict[str, list[str]] = {}
+    for name in ("hard_failures", "warnings"):
+        value = decision.get(name)
+        if not isinstance(value, list):
+            raise ValueError(f"promotion decision {name} must be a list")
+        if len(value) > 100:
+            raise ValueError(f"promotion decision {name} has too many entries")
+        if any(not isinstance(item, str) or not item.strip() or len(item) > 512 for item in value):
+            raise ValueError(f"promotion decision {name} contains an invalid entry")
+        audit_fields[name] = value
 
     if outcome not in {"PROMOTE", "HOLD", "REJECT"}:
         raise ValueError(f"invalid promotion decision: {outcome!r}")
@@ -107,8 +121,8 @@ def build_lineage(
         "candidate_run_id": candidate,
         "decision": outcome,
         "candidate_git_sha": candidate_git_sha,
-        "hard_failures": list(decision.get("hard_failures") or []),
-        "warnings": list(decision.get("warnings") or []),
+        "hard_failures": list(audit_fields["hard_failures"]),
+        "warnings": list(audit_fields["warnings"]),
         "policy": dict(decision.get("policy") or {}),
     }
     events.append(event)
