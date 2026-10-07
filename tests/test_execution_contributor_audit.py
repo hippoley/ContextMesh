@@ -47,3 +47,14 @@ def test_configured_executed_contributor_is_compliant():
     )
     assert audit.disposition == ExecutionContributorDisposition.COMPLIANT
     assert audit.compliant is True
+
+
+def test_contribution_without_execution_is_invalid_telemetry():
+    audit = ExecutionContributorAudit(
+        contributor_id="ghost-backend",
+        configured=True,
+        executed=False,
+        contributed=True,
+    )
+    assert audit.disposition == ExecutionContributorDisposition.INVALID_TELEMETRY
+    assert audit.compliant is False
