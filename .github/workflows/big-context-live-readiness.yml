@@ -27,6 +27,9 @@ on:
       - 'tests/test_v17_live_run_manifest.py'
       - 'benchmarks/verify_frozen_public_proof.py'
       - 'src/contextmesh/provider_smoke.py'
+      - 'src/contextmesh/diagnostics.py'
+      - 'tests/test_execution_contributor_audit.py'
+      - 'tests/test_contract_resolution_receipt.py'
       - 'src/contextmesh/big_context_proof.py'
       - 'tests/test_v17_big_context_gates.py'
       - 'tests/test_v17_frozen_proof.py'
@@ -82,7 +85,9 @@ jobs:
             tests/test_v17_promotion_contract.py \
             tests/test_v17_promotion_lineage.py \
             tests/test_v17_reference_rollback.py \
-            tests/test_v17_recovery_context.py
+            tests/test_v17_recovery_context.py \
+            tests/test_execution_contributor_audit.py \
+            tests/test_contract_resolution_receipt.py
           test -f benchmarks/big-context/nist-public-corpus.json
           test -f .github/workflows/big-context-live-proof.yml
           test -f .github/workflows/big-context-reference-rollback.yml
