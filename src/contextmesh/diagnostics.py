@@ -42,6 +42,7 @@ class EvidenceFailureClass(str, Enum):
 class ContractResolutionDisposition(str, Enum):
     PRESERVED = "preserved"
     EXPLICIT_TRANSFORM = "explicit-transform"
+    AUTHORIZED_FALLBACK = "authorized-fallback"
     DROPPED = "dropped"
     UNEXPECTED_FALLBACK = "unexpected-fallback"
     SCOPE_EXPANSION = "scope-expansion"
@@ -72,7 +73,7 @@ class ContractResolutionReceipt(BaseModel):
             if self.transform:
                 return ContractResolutionDisposition.EXPLICIT_TRANSFORM
             if self.fallback_authorized:
-                return ContractResolutionDisposition.EXPLICIT_TRANSFORM
+                return ContractResolutionDisposition.AUTHORIZED_FALLBACK
             return ContractResolutionDisposition.UNEXPECTED_FALLBACK
         return ContractResolutionDisposition.PRESERVED
 
@@ -82,6 +83,7 @@ class ContractResolutionReceipt(BaseModel):
         return self.disposition in {
             ContractResolutionDisposition.PRESERVED,
             ContractResolutionDisposition.EXPLICIT_TRANSFORM,
+            ContractResolutionDisposition.AUTHORIZED_FALLBACK,
         }
 
 
