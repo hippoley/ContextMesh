@@ -205,3 +205,24 @@ def test_lineage_rejects_coerced_decision_values():
             assert "invalid promotion decision" in str(exc)
         else:
             raise AssertionError("expected exact decision enum rejection")
+
+
+def test_lineage_rejects_self_consistent_but_malformed_prior_schema():
+    mutations = [
+        lambda p: p.update({"events": "oops", "event_count": 4}),
+        lambda p: p.update({"event_count": 99}),
+        lambda p: p["events"][0].update({"sequence": 7}),
+        lambda p: p["events"][0].update({"decision": "promote"}),
+        lambda p: p["events"][0].update({"warnings": "oops"}),
+        lambda p: p.update({"rollback_count": True}),
+    ]
+    for mutate in mutations:
+        prior = mod.build_lineage(_decision("A", "B", "PROMOTE"))
+        mutate(prior)
+        prior["lineage_fingerprint"] = mod._fingerprint(prior)
+        try:
+            mod.build_lineage(_decision("B", "C", "PROMOTE"), prior_lineage=prior)
+        except ValueError as exc:
+            assert "prior lineage" in str(exc)
+        else:
+            raise AssertionError("expected malformed prior lineage schema rejection")
