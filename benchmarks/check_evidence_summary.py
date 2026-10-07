@@ -15,7 +15,10 @@ def main() -> int:
     args = ap.parse_args()
     summary = None
     if args.summary.is_file():
-        raw = json.loads(args.summary.read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(args.summary.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            raw = None
         summary = raw if isinstance(raw, dict) else None
     result = evidence_check(summary)
     args.output.parent.mkdir(parents=True, exist_ok=True)
