@@ -44,6 +44,7 @@ class ContractResolutionDisposition(str, Enum):
     EXPLICIT_TRANSFORM = "explicit-transform"
     AUTHORIZED_FALLBACK = "authorized-fallback"
     DROPPED = "dropped"
+    UNRESOLVED = "unresolved"
     UNEXPECTED_FALLBACK = "unexpected-fallback"
     SCOPE_EXPANSION = "scope-expansion"
 
@@ -62,8 +63,9 @@ class ContractResolutionReceipt(BaseModel):
     @property
     def disposition(self) -> ContractResolutionDisposition:
         if self.declared_scope is not None:
-            resolved_scope = self.resolved_scope or []
-            if not set(resolved_scope).issubset(set(self.declared_scope)):
+            if self.resolved_scope is None:
+                return ContractResolutionDisposition.UNRESOLVED
+            if not set(self.resolved_scope).issubset(set(self.declared_scope)):
                 return ContractResolutionDisposition.SCOPE_EXPANSION
         if self.declared_fingerprint is not None and self.resolved_fingerprint is None:
             return ContractResolutionDisposition.DROPPED
