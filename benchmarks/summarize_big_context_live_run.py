@@ -6,11 +6,18 @@ from pathlib import Path
 from typing import Any
 
 
-def _load(path: Path) -> dict[str, Any] | None:
+def _load(path: Path, errors: list[str]) -> dict[str, Any] | None:
     if not path.is_file():
         return None
-    raw = json.loads(path.read_text(encoding="utf-8"))
-    return raw if isinstance(raw, dict) else None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        errors.append(f"{path.name}:{type(exc).__name__}")
+        return None
+    if not isinstance(raw, dict):
+        errors.append(f"{path.name}:not-object")
+        return None
+    return raw
 
 
 def build_manifest(
@@ -26,15 +33,16 @@ def build_manifest(
     run_scale: bool,
     reference_run_id: str = "",
 ) -> dict[str, Any]:
-    cost = _load(result_dir / "cost-estimate.json")
-    smoke = _load(result_dir / "provider-smoke.json")
-    proof = _load(result_dir / "live-proof.json")
-    verification = _load(result_dir / "frozen-proof-verification.json")
-    scale_plan = _load(result_dir / "gate4-scale-plan.json")
-    promotion = _load(result_dir / "promotion-decision.json")
-    lineage = _load(result_dir / "promotion-lineage.json")
-    provider_blocker = _load(result_dir / "provider-blocker.json")
-    evidence_check = _load(result_dir / "evidence-check.json")
+    artifact_errors: list[str] = []
+    cost = _load(result_dir / "cost-estimate.json", artifact_errors)
+    smoke = _load(result_dir / "provider-smoke.json", artifact_errors)
+    proof = _load(result_dir / "live-proof.json", artifact_errors)
+    verification = _load(result_dir / "frozen-proof-verification.json", artifact_errors)
+    scale_plan = _load(result_dir / "gate4-scale-plan.json", artifact_errors)
+    promotion = _load(result_dir / "promotion-decision.json", artifact_errors)
+    lineage = _load(result_dir / "promotion-lineage.json", artifact_errors)
+    provider_blocker = _load(result_dir / "provider-blocker.json", artifact_errors)
+    evidence_check = _load(result_dir / "evidence-check.json", artifact_errors)
 
     if provider_blocker is not None:
         stage = "provider-configuration-blocked"
@@ -104,6 +112,7 @@ def build_manifest(
             lineage.get("current_reference_run_id") if lineage else None
         ),
         "files_present": sorted(path.name for path in result_dir.iterdir() if path.is_file()),
+        "artifact_parse_errors": artifact_errors,
         "credential_material_recorded": False,
     }
 
