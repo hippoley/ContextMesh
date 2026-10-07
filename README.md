@@ -90,22 +90,28 @@ Gate 5  Drift                repeat-run model/prompt/chunk/reducer stability
 
 A first live run can pass Gates 1–4 and still **does not** set `claim_proven=true`; Gate 5 requires a stored reference and a repeated run.
 
-**Current public proof status (2026-09-28):**
+**Current public proof status (2026-10-07):**
 
 ```text
 Gate 0  synthetic execution mechanics                         PASS
 Gate 1  real NIST corpus · 12 files · 3.88M est. tokens       PASS
 Gate 2  132 frozen cases · 11 kinds · text/table/image         PASS
-Gate 3  live multimodal evidence + task fidelity               BLOCKED · credential
-Gate 4  1× → 20× frozen nested scale curve                    PREPARED · live NOT RUN
-Gate 5  repeated-run drift                                     NOT RUN
+Gate 3  authenticated live multimodal fidelity                 BLOCKED · credential/live run
+Gate 4  offline degradation + recovery evidence                PRODUCED
+        provider-backed 1× → 20× recovery curve                NOT RUN
+Gate 5  verification architecture                              READY
+        repeated independent live evidence                     NOT RUN
 ```
 
-The real public corpus is **29.6212×** the 131,072-token live-route context window and contains **1,905 required coverage units** (936 text, 899 image, 70 table). Gates 1–2 are backed by a successful GitHub Actions run and a committed source-hash/result record. Gate 4 is now **prepared but not passed**: a strict 12-case panel (including cross-file, text/table/image, and head/middle/tail coverage) is frozen into nested 1×/2×/5×/10×/20× projections with exact anchor and projection fingerprints; the live recall curve has not run. The conservative no-call envelope is **¥48.46 for Gate 3** and **¥60.61 for Gate 3+4**. **Live readiness:** no authorized provider secret is configured, so no paid run has started. Track Gate 3 in [Issue #7](https://github.com/hippoley/ContextMesh/issues/7).
+The real public corpus is **29.6212×** the 131,072-token live-route context window and contains **1,905 required coverage units** (936 text, 899 image, 70 table). Gates 1–2 remain backed by successful public workflow evidence and frozen source/result records.
+
+Gate 4 is no longer merely a prepared scale plan. On the frozen NIST v2 projections, the measured lexical top-20 baseline degrades from **72.7% at 1× to 18.2% at 20×**; the repository now also records observed failure frontiers, verified offline intervention reruns, and repeated offline recovery stability. This is **offline evidence, not provider-backed Gate 4 PASS**. The decisive missing result is ContextMesh's authenticated live 1×/2×/5×/10×/20× recovery curve on the same frozen projections.
+
+Gate 5's drift, promotion, lineage, replay, and rollback machinery is substantially implemented, but promotion remains unproven until a live reference run and an independent repeated live run exist. **PREPARED is not PASS; infrastructure is not live evidence.** Track the first authenticated run in [Issue #7](https://github.com/hippoley/ContextMesh/issues/7).
 
 [Official Gate 1–2 v2 evidence](docs/reality/Big-Context-NIST-Gate1-2-v2-2026-09-28.md) · [machine-readable v2 result](benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json) · [reference run](https://github.com/hippoley/ContextMesh/actions/runs/36395147919)
 
-[Official Gate 4 v2 PREPARED evidence](docs/reality/Big-Context-NIST-Gate4-Preflight-v2-2026-09-28.md) · [machine-readable v2 scale plan](benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json) · [reference run](https://github.com/hippoley/ContextMesh/actions/runs/36395147919) · [live Gate 4 tracker](https://github.com/hippoley/ContextMesh/issues/8)
+[Gate 4 frozen preflight](docs/reality/Big-Context-NIST-Gate4-Preflight-v2-2026-09-28.md) · [machine-readable v2 scale plan](benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json) · [live Gate 3 tracker](https://github.com/hippoley/ContextMesh/issues/7)
 
 [Read the five-gate contract](docs/BIG_CONTEXT_PROOF.md) · [Run the proof](benchmarks/big_context_proof.py) · [Needle schema](benchmarks/big-context/needle-matrix.example.json) · [Task schema](benchmarks/big-context/task-cases.example.json)
 
