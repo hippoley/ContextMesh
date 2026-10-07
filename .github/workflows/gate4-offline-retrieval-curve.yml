@@ -45,6 +45,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e '.[dev,rich]'
 
+      - name: Restore frozen NIST source downloads
+        uses: actions/cache@v4
+        with:
+          path: /tmp/contextmesh-nist-proof/downloads
+          key: gate4-nist-v2-${{ runner.os }}-${{ hashFiles(
+            'benchmarks/big-context/nist-public-corpus.json',
+            'benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json',
+            'benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json'
+          ) }}
+
       - name: Rebuild official bounded-table NIST v2 corpus
         run: |
           python benchmarks/build_public_nist_proof.py \
@@ -53,7 +63,8 @@ jobs:
             --model-context-tokens 131072 \
             --min-corpus-ratio 5 \
             --corpus-id nist-public-big-context-v2 \
-            --max-table-block-chars 12000
+            --max-table-block-chars 12000 \
+            --reuse-downloads
 
       - name: Rebuild strict frozen Gate 4 plan
         run: |
