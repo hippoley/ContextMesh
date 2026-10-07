@@ -255,3 +255,41 @@ def test_compare_live_to_lexical_carries_retrieval_diagnostics() -> None:
     assert row["lexical_best_ground_truth_rank"] == 22
     assert row["lexical_first_sufficient_rank"] == 26
     assert row["lexical_failure_reason"] == "candidate-miss"
+
+
+
+def test_live_attribution_frontier_keeps_pretransition_stable_scale_after_recovery() -> None:
+    points = [
+        _point(
+            1,
+            classification="stable",
+            lexical_recovered=True,
+            contextmesh_recovered=True,
+        ),
+        _point(
+            2,
+            classification="shared-evidence-bottleneck",
+            lexical_recovered=False,
+            contextmesh_recovered=False,
+        ),
+        _point(
+            5,
+            classification="stable",
+            lexical_recovered=True,
+            contextmesh_recovered=True,
+        ),
+    ]
+
+    frontier = live_attribution_frontier(
+        points,
+        "cross-file-008",
+        baseline="lexical-top-20",
+    )
+
+    assert frontier["first_transition_scale"] == 2
+    assert frontier["last_stable_scale"] == 1
+    assert frontier["transition_bracket"] == {
+        "greater_than": 1,
+        "less_than_or_equal": 2,
+    }
+    assert frontier["first_by_classification"]["stable"] == 1
