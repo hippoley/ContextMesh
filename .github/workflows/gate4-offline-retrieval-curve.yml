@@ -49,11 +49,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/contextmesh-nist-proof/downloads
-          key: gate4-nist-v2-${{ runner.os }}-${{ hashFiles(
-            'benchmarks/big-context/nist-public-corpus.json',
-            'benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json',
-            'benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json'
-          ) }}
+          key: gate4-nist-v2-${{ runner.os }}-${{ hashFiles('benchmarks/big-context/nist-public-corpus.json', 'benchmarks/results/nist-public-gate1-2-v2-2026-09-28.json', 'benchmarks/results/nist-public-gate4-preflight-v2-2026-09-28.json') }}
 
       - name: Rebuild official bounded-table NIST v2 corpus
         run: |
