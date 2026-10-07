@@ -39,6 +39,58 @@ class EvidenceFailureClass(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ContractResolutionDisposition(str, Enum):
+    PRESERVED = "preserved"
+    EXPLICIT_TRANSFORM = "explicit-transform"
+    AUTHORIZED_FALLBACK = "authorized-fallback"
+    DROPPED = "dropped"
+    UNRESOLVED = "unresolved"
+    UNEXPECTED_FALLBACK = "unexpected-fallback"
+    SCOPE_EXPANSION = "scope-expansion"
+
+
+class ContractResolutionReceipt(BaseModel):
+    field_id: str
+    declared_fingerprint: str | None = None
+    resolved_fingerprint: str | None = None
+    declared_scope: list[str] | None = None
+    resolved_scope: list[str] | None = None
+    transform: str | None = None
+    fallback_authorized: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @computed_field
+    @property
+    def disposition(self) -> ContractResolutionDisposition:
+        if self.declared_scope is not None:
+            if self.resolved_scope is None:
+                return ContractResolutionDisposition.UNRESOLVED
+            if not set(self.resolved_scope).issubset(set(self.declared_scope)):
+                return ContractResolutionDisposition.SCOPE_EXPANSION
+        if self.declared_fingerprint is not None and self.resolved_fingerprint is None:
+            return ContractResolutionDisposition.DROPPED
+        if (
+            self.declared_fingerprint is not None
+            and self.resolved_fingerprint is not None
+            and self.declared_fingerprint != self.resolved_fingerprint
+        ):
+            if self.transform:
+                return ContractResolutionDisposition.EXPLICIT_TRANSFORM
+            if self.fallback_authorized:
+                return ContractResolutionDisposition.AUTHORIZED_FALLBACK
+            return ContractResolutionDisposition.UNEXPECTED_FALLBACK
+        return ContractResolutionDisposition.PRESERVED
+
+    @computed_field
+    @property
+    def compliant(self) -> bool:
+        return self.disposition in {
+            ContractResolutionDisposition.PRESERVED,
+            ContractResolutionDisposition.EXPLICIT_TRANSFORM,
+            ContractResolutionDisposition.AUTHORIZED_FALLBACK,
+        }
+
+
 class ExecutionContributorDisposition(str, Enum):
     COMPLIANT = "compliant"
     MISSING_EXECUTION = "missing-execution"
