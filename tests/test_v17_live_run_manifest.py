@@ -165,3 +165,28 @@ def test_live_run_manifest_requires_explicit_true_for_frozen_verification(tmp_pa
     )
 
     assert manifest["frozen_proof_verified"] is True
+
+
+def test_live_run_manifest_survives_malformed_partial_artifacts(tmp_path: Path):
+    result_dir = tmp_path / "results"
+    result_dir.mkdir()
+    (result_dir / "provider-smoke.json").write_text('{"status":', encoding="utf-8")
+    (result_dir / "live-proof.json").write_text('[]', encoding="utf-8")
+    (result_dir / "cost-estimate.json").write_text(json.dumps({"estimated_cost_cny": 3.0, "within_budget": True}), encoding="utf-8")
+
+    manifest = mod.build_manifest(
+        result_dir,
+        run_id="791",
+        git_sha="mno",
+        provider="dashscope",
+        model="qwen",
+        context_tokens=131072,
+        workers=6,
+        smoke_only=True,
+        run_scale=False,
+    )
+
+    assert manifest["stage"] == "preflight-complete-no-provider"
+    assert "provider-smoke.json:JSONDecodeError" in manifest["artifact_parse_errors"]
+    assert "live-proof.json:not-object" in manifest["artifact_parse_errors"]
+    assert manifest["provider_calls"] == 0
