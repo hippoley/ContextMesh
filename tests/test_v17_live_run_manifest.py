@@ -165,3 +165,45 @@ def test_live_run_manifest_requires_explicit_true_for_frozen_verification(tmp_pa
     )
 
     assert manifest["frozen_proof_verified"] is True
+
+
+def test_live_run_manifest_survives_malformed_partial_artifacts(tmp_path: Path):
+    result_dir = tmp_path / "results"
+    result_dir.mkdir()
+    (result_dir / "provider-smoke.json").write_text('{"status":', encoding="utf-8")
+    (result_dir / "live-proof.json").write_text('[]', encoding="utf-8")
+    (result_dir / "cost-estimate.json").write_text(json.dumps({"estimated_cost_cny": 3.0, "within_budget": True}), encoding="utf-8")
+
+    manifest = mod.build_manifest(
+        result_dir,
+        run_id="791",
+        git_sha="mno",
+        provider="dashscope",
+        model="qwen",
+        context_tokens=131072,
+        workers=6,
+        smoke_only=True,
+        run_scale=False,
+    )
+
+    assert manifest["stage"] == "preflight-complete-no-provider"
+    assert "provider-smoke.json:JSONDecodeError" in manifest["artifact_parse_errors"]
+    assert "live-proof.json:not-object" in manifest["artifact_parse_errors"]
+    assert manifest["provider_calls"] == 0
+
+
+def test_live_cost_gate_rejects_non_finite_and_negative_inputs(tmp_path: Path):
+    import subprocess
+    script = Path(__file__).parents[1] / "benchmarks" / "estimate_big_context_live_cost.py"
+    corpus = tmp_path / "corpus.json"
+    needles = tmp_path / "needles.json"
+    tasks = tmp_path / "tasks.json"
+    corpus.write_text(json.dumps({"required_blocks": 1, "total_chars": 100, "modality_counts": {}}), encoding="utf-8")
+    needles.write_text(json.dumps({"cases": []}), encoding="utf-8")
+    tasks.write_text(json.dumps({"cases": []}), encoding="utf-8")
+    base = ["python", str(script), "--corpus-manifest", str(corpus), "--needles", str(needles), "--tasks", str(tasks), "--context-tokens", "100", "--input-cny-per-million", "1", "--output-cny-per-million", "1", "--max-estimated-cost-cny", "10"]
+    for extra, expected in [(["--safety-factor", "nan"], "safety_factor must be finite"), (["--input-cny-per-million", "-1"], "input_cny_per_million must be non-negative"), (["--max-estimated-cost-cny", "inf"], "max_estimated_cost_cny must be finite")]:
+        cmd = base + extra
+        result = subprocess.run(cmd, text=True, capture_output=True)
+        assert result.returncode != 0
+        assert expected in result.stderr + result.stdout

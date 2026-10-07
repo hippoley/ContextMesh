@@ -46,6 +46,28 @@ def main() -> int:
     ap.add_argument("--output", type=Path)
     args = ap.parse_args()
 
+    numeric_inputs = {
+        "context_tokens": args.context_tokens,
+        "input_cny_per_million": args.input_cny_per_million,
+        "output_cny_per_million": args.output_cny_per_million,
+        "max_estimated_cost_cny": args.max_estimated_cost_cny,
+        "image_reserve_tokens": args.image_reserve_tokens,
+        "block_prompt_reserve_tokens": args.block_prompt_reserve_tokens,
+        "output_tokens_per_block": args.output_tokens_per_block,
+        "final_input_tokens_per_task": args.final_input_tokens_per_task,
+        "final_output_tokens_per_task": args.final_output_tokens_per_task,
+        "safety_factor": args.safety_factor,
+    }
+    for name, value in numeric_inputs.items():
+        if isinstance(value, float) and not math.isfinite(value):
+            raise SystemExit(f"{name} must be finite")
+        if value < 0:
+            raise SystemExit(f"{name} must be non-negative")
+    if args.context_tokens == 0:
+        raise SystemExit("context_tokens must be greater than zero")
+    if args.safety_factor == 0:
+        raise SystemExit("safety_factor must be greater than zero")
+
     manifest = json.loads(args.corpus_manifest.read_text(encoding="utf-8"))
     needles = _load_cases(args.needles)
     tasks = _load_cases(args.tasks)
