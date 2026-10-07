@@ -226,3 +226,29 @@ def test_lineage_rejects_self_consistent_but_malformed_prior_schema():
             assert "prior lineage" in str(exc)
         else:
             raise AssertionError("expected malformed prior lineage schema rejection")
+
+
+def test_lineage_rejects_self_consistent_impossible_causal_history():
+    mutations = [
+        lambda p: p["events"][0].update({"reference_run_id": "X"}),
+        lambda p: p["events"][0].update({"candidate_run_id": "A"}),
+        lambda p: p.update({"current_reference_run_id": "A"}),
+    ]
+    for mutate in mutations:
+        prior = mod.build_lineage(_decision("A", "B", "PROMOTE"))
+        mutate(prior)
+        prior["lineage_fingerprint"] = mod._fingerprint(prior)
+        try:
+            mod.build_lineage(_decision("B", "C", "PROMOTE"), prior_lineage=prior)
+        except ValueError as exc:
+            assert "prior lineage" in str(exc)
+        else:
+            raise AssertionError("expected impossible causal lineage rejection")
+
+
+def test_lineage_causal_replay_preserves_reference_across_hold_and_reject():
+    first = mod.build_lineage(_decision("A", "B", "HOLD"))
+    second = mod.build_lineage(_decision("A", "C", "REJECT"), prior_lineage=first)
+    third = mod.build_lineage(_decision("A", "D", "PROMOTE"), prior_lineage=second)
+    assert third["current_reference_run_id"] == "D"
+    assert [event["decision"] for event in third["events"]] == ["HOLD", "REJECT", "PROMOTE"]

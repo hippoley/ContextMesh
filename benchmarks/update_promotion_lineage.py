@@ -54,6 +54,17 @@ def _validate_prior_lineage(lineage: dict[str, Any]) -> list[dict[str, Any]]:
                 raise ValueError(f"prior lineage event {name} is invalid")
         if not isinstance(event.get("policy"), dict):
             raise ValueError("prior lineage event policy is invalid")
+    replay_current = root
+    for event in events:
+        if event["reference_run_id"] != replay_current:
+            raise ValueError("prior lineage causal chain is invalid")
+        if event["reference_run_id"] == event["candidate_run_id"]:
+            raise ValueError("prior lineage event identities must differ")
+        if event["decision"] == "PROMOTE":
+            replay_current = event["candidate_run_id"]
+    if replay_current != current:
+        raise ValueError("prior lineage current reference does not match causal replay")
+
     rollback_count = lineage.get("rollback_count")
     if isinstance(rollback_count, bool) or not isinstance(rollback_count, int) or rollback_count < 0:
         raise ValueError("prior lineage rollback_count is invalid")
@@ -135,12 +146,12 @@ def build_lineage(
         )
 
     if prior_lineage:
-        events = list(_validate_prior_lineage(prior_lineage))
-        root = prior_lineage.get("root_reference_run_id")
-        current = prior_lineage.get("current_reference_run_id")
         prior_fp = prior_lineage.get("lineage_fingerprint")
         if prior_fp and prior_fp != _fingerprint(prior_lineage):
             raise ValueError("prior lineage fingerprint mismatch")
+        events = list(_validate_prior_lineage(prior_lineage))
+        root = prior_lineage.get("root_reference_run_id")
+        current = prior_lineage.get("current_reference_run_id")
         if str(current) != str(reference):
             raise ValueError(
                 f"lineage fork rejected: current reference={current}, decision reference={reference}"
