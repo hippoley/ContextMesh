@@ -31,7 +31,7 @@ def test_authorized_fallback_is_compliant():
         resolved_fingerprint="sha256:env",
         fallback_authorized=True,
     )
-    assert receipt.disposition == ContractResolutionDisposition.EXPLICIT_TRANSFORM
+    assert receipt.disposition == ContractResolutionDisposition.AUTHORIZED_FALLBACK
     assert receipt.compliant is True
 
 
