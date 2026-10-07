@@ -57,6 +57,15 @@ def build_lineage(
 
     reference = decision.get("reference_run_id")
     candidate = decision.get("candidate_run_id")
+    for name, value in (("reference_run_id", reference), ("candidate_run_id", candidate)):
+        if not isinstance(value, str):
+            raise ValueError(f"promotion decision {name} must be a string")
+        if not value.strip():
+            raise ValueError(f"promotion decision {name} must be non-empty")
+        if value != value.strip():
+            raise ValueError(f"promotion decision {name} must not contain surrounding whitespace")
+        if len(value) > 128:
+            raise ValueError(f"promotion decision {name} is too long")
     outcome = str(decision.get("decision") or "").upper()
 
     if outcome not in {"PROMOTE", "HOLD", "REJECT"}:

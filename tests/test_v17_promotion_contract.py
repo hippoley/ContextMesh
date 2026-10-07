@@ -111,3 +111,12 @@ def test_promotion_rejects_malformed_artifact_metric_without_crashing():
     result = mod.decide(diff)
     assert result["decision"] == "REJECT"
     assert any("must be numeric" in item for item in result["hard_failures"])
+
+
+def test_promotion_rejects_invalid_or_colliding_run_identities():
+    for reference, candidate in [(" ", "r2"), (1, "r2"), (" r1", "r2"), ("r1", "r1")]:
+        diff = _diff()
+        diff["reference_run_id"] = reference
+        diff["candidate_run_id"] = candidate
+        result = mod.decide(diff)
+        assert result["decision"] == "REJECT"
