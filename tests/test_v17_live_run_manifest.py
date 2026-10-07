@@ -34,7 +34,7 @@ def test_live_run_manifest_distinguishes_preflight_smoke_and_proof(tmp_path: Pat
     assert preflight["estimated_cost_cny"] == 12.5
 
     (result_dir / "provider-smoke.json").write_text(
-        json.dumps({"provider_calls": 2, "total_tokens": 77}),
+        json.dumps({"provider_attempts": 2, "provider_calls": 2, "total_tokens": 77}),
         encoding="utf-8",
     )
     smoke = mod.build_manifest(
@@ -49,6 +49,7 @@ def test_live_run_manifest_distinguishes_preflight_smoke_and_proof(tmp_path: Pat
         run_scale=False,
     )
     assert smoke["stage"] == "provider-smoke-complete"
+    assert smoke["provider_attempts"] == 2
     assert smoke["provider_calls"] == 2
     assert smoke["provider_tokens"] == 77
 
@@ -189,6 +190,7 @@ def test_live_run_manifest_survives_malformed_partial_artifacts(tmp_path: Path):
     assert manifest["stage"] == "preflight-complete-no-provider"
     assert "provider-smoke.json:JSONDecodeError" in manifest["artifact_parse_errors"]
     assert "live-proof.json:not-object" in manifest["artifact_parse_errors"]
+    assert manifest["provider_attempts"] == 0
     assert manifest["provider_calls"] == 0
 
 
