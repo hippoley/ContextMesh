@@ -80,8 +80,11 @@ def decide(
     if diff.get("reference_run_id") == diff.get("candidate_run_id"):
         hard_failures.append("reference-candidate-run-id-collision")
 
-    if str(diff.get("status")).lower() != "pass":
-        hard_failures.append(f"gate5-status={diff.get('status')}")
+    status = diff.get("status")
+    if not isinstance(status, str) or status not in {"pass", "fail"}:
+        hard_failures.append("invalid-gate5-status")
+    elif status != "pass":
+        hard_failures.append(f"gate5-status={status}")
 
     try:
         scale20_delta = _metric(diff, "scale_20x", "contextmesh_evidence_recall", "delta")
@@ -110,7 +113,14 @@ def decide(
             f"latency-ratio={latency_ratio:.3f}>{max_latency_ratio:.3f}"
         )
 
-    blockers = list(diff.get("blockers") or [])
+    raw_blockers = diff.get("blockers")
+    if raw_blockers is None:
+        blockers = []
+    elif not isinstance(raw_blockers, list) or any(not isinstance(item, str) or not item.strip() for item in raw_blockers):
+        blockers = []
+        hard_failures.append("invalid-gate5-blockers")
+    else:
+        blockers = raw_blockers
     if blockers:
         hard_failures.extend(f"gate5:{item}" for item in blockers)
 
