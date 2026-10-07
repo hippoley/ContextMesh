@@ -13,7 +13,14 @@ from contextmesh.big_context_proof import (
     load_needle_matrix,
 )
 from contextmesh.store import FileContextStore
-from contextmesh.gate4_diagnostics import lexical_case_diagnostics, failure_classification
+from contextmesh.gate4_diagnostics import (
+    failure_classification,
+    attach_recovery_confirmation,
+    failure_frontier,
+    failure_witness,
+    lexical_case_diagnostics,
+    lexical_recovery_checks,
+)
 
 
 def _fingerprint(block_ids: list[str]) -> str:
@@ -96,6 +103,20 @@ def main() -> int:
             )
             diag5 = lexical_case_diagnostics(projected_store, projected_id, needles, 5)
             diag20 = lexical_case_diagnostics(projected_store, projected_id, needles, 20)
+            recovery5 = lexical_recovery_checks(
+                projected_store,
+                projected_id,
+                needles,
+                diag5,
+                baseline_top_k=5,
+            )
+            recovery20 = lexical_recovery_checks(
+                projected_store,
+                projected_id,
+                needles,
+                diag20,
+                baseline_top_k=20,
+            )
 
         rows.append(
             {
@@ -111,6 +132,8 @@ def main() -> int:
                 "lexical_top_20_evidence_recall": top20,
                 "lexical_top_5_cases": diag5,
                 "lexical_top_20_cases": diag20,
+                "lexical_top_5_recovery_checks": recovery5,
+                "lexical_top_20_recovery_checks": recovery20,
             }
         )
 
@@ -124,6 +147,41 @@ def main() -> int:
         (float(row["lexical_top_20_evidence_recall"]) for row in rows),
         default=0.0,
     )
+
+    def confirmed_failure_witness(
+        case,
+        *,
+        key: str,
+        top_k: int,
+        checks_key: str,
+    ) -> dict[str, object]:
+        witness = failure_witness(
+            rows,
+            case.id,
+            key,
+            top_k=top_k,
+            expected_terms=case.match_terms,
+            target_assets=case.target_assets,
+        )
+        failure = witness.get("failure")
+        if not failure:
+            return witness
+        failure_scale = float(failure["scale"])
+        point = next(
+            (
+                row
+                for row in rows
+                if float(row["requested_ratio"]) == failure_scale
+            ),
+            None,
+        )
+        if point is None:
+            return witness
+        return attach_recovery_confirmation(
+            witness,
+            scale=failure_scale,
+            checks=list(point.get(checks_key, [])),
+        )
 
     payload = {
         "schema_version": 1,
@@ -147,6 +205,44 @@ def main() -> int:
                 "kind": case.kind.value,
                 "top_5": failure_classification(rows, case.id, "lexical_top_5_cases"),
                 "top_20": failure_classification(rows, case.id, "lexical_top_20_cases"),
+            }
+            for case in needles if case.expected_present
+        ],
+        "failure_frontiers": [
+            {
+                "case_id": case.id,
+                "kind": case.kind.value,
+                "top_5": failure_frontier(
+                    rows,
+                    case.id,
+                    "lexical_top_5_cases",
+                    top_k=5,
+                ),
+                "top_20": failure_frontier(
+                    rows,
+                    case.id,
+                    "lexical_top_20_cases",
+                    top_k=20,
+                ),
+            }
+            for case in needles if case.expected_present
+        ],
+        "failure_witnesses": [
+            {
+                "case_id": case.id,
+                "kind": case.kind.value,
+                "top_5": confirmed_failure_witness(
+                    case,
+                    key="lexical_top_5_cases",
+                    top_k=5,
+                    checks_key="lexical_top_5_recovery_checks",
+                ),
+                "top_20": confirmed_failure_witness(
+                    case,
+                    key="lexical_top_20_cases",
+                    top_k=20,
+                    checks_key="lexical_top_20_recovery_checks",
+                ),
             }
             for case in needles if case.expected_present
         ],
@@ -195,6 +291,91 @@ def main() -> int:
                     sufficient="—" if sufficient is None else sufficient,
                     result="recovered" if case.get("recovered") else "miss",
                     reason=case.get("failure_reason") or "—",
+                )
+            )
+
+    lines.extend([
+        "",
+        "## Observed failure frontiers",
+        "",
+        "| Case | Budget | Last recovered | First failure | Breakpoint bracket | Mechanism | Recovery top-k |",
+        "| :--- | ---: | ---: | ---: | :--- | :--- | ---: |",
+    ])
+    for case in payload["failure_frontiers"]:
+        for label, budget in (("top_5", 5), ("top_20", 20)):
+            frontier = case[label]
+            bracket = frontier.get("breakpoint_bracket")
+            if bracket:
+                bracket_text = (
+                    f"({bracket['greater_than']:g}x, "
+                    f"{bracket['less_than_or_equal']:g}x]"
+                )
+            else:
+                bracket_text = "—"
+            lines.append(
+                "| {case_id} | {budget} | {last} | {first} | {bracket} | {mechanism} | {recovery} |".format(
+                    case_id=case["case_id"],
+                    budget=budget,
+                    last="—" if frontier.get("last_recovered_scale") is None else f"{frontier['last_recovered_scale']:g}x",
+                    first="—" if frontier.get("first_failure_scale") is None else f"{frontier['first_failure_scale']:g}x",
+                    bracket=bracket_text,
+                    mechanism=frontier.get("mechanism") or "—",
+                    recovery="—" if frontier.get("recovery_top_k") is None else frontier["recovery_top_k"],
+                )
+            )
+
+    lines.extend([
+        "",
+        "## Minimal observed failure witnesses",
+        "",
+        "> Suggested recovery top-k begins as diagnostic inference. "
+        "When intervention_verified=true, this runner actually reran retrieval "
+        "at that budget on the same frozen projection. This still does not "
+        "verify live-model recovery.",
+        "",
+        "| Case | Budget | PASS scale | FAIL scale | First hit | Sufficient rank | Shortfall | Missing terms | Missing assets | Suggested top-k |",
+        "| :--- | ---: | ---: | ---: | ---: | ---: | ---: | :--- | :--- | ---: |",
+    ])
+    for case in payload["failure_witnesses"]:
+        for label, budget in (("top_5", 5), ("top_20", 20)):
+            witness = case[label]
+            failure = witness.get("failure")
+            previous = witness.get("previous_pass")
+            if not failure:
+                continue
+            shortfall = (witness.get("rank_shift") or {}).get(
+                "budget_shortfall"
+            )
+            lines.append(
+                "| {case_id} | {budget} | {pass_scale} | {fail_scale} | "
+                "{first_hit} | {sufficient} | {shortfall} | {terms} | "
+                "{assets} | {suggested} |".format(
+                    case_id=case["case_id"],
+                    budget=budget,
+                    pass_scale=(
+                        "—"
+                        if not previous
+                        else f"{previous['scale']:g}x"
+                    ),
+                    fail_scale=f"{failure['scale']:g}x",
+                    first_hit=(
+                        "—"
+                        if failure.get("best_ground_truth_rank") is None
+                        else failure["best_ground_truth_rank"]
+                    ),
+                    sufficient=(
+                        "—"
+                        if failure.get("first_sufficient_rank") is None
+                        else failure["first_sufficient_rank"]
+                    ),
+                    shortfall="—" if shortfall is None else shortfall,
+                    terms=", ".join(witness.get("missing_terms") or []) or "—",
+                    assets=", ".join(witness.get("missing_assets") or []) or "—",
+                    suggested=(
+                        "—"
+                        if witness.get("suggested_recovery_top_k") is None
+                        else witness["suggested_recovery_top_k"]
+                    ),
                 )
             )
 

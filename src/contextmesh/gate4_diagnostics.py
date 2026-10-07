@@ -183,3 +183,419 @@ def compare_live_to_lexical(
             "classification": classification,
         })
     return out
+
+
+
+def failure_mechanism(diag: dict[str, Any], *, top_k: int) -> dict[str, Any]:
+    """Classify why a lexical case failed at a fixed retrieval budget."""
+    if not diag.get("expected_present", True):
+        return {
+            "mechanism": "not-applicable",
+            "recovery_top_k": None,
+            "rank_gap": None,
+        }
+    if diag.get("recovered"):
+        return {
+            "mechanism": "recovered",
+            "recovery_top_k": diag.get("first_sufficient_rank"),
+            "rank_gap": 0,
+        }
+
+    first_hit = diag.get("best_ground_truth_rank")
+    sufficient = diag.get("first_sufficient_rank")
+    if first_hit is None:
+        mechanism = "ground-truth-displaced"
+    elif first_hit > top_k:
+        mechanism = "first-hit-beyond-budget"
+    elif sufficient is None:
+        mechanism = "evidence-closure-unresolved"
+    elif sufficient > top_k:
+        mechanism = "partial-evidence-below-sufficiency"
+    else:
+        mechanism = diag.get("failure_reason") or "unclassified"
+
+    return {
+        "mechanism": mechanism,
+        "recovery_top_k": sufficient,
+        "rank_gap": None if sufficient is None else max(0, sufficient - top_k),
+    }
+
+
+def failure_frontier(
+    points: list[dict[str, Any]],
+    case_id: str,
+    key: str,
+    *,
+    top_k: int,
+) -> dict[str, Any]:
+    """Locate the first observed scale failure and explain its retrieval mechanism.
+
+    This reports an observed bracket over the frozen scale points; it does not
+    interpolate an unmeasured exact breakpoint.
+    """
+    present: list[tuple[float, dict[str, Any]]] = []
+    for point in points:
+        diag = next(
+            (row for row in point.get(key, []) if row.get("case_id") == case_id),
+            None,
+        )
+        if diag and diag.get("expected_present"):
+            present.append((float(point["requested_ratio"]), diag))
+
+    if not present:
+        return {
+            "classification": "not-applicable",
+            "last_recovered_scale": None,
+            "first_failure_scale": None,
+            "breakpoint_bracket": None,
+            "mechanism": "not-applicable",
+            "recovery_top_k": None,
+            "rank_gap": None,
+        }
+
+    last_recovered: float | None = None
+    first_failure: tuple[float, dict[str, Any]] | None = None
+    for ratio, diag in present:
+        if diag.get("recovered"):
+            last_recovered = ratio
+            continue
+        first_failure = (ratio, diag)
+        break
+
+    if first_failure is None:
+        return {
+            "classification": "stable",
+            "last_recovered_scale": last_recovered,
+            "first_failure_scale": None,
+            "breakpoint_bracket": None,
+            "mechanism": "recovered",
+            "recovery_top_k": None,
+            "rank_gap": 0,
+        }
+
+    failure_ratio, failure_diag = first_failure
+    mechanism = failure_mechanism(failure_diag, top_k=top_k)
+    baseline_failed = last_recovered is None
+    bracket = (
+        None
+        if baseline_failed
+        else {
+            "greater_than": last_recovered,
+            "less_than_or_equal": failure_ratio,
+        }
+    )
+    return {
+        "classification": "baseline-incapable" if baseline_failed else "scale-regression",
+        "last_recovered_scale": last_recovered,
+        "first_failure_scale": failure_ratio,
+        "breakpoint_bracket": bracket,
+        **mechanism,
+    }
+
+
+
+def failure_witness(
+    points: list[dict[str, Any]],
+    case_id: str,
+    key: str,
+    *,
+    top_k: int,
+    expected_terms: list[str] | None = None,
+    target_assets: list[str] | None = None,
+) -> dict[str, Any]:
+    """Build a minimal observed PASS->FAIL witness for one retrieval case.
+
+    The suggested recovery budget is an inference from the observed ranking.
+    It is not labeled as a successful intervention until a separate run
+    actually executes that budget.
+    """
+    observations: list[tuple[float, dict[str, Any]]] = []
+    for point in points:
+        diag = next(
+            (
+                row
+                for row in point.get(key, [])
+                if row.get("case_id") == case_id
+            ),
+            None,
+        )
+        if diag and diag.get("expected_present"):
+            observations.append(
+                (float(point["requested_ratio"]), diag)
+            )
+
+    previous_pass: tuple[float, dict[str, Any]] | None = None
+    for ratio, diag in observations:
+        if diag.get("recovered"):
+            previous_pass = (ratio, diag)
+            continue
+        if previous_pass is None:
+            return {
+                "case_id": case_id,
+                "top_k": top_k,
+                "classification": "baseline-incapable",
+                "observed": True,
+                "previous_pass": None,
+                "failure": {
+                    "scale": ratio,
+                    "best_ground_truth_rank": diag.get(
+                        "best_ground_truth_rank"
+                    ),
+                    "first_sufficient_rank": diag.get(
+                        "first_sufficient_rank"
+                    ),
+                    "failure_reason": diag.get(
+                        "failure_reason"
+                    ),
+                    "matched_terms": list(
+                        diag.get("matched_terms") or []
+                    ),
+                    "matched_assets": list(
+                        diag.get("matched_assets") or []
+                    ),
+                },
+                "missing_terms": sorted(
+                    set(expected_terms or [])
+                    - set(diag.get("matched_terms") or [])
+                ),
+                "missing_assets": sorted(
+                    {
+                        Path(asset).name
+                        for asset in (target_assets or [])
+                    }
+                    - set(diag.get("matched_assets") or [])
+                ),
+                "suggested_recovery_top_k": diag.get(
+                    "first_sufficient_rank"
+                ),
+                "suggestion_evidence": "diagnostic-inference",
+                "intervention_verified": False,
+            }
+
+        pass_ratio, pass_diag = previous_pass
+        sufficient = diag.get("first_sufficient_rank")
+        witness = {
+            "case_id": case_id,
+            "top_k": top_k,
+            "classification": "scale-regression",
+            "observed": True,
+            "previous_pass": {
+                "scale": pass_ratio,
+                "best_ground_truth_rank": pass_diag.get(
+                    "best_ground_truth_rank"
+                ),
+                "first_sufficient_rank": pass_diag.get(
+                    "first_sufficient_rank"
+                ),
+                "matched_terms": list(
+                    pass_diag.get("matched_terms") or []
+                ),
+                "matched_assets": list(
+                    pass_diag.get("matched_assets") or []
+                ),
+            },
+            "failure": {
+                "scale": ratio,
+                "best_ground_truth_rank": diag.get(
+                    "best_ground_truth_rank"
+                ),
+                "first_sufficient_rank": sufficient,
+                "failure_reason": diag.get(
+                    "failure_reason"
+                ),
+                "matched_terms": list(
+                    diag.get("matched_terms") or []
+                ),
+                "matched_assets": list(
+                    diag.get("matched_assets") or []
+                ),
+            },
+            "rank_shift": {
+                "best_ground_truth_rank_delta": (
+                    None
+                    if (
+                        pass_diag.get("best_ground_truth_rank")
+                        is None
+                        or diag.get("best_ground_truth_rank")
+                        is None
+                    )
+                    else (
+                        int(diag["best_ground_truth_rank"])
+                        - int(pass_diag["best_ground_truth_rank"])
+                    )
+                ),
+                "sufficient_rank_delta": (
+                    None
+                    if (
+                        pass_diag.get("first_sufficient_rank")
+                        is None
+                        or sufficient is None
+                    )
+                    else (
+                        int(sufficient)
+                        - int(
+                            pass_diag["first_sufficient_rank"]
+                        )
+                    )
+                ),
+                "budget_shortfall": (
+                    None
+                    if sufficient is None
+                    else max(0, int(sufficient) - top_k)
+                ),
+            },
+            "missing_terms": sorted(
+                set(expected_terms or [])
+                - set(diag.get("matched_terms") or [])
+            ),
+            "missing_assets": sorted(
+                {
+                    Path(asset).name
+                    for asset in (target_assets or [])
+                }
+                - set(diag.get("matched_assets") or [])
+            ),
+            "suggested_recovery_top_k": sufficient,
+            "suggestion_evidence": "diagnostic-inference",
+            "intervention_verified": False,
+        }
+        return witness
+
+    return {
+        "case_id": case_id,
+        "top_k": top_k,
+        "classification": "stable",
+        "observed": False,
+        "previous_pass": (
+            None
+            if previous_pass is None
+            else {
+                "scale": previous_pass[0],
+                "best_ground_truth_rank": previous_pass[1].get(
+                    "best_ground_truth_rank"
+                ),
+                "first_sufficient_rank": previous_pass[1].get(
+                    "first_sufficient_rank"
+                ),
+                "matched_terms": list(
+                    previous_pass[1].get("matched_terms") or []
+                ),
+                "matched_assets": list(
+                    previous_pass[1].get("matched_assets") or []
+                ),
+            }
+        ),
+        "failure": None,
+        "missing_terms": [],
+        "missing_assets": [],
+        "suggested_recovery_top_k": None,
+        "suggestion_evidence": None,
+        "intervention_verified": False,
+    }
+
+
+
+def lexical_recovery_checks(
+    store: FileContextStore,
+    corpus_id: str,
+    cases: list[NeedleCase],
+    diagnostics: list[dict[str, Any]],
+    *,
+    baseline_top_k: int,
+) -> list[dict[str, Any]]:
+    """Actually rerun failed lexical cases at their observed sufficient rank.
+
+    This verifies a retrieval-budget intervention on the same frozen projection.
+    It remains retrieval-only evidence and does not imply live model recovery.
+    """
+    by_id = {case.id: case for case in cases}
+    checks: list[dict[str, Any]] = []
+
+    for diag in diagnostics:
+        if not diag.get("expected_present"):
+            continue
+        if diag.get("recovered"):
+            continue
+
+        case_id = str(diag.get("case_id") or "")
+        case = by_id.get(case_id)
+        suggested = diag.get("first_sufficient_rank")
+        if (
+            case is None
+            or suggested is None
+            or int(suggested) <= baseline_top_k
+        ):
+            continue
+
+        recovery_top_k = int(suggested)
+        rerun = lexical_case_diagnostics(
+            store,
+            corpus_id,
+            [case],
+            recovery_top_k,
+        )[0]
+        checks.append({
+            "case_id": case_id,
+            "baseline_top_k": baseline_top_k,
+            "verified_recovery_top_k": recovery_top_k,
+            "intervention_type": "retrieval-budget-increase",
+            "intervention_verified": True,
+            "recovered": bool(rerun.get("recovered")),
+            "failure_reason": rerun.get("failure_reason"),
+            "best_ground_truth_rank": rerun.get(
+                "best_ground_truth_rank"
+            ),
+            "first_sufficient_rank": rerun.get(
+                "first_sufficient_rank"
+            ),
+            "matched_terms": list(
+                rerun.get("matched_terms") or []
+            ),
+            "matched_assets": list(
+                rerun.get("matched_assets") or []
+            ),
+            "evidence_scope": "offline-retrieval-only",
+            "live_model_recovery_verified": False,
+        })
+
+    return checks
+
+
+def attach_recovery_confirmation(
+    witness: dict[str, Any],
+    *,
+    scale: float,
+    checks: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Attach an actually rerun retrieval intervention to a failure witness."""
+    out = dict(witness)
+    failure = witness.get("failure")
+    if not failure or float(failure.get("scale")) != float(scale):
+        return out
+
+    check = next(
+        (
+            row
+            for row in checks
+            if row.get("case_id") == witness.get("case_id")
+            and int(row.get("baseline_top_k") or -1)
+            == int(witness.get("top_k") or -2)
+        ),
+        None,
+    )
+    if check is None:
+        return out
+
+    out["intervention_verified"] = True
+    out["intervention_recovered"] = bool(
+        check.get("recovered")
+    )
+    out["verified_recovery_top_k"] = check.get(
+        "verified_recovery_top_k"
+    )
+    out["intervention_evidence_scope"] = check.get(
+        "evidence_scope"
+    )
+    out["live_model_recovery_verified"] = False
+    out["recovery_check"] = check
+    return out
