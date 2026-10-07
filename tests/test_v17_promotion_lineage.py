@@ -173,3 +173,35 @@ def test_lineage_rejects_ambiguous_run_identities():
             assert "promotion decision reference_run_id" in str(exc)
         else:
             raise AssertionError("expected ambiguous run identity rejection")
+
+
+def test_lineage_rejects_malformed_audit_fields():
+    cases = [
+        ("hard_failures", "oops"),
+        ("warnings", {"x": 1}),
+        ("hard_failures", [""]),
+        ("warnings", [1]),
+        ("hard_failures", ["x"] * 101),
+        ("warnings", ["x" * 513]),
+    ]
+    for field, value in cases:
+        decision = _decision("A", "B", "PROMOTE")
+        decision[field] = value
+        try:
+            mod.build_lineage(decision)
+        except ValueError as exc:
+            assert f"promotion decision {field}" in str(exc)
+        else:
+            raise AssertionError("expected malformed audit field rejection")
+
+
+def test_lineage_rejects_coerced_decision_values():
+    for value in [True, 1, "promote", " PROMOTE "]:
+        decision = _decision("A", "B", "PROMOTE")
+        decision["decision"] = value
+        try:
+            mod.build_lineage(decision)
+        except ValueError as exc:
+            assert "invalid promotion decision" in str(exc)
+        else:
+            raise AssertionError("expected exact decision enum rejection")
