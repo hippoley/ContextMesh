@@ -32,6 +32,7 @@ class ProviderSmokeResult:
     base_url: str
     text_ok: bool
     vision_ok: bool
+    provider_attempts: int
     provider_calls: int
     prompt_tokens: int
     completion_tokens: int
@@ -47,6 +48,7 @@ class ProviderSmokeResult:
             "base_url": self.base_url,
             "text_ok": self.text_ok,
             "vision_ok": self.vision_ok,
+            "provider_attempts": self.provider_attempts,
             "provider_calls": self.provider_calls,
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
@@ -268,6 +270,7 @@ def smoke_openai_compatible(
         base_url=base_url,
         text_ok=text_ok,
         vision_ok=vision_ok,
+        provider_attempts=2,
         provider_calls=2,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
