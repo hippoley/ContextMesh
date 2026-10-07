@@ -110,3 +110,18 @@ def test_explicit_falsy_scalar_replaced_by_default_is_unexpected_fallback():
     )
     assert receipt.disposition == ContractResolutionDisposition.UNEXPECTED_FALLBACK
     assert receipt.compliant is False
+
+
+def test_declared_resource_scope_cannot_resolve_to_side_effect_target():
+    """Reality regression: Mem0 #7347 writes telemetry state into the memory index."""
+    receipt = ContractResolutionReceipt(
+        field_id="telemetry-storage-target",
+        declared_scope=["memory_migrations"],
+        resolved_scope=["mem0"],
+        metadata={
+            "reality_source": "mem0ai/mem0#7347",
+            "failure_shape": "side-effect-target-outside-declared-resource-scope",
+        },
+    )
+    assert receipt.disposition == ContractResolutionDisposition.SCOPE_EXPANSION
+    assert receipt.compliant is False
