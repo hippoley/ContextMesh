@@ -44,6 +44,7 @@ class ExecutionContributorDisposition(str, Enum):
     MISSING_EXECUTION = "missing-execution"
     UNAUTHORIZED_EXECUTION = "unauthorized-execution"
     UNAUTHORIZED_CONTRIBUTION = "unauthorized-contribution"
+    INVALID_TELEMETRY = "invalid-telemetry"
 
 
 class ExecutionContributorAudit(BaseModel):
@@ -56,6 +57,8 @@ class ExecutionContributorAudit(BaseModel):
     @computed_field
     @property
     def disposition(self) -> ExecutionContributorDisposition:
+        if self.contributed and not self.executed:
+            return ExecutionContributorDisposition.INVALID_TELEMETRY
         if self.contributed and not self.configured:
             return ExecutionContributorDisposition.UNAUTHORIZED_CONTRIBUTION
         if self.executed and not self.configured:
